@@ -1,104 +1,25 @@
-\# ⬛ KARALEVHA (v2.1)
+# KaraLevha (v2.2)
 
+Karalevha; açık kaynak paylaşımını temel alan, maker topluluklarını bir araya getiren ve 3D baskı hizmet analizlerini tek merkezden yöneten modern bir platform projesidir.
 
+---
 
-Tamamen bağımsız, modüler ve açık kaynak felsefesiyle sıfırdan inşa edilen merkezi \*\*Maker Topluluk, Üretim ve Paylaşım Platformu\*\*. 
+## Güncelleme Notları (Changelog)
 
+###  v2.2 - Büyük Entegrasyon & Arayüz Güncellemesi (29.05.2026)
+* **Merkezi Üyelik Sistemi:** Kullanıcıların tüm platformda (Forum, Baskı Dükkanı vb.) ortak kullanabileceği FastAPI & SQLite destekli güvenli Kayıt Ol (`kayit.js`) ve Giriş Yap (`giris.js`) sayfaları arayüze entegre edildi.
+* **Ana Sayfa Arayüzü:** Platformun vitrini, orijinal şablonundaki saf siyah tema ve ikonik üçlü blok (Baskı Dükkanı, E-Kütüphane, Forum) düzenine göre React bileşenleri ile yeniden inşa edildi.
+* **Dinamik STL Analiz Motoru:** 3D Baskı Dükkanı'ndaki sabit 25 gram taklit (mock) veri yapısı çöpe atıldı; yerine backend tarafında `numpy-stl` entegrasyonu yapılarak yüklenen gerçek STL dosyalarının milimetrik hacim ve boyut analizini yapan dinamik motor devreye alındı.
+* **React Router Köprüsü:** Sayfalar arası pürüzsüz ve yenilenmeyen geçişler için sayfa yönlendirme altyapısı kuruldu. 
 
+###  v2.1 - Yeniden İnşa & Altyapı Taşınması
+* Projenin bulut tabanlı sürümü ve yerel kütüphaneleri optimize edilerek modern React (Frontend) ve FastAPI (Backend) mimarisine geçiş süreci resmen başladı.
+* Veritabanı şemaları (Kullanıcılar ve Filamentler) SQLite üzerinde merkezi hale getirildi.
 
-Bu proje; maker kültürü, DIY elektroniği ve sürdürülebilir üretim teknolojilerini tek bir çatı altında toplamayı hedefler.
+---
 
+## 🛠️ Kullanılan Teknolojiler
 
-
-\---
-
-
-
-\## 🚀 Proje Vizyonu \& Modüller
-
-
-
-Karalevha, sadece bir web sitesi değil, maker ekosistemi için tasarlanmış entegre bir "Süper App" mimarisidir:
-
-
-
-\- \*\*⚙️ 3D Baskı Hizmeti (v2.1):\*\* Kullanıcıların STL modellerini yükleyip anlık hacim, boyut ve maliyet analizi yapabildiği, atölye stok durumuna göre sipariş oluşturabildiği otomatik üretim motoru.
-
-\- \*\*💬 Maker Forumu (Yakında):\*\* Teknik yardımlaşma, filament tavsiyeleri, 3D yazıcı kalibrasyonları ve donanım sorunlarının tartışılabileceği topluluk alanı.
-
-\- \*\*📚 E-Kütüphane (Yakında):\*\* Teknik dökümanlar, filament rehberleri, açık kaynak kütüphaneler ve eğitici maker içerikleri.
-
-\- \*\*🛠️ Proje Paylaşım Alanı (Yakında):\*\* Geliştirilen açık kaynak projelerin, STL dosyalarının ve devre şemalarının sergileneceği portfolyo havuzu.
-
-
-
-\---
-
-
-
-\## 🛠️ Mimari ve Teknolojik Altyapı
-
-
-
-Proje, gelecekteki ölçeklenebilirlik gereksinimleri ve \*\*Google OAuth 2.0 (Google ile Giriş Yap)\*\* entegrasyonu göz önünde bulundurularak esnek ve modüler bir yapıda tasarlanmıştır.
-
-
-
-\### Frontend
-
-\- \*\*Framework:\*\* React.js
-
-\- \*\*Yönlendirme (Routing):\*\* React Router DOM
-
-\- \*\*3D Render Motoru:\*\* Three.js / React Three Fiber / Drei
-
-
-
-\### Backend \& Veritabanı
-
-\- \*\*Framework:\*\* FastAPI (Python)
-
-\- \*\*Sunucu:\*\* Uvicorn
-
-\- \*\*Veritabanı:\*\* SQLite
-
-\- \*\*Güvenlik \& Şifreleme:\*\* Passlib (Bcrypt şifre hashleme motoru)
-
-
-
-\---
-
-
-
-\## 📂 Klasör Yapısı
-
-
-
-```text
-
-karalevha/
-
-├── karalevha-backend/      # FastAPI Python Backend Servisi
-
-│   ├── main.py             # Ana API motoru ve veritabanı şeması
-
-│   └── karalevha.db        # Merkezi SQLite veritabanı (Git'e gönderilmez)
-
-│
-
-├── karalevha-frontend/     # React.js Frontend Uygulaması
-
-│   └── karalevha-front/
-
-│       ├── src/
-
-│       │   ├── components/ # Navbar, Footer gibi ortak bileşenler
-
-│       │   ├── layouts/    # Masterpage (MainLayout) şablonları
-
-│       │   ├── views/      # Sayfalar (AnaSayfa, BaskiDukkani vb.)
-
-│       │   ├── App.js      # URL yönlendirme merkezi
-
-│       │   └── index.js    # Giriş noktası
-
+* **Frontend:** React.js, React Router DOM, Inline CSS (Karanlık Tema)
+* **Backend:** Python, FastAPI, Uvicorn, SQLite3, CryptContext (Bcrypt)
+* **Analiz Motoru:** `numpy-stl`, `tempfile`

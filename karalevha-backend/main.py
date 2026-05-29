@@ -1,12 +1,15 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, File, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 import sqlite3
 import uvicorn
+import os
+import tempfile
 from typing import Optional
 from passlib.context import CryptContext
+from stl import mesh  # STL analizi için numpy-stl motoru
 
-app = FastAPI(title="Karalevha Merkezi Backend Motoru")
+app = FastAPI(title="Karalevha Merkezi Backend Motoru v2.2")
 
 # CORS Ayarları (React ile güvenli haberleşme için)
 app.add_middleware(
@@ -20,7 +23,7 @@ app.add_middleware(
 # Şifre Hashleme Motoru (Güvenlik için)
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-ADMIN_PASSWORD = "123" # Admin paneli şifresi sabit kalabilir
+ADMIN_PASSWORD = "123"  # Admin paneli şifresi
 
 # VERİTABANI BAĞLANTISI VE TABLOLARIN OLUŞTURULMASI
 DB_NAME = "karalevha.db"
@@ -29,7 +32,7 @@ def veritabani_hazirla():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
-    # 1. Filamentler Tablosu (Eski baskı torbacısından miras)
+    # 1. Filamentler Tablosu
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS filaments (
             id TEXT PRIMARY KEY,
@@ -40,15 +43,15 @@ def veritabani_hazirla():
         )
     ''')
     
-    # 2. GELECEĞE HAZIR MERKEZİ KULLANICI TABLOSU (Forum, Baskı, Google Girişi Ortak)
+    # 2. Merkezi Kullanıcı Tablosu
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             email TEXT UNIQUE NOT NULL,
-            password_hash TEXT, -- Google ile girenler için NULL (boş) kalabilir!
-            auth_provider TEXT DEFAULT 'local', -- 'local' veya 'google'
-            display_name TEXT, -- Forumda görünecek isim
-            role TEXT DEFAULT 'user', -- 'user', 'maker', 'admin'
+            password_hash TEXT,
+            auth_provider TEXT DEFAULT 'local',
+            display_name TEXT,
+            role TEXT DEFAULT 'user',
             kayit_tarihi TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -58,8 +61,9 @@ def veritabani_hazirla():
 
 veritabani_hazirla()
 
-# Pydantic Modelleri (Veri Kalıpları)
-class LoginRequest(BaseModel):
+# ----------------- PYDANTIC MODELLERİ (VERI KALIPLARI) -----------------
+
+class AdminLoginModel(BaseModel):
     password: str
 
 class FilamentModel(BaseModel):
@@ -70,15 +74,20 @@ class FilamentModel(BaseModel):
     active: bool
 
 class KayitModel(BaseModel):
-    email: str
+    email: EmailStr
     password: str
     display_name: str
+    
+class UserLoginModel(BaseModel):
+    email: EmailStr
+    password: str
+
 
 # ----------------- APİ ENDPOINTLERİ -----------------
 
-# Admin Giriş Doğrulaması (Gizli URL için)
+# Admin Giriş Doğrulaması
 @app.post("/admin/login")
-async def admin_login(req: LoginRequest):
+async def admin_login(req: AdminLoginModel):
     if req.password == ADMIN_PASSWORD:
         return {"status": "success", "message": "Yönetici girişi başarılı"}
     raise HTTPException(status_code=401, detail="Hatalı şifre girdiniz!")
@@ -121,14 +130,104 @@ async def delete_filament(f_id: str):
     conn.close()
     return {"status": "success"}
 
-# Model Analiz Taklidi (Şimdilik frontend patlamasın diye eski yapıyı koruyoruz)
+
+# ----------------- GERÇEK STL MODEL ANALİZ MOTORU -----------------
 @app.post("/analyze")
-async def analyze_file():
-    # Gerçek analiz kodlarını veya kütüphanelerini buraya ekleyebiliriz
+async def analyze_file(file: UploadFile = File(...)):
+    if not file.filename.lower().endswith('.stl'):
+        raise HTTPException(status_code=400, detail="Lütfen geçerli bir .STL dosyası yükleyin.")
+
+    try:
+        # Gelen dosya akışını geçici bir dosyaya güvenle yazıyoruz
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".stl") as tmp:
+            content = await file.read()
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        # numpy-stl ile 3B modeli okuyoruz
+        your_mesh = mesh.Mesh.from_file(tmp_path)
+        
+        # mm3 cinsinden gerçek hacim hesabı
+        volume, cog, inertia = your_mesh.get_mass_properties()
+        
+        # Model sınır boyutu (Bounding Box) hesaplama
+        minx, maxx = your_mesh.x.min(), your_mesh.x.max()
+        miny, maxy = your_mesh.y.min(), your_mesh.y.max()
+        minz, maxz = your_mesh.z.min(), your_mesh.z.max()
+        
+        dim_x = round(maxx - minx, 1)
+        dim_y = round(maxy - miny, 1)
+        dim_z = round(maxz - minz, 1)
+        dimensions_str = f"{dim_x}x{dim_y}x{dim_z} mm"
+
+        # İşlem bitince geçici dosyayı temizle
+        os.remove(tmp_path)
+
+        if volume <= 0:
+            volume = 0
+
+        return {
+            "status": "success",
+            "volume": float(volume),             # mm3 cinsinden net dinamik hacim
+            "dimensions": dimensions_str         # Gerçek boyutlar
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"STL dosyası analiz edilirken hata oluştu: {str(e)}")
+
+
+# ----------------- ÜYELİK SİSTEMİ ENDPOINTLERİ -----------------
+
+# Kullanıcı Kayıt Olma
+@app.post("/api/auth/register")
+async def register_user(u: KayitModel):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    try:
+        hashed_password = pwd_context.hash(u.password)
+        cursor.execute(
+            """INSERT INTO users (email, password_hash, display_name, auth_provider, role) 
+               VALUES (?, ?, ?, 'local', 'user')""",
+            (u.email, hashed_password, u.display_name)
+        )
+        conn.commit()
+    except sqlite3.IntegrityError:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Bu e-posta adresi zaten kayıtlı!")
+    finally:
+        conn.close()
+        
+    return {"status": "success", "message": "Kayıt başarıyla tamamlandı!"}
+
+# Kullanıcı Giriş Yapma
+@app.post("/api/auth/login")
+async def login_user(req: UserLoginModel):
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT * FROM users WHERE email = ?", (req.email,))
+    user = cursor.fetchone()
+    conn.close()
+    
+    if not user:
+        raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı!")
+        
+    if user["auth_provider"] == "google":
+        raise HTTPException(status_code=400, detail="Bu hesap Google ile oluşturulmuş. Lütfen Google ile giriş yapın.")
+        
+    if not pwd_context.verify(req.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı!")
+        
     return {
         "status": "success",
-        "volume": 25000,
-        "dimensions": "50x50x50"
+        "message": "Giriş başarılı",
+        "user": {
+            "id": user["id"],
+            "email": user["email"],
+            "display_name": user["display_name"],
+            "role": user["role"]
+        }
     }
 
 if __name__ == "__main__":

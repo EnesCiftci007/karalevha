@@ -1,34 +1,167 @@
-import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import MainLayout from './layouts/MainLayout';
-import AnaSayfa from './views/AnaSayfa';
-import BaskiDukkani from './views/BaskiDukkani';
+import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
+import Kayit from './views/kayit';
+import Giris from './views/giris';
+import BaskiDukkani from './views/BaskiDukkani'; // 🖨️ Zaten hazır olan sayfamızı buraya geri çağırdık!
 
-export default function App() {
+// 1. Üst Menü (Navbar) Componenti
+const Navbar = ({ user, onLogout }) => {
+    return (
+        <nav style={styles.navbar}>
+            <div style={styles.logoAlani}>
+                <Link to="/" style={styles.navLinkLogo}>
+                    <span style={{ fontWeight: 'bold', fontSize: '24px' }}>Kara Levha</span>
+                </Link>
+            </div>
+
+            <div style={styles.navLinks}>
+                <Link to="/" style={styles.navLink}>Ana Sayfa</Link>
+                <Link to="/baski-dukkani" style={styles.navLink}>Baskı Dükkanı</Link>
+                <Link to="/e-kutuphane" style={styles.navLink}>E-Kütüphane</Link>
+                <Link to="/forum" style={styles.navLink}>Forum</Link>
+
+                {user ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginLeft: '10px' }}>
+                        <span style={styles.welcomeText}>👋 {user.display_name}</span>
+                        <button onClick={onLogout} style={styles.logoutBtn}>Çıkış</button>
+                    </div>
+                ) : (
+                    <Link to="/giris" style={styles.loginLink}>
+                        <span style={{ fontSize: '18px', marginRight: '5px' }}>👤</span> Giriş
+                    </Link>
+                )}
+            </div>
+        </nav>
+    );
+};
+
+// 2. Wix Tasarımlı Orijinal Üçlü Blok Yapısı (Ana Sayfa)
+const AnaSayfa = () => {
+    return (
+        <div style={styles.mainContainer}>
+            <div style={styles.heroSection}>
+                <h1 style={styles.heroTitle}>Hoş Geldin!</h1>
+                <p style={styles.heroSub}>
+                    Karalevha, açık kaynak paylaşımını temel alan bir platformdur. 3D Baskı Dükkanı üzerinden projeleriniz için baskı hizmeti alabilir, E-Kütüphane kısmından teknik şema ve dokümanlara ulaşabilir, Forum alanında ise diğer makerlar ile fikir alışverişinde bulunabilirsiniz.
+                </p>
+            </div>
+
+            {/* 3'lü Blok Grid Yapısı */}
+            <div style={styles.cardsGrid}>
+
+                {/* Turuncu Blok - 3D Baskı Dükkanı (Artık Gerçek Sayfaya Gidiyor) */}
+                <div style={{ ...styles.card, border: '1px solid #d35400' }}>
+                    <div style={{ ...styles.cardImageArea, backgroundColor: '#d35400', backgroundImage: 'radial-gradient(circle, #e67e22 10%, transparent 11%)', backgroundSize: '12px 12px' }}>
+                        <div style={styles.iconMock}>🖨️🛠️</div>
+                    </div>
+                    <div style={styles.cardFooter}>
+                        <Link to="/baski-dukkani" style={styles.cardLink}>Baskı Dükkanı</Link>
+                    </div>
+                </div>
+
+                {/* Yeşil Blok - E-Kütüphane */}
+                <div style={{ ...styles.card, border: '1px solid #27ae60' }}>
+                    <div style={{ ...styles.cardImageArea, backgroundColor: '#27ae60', backgroundImage: 'linear-gradient(45deg, #2ecc71 12%, transparent 12%)', backgroundSize: '15px 15px' }}>
+                        <div style={styles.iconMock}>📖🔍</div>
+                    </div>
+                    <div style={styles.cardFooter}>
+                        <Link to="/e-kutuphane" style={styles.cardLink}>E-Kütüphane</Link>
+                    </div>
+                </div>
+
+                {/* Mavi Blok - Forum */}
+                <div style={{ ...styles.card, border: '1px solid #2980b9' }}>
+                    <div style={{ ...styles.cardImageArea, backgroundColor: '#2980b9', backgroundImage: 'radial-gradient(circle, #3498db 8%, transparent 9%)', backgroundSize: '16px 16px' }}>
+                        <div style={styles.iconMock}>💬📌</div>
+                    </div>
+                    <div style={styles.cardFooter}>
+                        <Link to="/forum" style={styles.cardLink}>Forum</Link>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    );
+};
+
+// 3. Kalan Diğer Sayfalar İçin Ortak "Bu Sayfa Hazırlanıyor" Uyarısı
+const HazirlaniyorSayfasi = ({ sayfaAdi }) => (
+    <div style={styles.pageContainer}>
+        <h2 style={{ fontSize: '32px', color: '#f1c40f', marginBottom: '15px' }}>🚧 {sayfaAdi}</h2>
+        <h3 style={{ fontSize: '24px', color: '#fff', marginBottom: '10px' }}>Bu Sayfa Hazırlanıyor...</h3>
+        <p style={{ color: '#aaa', fontSize: '16px', marginBottom: '30px' }}>
+            Karalevha üretim motorları bu bölümü inşa etmek için çalışıyor. Çok yakında buradayız!
+        </p>
+        <Link to="/" style={styles.backBtn}>Ana Sayfaya Dön</Link>
+    </div>
+);
+
+// 4. ANA UYGULAMA MOTORU
+function App() {
+    const [user, setUser] = useState(null);
+
+    useEffect(() => {
+        const savedUser = localStorage.getItem('user');
+        if (savedUser) {
+            setUser(JSON.parse(savedUser));
+        }
+    }, []);
+
+    const handleLogout = () => {
+        localStorage.removeItem('user');
+        setUser(null);
+        window.location.href = '/giris';
+    };
+
     return (
         <Router>
-            <Routes>
-                {/* Karalevha Ana Sayfa Vitrini */}
-                <Route path="/" element={
-                    <MainLayout>
-                        <AnaSayfa />
-                    </MainLayout>
-                } />
+            <div style={{ backgroundColor: '#000000', minHeight: '100vh', color: '#fff', fontFamily: 'Arial, sans-serif' }}>
+                <Navbar user={user} onLogout={handleLogout} />
 
-                {/* 3D Bask� Analiz ve Sipari� Motoru */}
-                <Route path="/baski" element={
-                    <MainLayout>
-                        <BaskiDukkani />
-                    </MainLayout>
-                } />
+                <Routes>
+                    <Route path="/" element={<AnaSayfa />} />
+                    <Route path="/kayit" element={<Kayit />} />
+                    <Route path="/giris" element={<Giris />} />
 
-                {/* Gizli Admin Giri� Yolu */}
-                <Route path="/admin" element={
-                    <MainLayout>
-                        <BaskiDukkani />
-                    </MainLayout>
-                } />
-            </Routes>
+                    {/* 🖨️ İŞTE BURASI: Artık hazırlık sayfasını değil, senin yazdığın gerçek Baskı Dükkanını açıyor! */}
+                    <Route path="/baski-dukkani" element={<BaskiDukkani />} />
+
+                    {/* Diğer henüz yazılmamış sayfalar hazırlık aşamasında kalıyor */}
+                    <Route path="/e-kutuphane" element={<HazirlaniyorSayfasi sayfaAdi="E-Kütüphane" />} />
+                    <Route path="/forum" element={<HazirlaniyorSayfasi sayfaAdi="Forum Alanı" />} />
+
+                    <Route path="*" element={<Navigate to="/" />} />
+                </Routes>
+            </div>
         </Router>
     );
 }
+
+// 🎨 Stil Kodları
+const styles = {
+    navbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 60px', backgroundColor: '#000000', borderBottom: '1px solid #111' },
+    logoAlani: { display: 'flex', alignItems: 'center' },
+    navLinkLogo: { color: '#fff', textDecoration: 'none', letterSpacing: '0.5px' },
+    navLinks: { display: 'flex', alignItems: 'center', gap: '25px' },
+    navLink: { color: '#fff', textDecoration: 'none', fontSize: '14px' },
+    loginLink: { color: '#fff', textDecoration: 'none', fontSize: '14px', display: 'flex', alignItems: 'center' },
+    welcomeText: { color: '#2ecc71', fontSize: '14px', fontWeight: 'bold' },
+    logoutBtn: { backgroundColor: '#e74c3c', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' },
+
+    mainContainer: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 20px', backgroundColor: '#000000' },
+    heroSection: { textAlign: 'center', maxWidth: '850px', marginBottom: '50px' },
+    heroTitle: { fontSize: '48px', fontWeight: 'bold', marginBottom: '20px', letterSpacing: '1px' },
+    heroSub: { color: '#bbb', fontSize: '15px', lineHeight: '1.7', letterSpacing: '0.3px' },
+
+    cardsGrid: { display: 'flex', gap: '25px', justifyContent: 'center', flexWrap: 'wrap', width: '100%', maxWidth: '1000px', padding: '20px', backgroundColor: '#1c1c1c', borderRadius: '4px' },
+    card: { width: '280px', height: '320px', backgroundColor: '#000', borderRadius: '4px', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
+    cardImageArea: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative' },
+    iconMock: { fontSize: '40px', color: '#fff', filter: 'drop-shadow(0px 4px 6px rgba(0,0,0,0.4))' },
+    cardFooter: { height: '60px', backgroundColor: '#000', display: 'flex', alignItems: 'center', paddingLeft: '20px' },
+    cardLink: { color: '#fff', textDecoration: 'none', fontSize: '18px', fontWeight: 'bold', letterSpacing: '0.5px' },
+
+    pageContainer: { display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '75vh', textAlign: 'center', padding: '0 20px' },
+    backBtn: { color: '#000', backgroundColor: '#fff', textDecoration: 'none', padding: '10px 20px', borderRadius: '4px', fontWeight: 'bold', fontSize: '14px' }
+};
+
+export default App;
