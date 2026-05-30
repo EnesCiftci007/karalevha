@@ -4,6 +4,7 @@ import Kayit from './views/kayit';
 import Giris from './views/giris';
 import BaskiDukkani from './views/BaskiDukkani';
 import Forum from './views/Forum';
+import Uye from './views/uye'; 
 
 const Navbar = ({ user, onLogout }) => {
     return (
@@ -22,7 +23,16 @@ const Navbar = ({ user, onLogout }) => {
 
                 {user ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginLeft: '10px' }}>
-                        <span style={styles.welcomeText}>👋 {user.display_name}</span>
+                        {/* İsme tıklayınca profile (uye) sayfasına gitmesini sağladık */}
+                        <Link to="/uye" style={styles.profileNavBlock}>
+                            {user.profile_image ? (
+                                <img src={user.profile_image} alt="PP" style={styles.miniAvatar} />
+                            ) : (
+                                <span style={{ fontSize: '16px' }}>👤</span>
+                            )}
+                            <span style={styles.welcomeText}>{user.display_name}</span>
+                            <span style={styles.miniBadge}>{user.badge || 'Maker'}</span>
+                        </Link>
                         <button onClick={onLogout} style={styles.logoutBtn}>Çıkış</button>
                     </div>
                 ) : (
@@ -48,7 +58,7 @@ const AnaSayfa = () => {
             <div style={styles.cardsGrid}>
                 <div style={{ ...styles.card, border: '1px solid #d35400' }}>
                     <div style={{ ...styles.cardImageArea, backgroundColor: '#d35400', backgroundImage: 'radial-gradient(circle, #e67e22 10%, transparent 11%)', backgroundSize: '12px 12px' }}>
-                        <div style={styles.iconMock}>🖨️🛠️</div>
+                        <div style={styles.iconMock}>𖖨️🛠️</div>
                     </div>
                     <div style={styles.cardFooter}>
                         <Link to="/baski-dukkani" style={styles.cardLink}>Baskı Dükkanı</Link>
@@ -91,11 +101,26 @@ const HazirlaniyorSayfasi = ({ sayfaAdi }) => (
 function App() {
     const [user, setUser] = useState(null);
 
+    // Giriş durumunu hafızadan yükleme ve senkronizasyon takibi
     useEffect(() => {
-        const savedUser = localStorage.getItem('user');
-        if (savedUser) {
-            setUser(JSON.parse(savedUser));
-        }
+        const checkUser = () => {
+            const savedUser = localStorage.getItem('user');
+            if (savedUser) {
+                setUser(JSON.parse(savedUser));
+            } else {
+                setUser(null);
+            }
+        };
+
+        checkUser();
+        // Login/Register işlemlerinde ismin anlık gelmesi için event listener bağladık
+        window.addEventListener('storage', checkUser);
+        const interval = setInterval(checkUser, 1000); // Yerel geçiş çakışmalarını önleme sayacı
+
+        return () => {
+            window.removeEventListener('storage', checkUser);
+            clearInterval(interval);
+        };
     }, []);
 
     const handleLogout = () => {
@@ -116,6 +141,7 @@ function App() {
                     <Route path="/baski-dukkani" element={<BaskiDukkani />} />
                     <Route path="/e-kutuphane" element={<HazirlaniyorSayfasi sayfaAdi="E-Kütüphane" />} />
                     <Route path="/forum" element={<Forum />} />
+                    <Route path="/uye" element={<Uye />} /> {/* Üye profili rotasını bağladık */}
                     <Route path="*" element={<Navigate to="/" />} />
                 </Routes>
             </div>
@@ -130,7 +156,13 @@ const styles = {
     navLinks: { display: 'flex', alignItems: 'center', gap: '25px' },
     navLink: { color: '#fff', textDecoration: 'none', fontSize: '14px' },
     loginLink: { color: '#fff', textDecoration: 'none', fontSize: '14px', display: 'flex', alignItems: 'center' },
-    welcomeText: { color: '#2ecc71', fontSize: '14px', fontWeight: 'bold' },
+
+    // Geliştirilmiş Profil Link Bloğu Stilleri
+    profileNavBlock: { display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', cursor: 'pointer', backgroundColor: '#111', padding: '5px 12px', borderRadius: '4px', border: '1px solid #222' },
+    miniAvatar: { width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #444' },
+    welcomeText: { color: '#fff', fontSize: '14px', fontWeight: 'bold' },
+    miniBadge: { backgroundColor: '#1e272e', border: '1px solid #34495e', color: '#3498db', padding: '2px 6px', borderRadius: '10px', fontSize: '10px', fontWeight: 'bold' },
+
     logoutBtn: { backgroundColor: '#e74c3c', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' },
     mainContainer: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '60px 20px', backgroundColor: '#000000' },
     heroSection: { textAlign: 'center', maxWidth: '850px', marginBottom: '50px' },

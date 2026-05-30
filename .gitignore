@@ -1,3 +1,27 @@
+# Node Modules (Frontend & Backend)
+karalevha-frontend/node_modules/
+**/node_modules/
+
+# Python Önbellek Dosyaları (Backend)
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.venv/
+venv/
+
+# Veritabanı Dosyaları (Backend)
 karalevha-backend/karalevha.db
+*.db
+*.sqlite
+*.sqlite3
+
+# Statik Yüklenen Kullanıcı Resimleri (GitHub'a gitmesin)
 karalevha-backend/static/uploads/*
-karalevha-backend/__pycache__/
+!karalevha-backend/static/uploads/.gitkeep
+
+# Çevre Değişkenleri ve Derleme Çıktıları
+.env
+build/
+.DS_Store

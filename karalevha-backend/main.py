@@ -11,7 +11,7 @@ from typing import Optional
 from passlib.context import CryptContext
 from stl import mesh  # STL analizi için numpy-stl motoru
 
-app = FastAPI(title="Karalevha Merkezi Backend Motoru v2.3")
+app = FastAPI(title="Karalevha Merkezi Backend Motoru v2.4")
 
 # CORS Ayarları
 app.add_middleware(
@@ -51,7 +51,7 @@ def veritabani_hazirla():
         )
     ''')
     
-    # 2. Merkezi Kullanıcı Tablosu
+    # 2. Geliştirilmiş Merkezi Kullanıcı Tablosu (v2.4 - Üye Profil Sütunları Eklendi)
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,6 +60,10 @@ def veritabani_hazirla():
             auth_provider TEXT DEFAULT 'local',
             display_name TEXT,
             role TEXT DEFAULT 'user',
+            profile_image TEXT DEFAULT NULL,
+            bio TEXT DEFAULT NULL,
+            custom_link TEXT DEFAULT NULL,
+            badge TEXT DEFAULT 'Maker',
             kayit_tarihi TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -73,7 +77,7 @@ def veritabani_hazirla():
         )
     ''')
 
-    # 4. Forum Konuları Tablosu (image_url eklendi)
+    # 4. Forum Konuları Tablosu
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS forum_posts (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -88,7 +92,7 @@ def veritabani_hazirla():
         )
     ''')
 
-    # 5. Yorumlar Tablosu (image_url eklendi)
+    # 5. Yorumlar Tablosu
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS forum_comments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -236,6 +240,71 @@ async def analyze_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"STL dosyası analiz edilirken hata oluştu: {str(e)}")
 
 
+# ----------------- ÜYE PROFİL GÜNCELLEME MOTORU (v2.4 yeni) -----------------
+
+@app.put("/api/user/profile")
+async def update_user_profile(
+    user_id: int = Form(...),
+    display_name: str = Form(...),
+    bio: Optional[str] = Form(None),
+    custom_link: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None)
+):
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    
+    # Kullanıcının mevcut bilgilerini kontrol et
+    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+    user = cursor.fetchone()
+    if not user:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+        
+    profile_image_url = user["profile_image"]
+
+    # Eğer yeni bir profil resmi yüklendiyse diske kaydet
+    if file and file.filename:
+        file_extension = os.path.splitext(file.filename)[1]
+        custom_filename = f"avatar_{user_id}_{tempfile.mktemp().split(os.sep)[-1]}{file_extension}"
+        file_path = os.path.join(UPLOAD_DIR, custom_filename)
+        
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        profile_image_url = f"http://localhost:8000/static/uploads/{custom_filename}"
+
+    try:
+        cursor.execute("""
+            UPDATE users 
+            SET display_name = ?, bio = ?, custom_link = ?, profile_image = ?
+            WHERE id = ?
+        """, (display_name, bio, custom_link, profile_image_url, user_id))
+        conn.commit()
+        
+        # Güncellenmiş güncel kullanıcı verilerini geri dönelim (Frontend localStorage'ı tazelemek için)
+        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
+        updated_user = cursor.fetchone()
+        conn.close()
+        
+        return {
+            "status": "success",
+            "message": "Profil başarıyla güncellendi.",
+            "user": {
+                "id": updated_user["id"],
+                "email": updated_user["email"],
+                "display_name": updated_user["display_name"],
+                "role": updated_user["role"],
+                "bio": updated_user["bio"],
+                "custom_link": updated_user["custom_link"],
+                "badge": updated_user["badge"],
+                "profile_image": updated_user["profile_image"]
+            }
+        }
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=f"Profil güncellenirken hata oluştu: {str(e)}")
+
+
 # ----------------- FORUM SİSTEMİ ENDPOINTLERİ -----------------
 
 @app.get("/api/forum/categories")
@@ -254,7 +323,7 @@ async def get_category_posts(category_id: int):
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT fp.*, u.display_name FROM forum_posts fp
+        SELECT fp.*, u.display_name, u.profile_image, u.badge FROM forum_posts fp
         JOIN users u ON fp.user_id = u.id
         WHERE fp.category_id = ?
         ORDER BY fp.tarih DESC
@@ -263,7 +332,6 @@ async def get_category_posts(category_id: int):
     conn.close()
     return [dict(row) for row in rows]
 
-# Geliştirilmiş Fotoğraflı Konu Açma Motoru (Form ve File Desteği)
 @app.post("/api/forum/posts")
 async def create_forum_post(
     category_id: int = Form(...),
@@ -276,7 +344,6 @@ async def create_forum_post(
     cursor = conn.cursor()
     image_url = None
 
-    # Eğer resim gönderildiyse diske kaydet ve URL'ini oluştur
     if file and file.filename:
         file_extension = os.path.splitext(file.filename)[1]
         custom_filename = f"post_{tempfile.mktemp().split(os.sep)[-1]}{file_extension}"
@@ -343,7 +410,7 @@ async def get_all_posts():
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT fp.*, u.display_name, c.name as category_name FROM forum_posts fp
+        SELECT fp.*, u.display_name, u.profile_image, u.badge, c.name as category_name FROM forum_posts fp
         JOIN users u ON fp.user_id = u.id
         JOIN forum_categories c ON fp.category_id = c.id
         ORDER BY fp.tarih DESC
@@ -375,7 +442,7 @@ async def get_post_comments(post_id: int):
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("""
-        SELECT fc.*, u.display_name FROM forum_comments fc
+        SELECT fc.*, u.display_name, u.profile_image, u.badge FROM forum_comments fc
         JOIN users u ON fc.user_id = u.id
         WHERE fc.post_id = ?
         ORDER BY fc.tarih ASC
@@ -384,6 +451,7 @@ async def get_post_comments(post_id: int):
     conn.close()
     return [dict(row) for row in rows]
 
+# Uye.js içinde kullanıcının kendi gönderilerini çekecek olan endpoint
 @app.get("/api/user/{user_id}/posts")
 async def get_user_posts(user_id: int):
     conn = sqlite3.connect(DB_NAME)
@@ -432,8 +500,8 @@ async def register_user(u: KayitModel):
     try:
         hashed_password = pwd_context.hash(u.password)
         cursor.execute(
-            """INSERT INTO users (email, password_hash, display_name, auth_provider, role) 
-               VALUES (?, ?, ?, 'local', 'user')""",
+            """INSERT INTO users (email, password_hash, display_name, auth_provider, role, badge) 
+               VALUES (?, ?, ?, 'local', 'user', 'Maker')""",
             (u.email, hashed_password, u.display_name)
         )
         conn.commit()
@@ -467,7 +535,11 @@ async def login_user(req: UserLoginModel):
             "id": user["id"],
             "email": user["email"],
             "display_name": user["display_name"],
-            "role": user["role"]
+            "role": user["role"],
+            "bio": user["bio"],
+            "custom_link": user["custom_link"],
+            "badge": user["badge"],
+            "profile_image": user["profile_image"]
         }
     }
 

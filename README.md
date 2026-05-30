@@ -6,6 +6,10 @@ Karalevha; açık kaynak paylaşımını temel alan, maker topluluklarını bir 
 
 ## Güncelleme Notları (Changelog)
 
+### v2.4 - Üye Profil Sistemi (30.05.2026)
+* **Sosyal Profil Yönetimi:** Kullanıcıların kendilerini tanıtabileceği Biyografi (`bio`), portfolyo/sosyal medya ekleyebileceği Özel Link (`custom_link`) ve platformdaki dijital kimliğini yansıtan Profil Resmi (PP) yükleme motoru arayüze (`uye.js`) entegre edildi.
+* **Gelişmiş Rol & Yetki Sistemi:** Kullanıcılar için merkezi ünvan rozeti (`badge`) altyapısı kuruldu; ilk kayıt olanlara otomatik `Maker` rozeti atanarak gelecekteki moderasyon ve yetkilendirme süreçlerine zemin hazırlandı.
+
 ### v2.3 - Forum Güncellemesi (30.05.2026)
 * **Görsel & Medya Yükleme Motoru:** FastAPI ve `StaticFiles` entegrasyonuyla sunucu tabanlı dosya depolama sistemi kuruldu; forum konularına görsel/fotoğraf ekleme desteği arayüze entegre edildi.
 * **İç İçe Cevap Sistemi (Nested Replies):** Yorumlar tablosuna hiyerarşik bağımlılık (`parent_id`) eklenerek, makerların diğer kullanıcıların yorumlarına doğrudan girintili (nested) alt cevaplar yazabileceği gelişmiş tartışma yapısı devreye alındı.
@@ -18,7 +22,7 @@ Karalevha; açık kaynak paylaşımını temel alan, maker topluluklarını bir 
 * **Dinamik STL Analiz Motoru:** 3D Baskı Dükkanı'ndaki sabit "25 gram hatası" düzeltilerek, yüklenen gerçek STL dosyalarının milimetrik hacim ve boyut analizini yapan dinamik motor devreye alındı.
 * **React Router Köprüsü:** Sayfalar arası pürüzsüz ve yenilenmeyen geçişler için sayfa yönlendirme altyapısı kuruldu. 
 
-###  v2.1 - Yeniden İnşa & Altyapı Taşınması
+###  v2.1 - Yeniden İnşa & Altyapı Taşınması 
 * Projenin bulut tabanlı sürümü ve yerel kütüphaneleri optimize edilerek modern React (Frontend) ve FastAPI (Backend) mimarisine geçiş süreci resmen başladı.
 * Veritabanı şemaları (Kullanıcılar ve Filamentler) SQLite üzerinde merkezi hale getirildi.
 
