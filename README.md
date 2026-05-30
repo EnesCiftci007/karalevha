@@ -1,4 +1,4 @@
-# KaraLevha (v2.2)
+# KaraLevha (v2.3)
 
 Karalevha; açık kaynak paylaşımını temel alan, maker topluluklarını bir araya getiren ve 3D baskı hizmet analizlerini tek merkezden yöneten modern bir platform projesidir.
 
@@ -6,10 +6,16 @@ Karalevha; açık kaynak paylaşımını temel alan, maker topluluklarını bir 
 
 ## Güncelleme Notları (Changelog)
 
-###  v2.2 - Büyük Entegrasyon & Arayüz Güncellemesi (29.05.2026)
+### v2.3 - Forum Güncellemesi (30.05.2026)
+* **Görsel & Medya Yükleme Motoru:** FastAPI ve `StaticFiles` entegrasyonuyla sunucu tabanlı dosya depolama sistemi kuruldu; forum konularına görsel/fotoğraf ekleme desteği arayüze entegre edildi.
+* **İç İçe Cevap Sistemi (Nested Replies):** Yorumlar tablosuna hiyerarşik bağımlılık (`parent_id`) eklenerek, makerların diğer kullanıcıların yorumlarına doğrudan girintili (nested) alt cevaplar yazabileceği gelişmiş tartışma yapısı devreye alındı.
+* **Canlı Akış & Önizleme Algoritması:** Forum ana sayfasında gezen kullanıcıların konuya tıklamadan fikir sahibi olabilmesi için, her gönderi kartının altında o konuya ait ilk 3 ana yorumu basan asenkron önizleme motoru eklendi.
+* **Mimarî Optimizasyon:** Arka planda çakışmaya sebep olan mükerrer endpoint fonksiyonları ayıklandı; SQL sorguları ve veri okuma süreçleri refaktör edilerek performans artırıldı.
+
+###  v2.2 - Baskı Torbacısı Entegrasyon ve Arayüz Güncellemesi (29.05.2026)
 * **Merkezi Üyelik Sistemi:** Kullanıcıların tüm platformda (Forum, Baskı Dükkanı vb.) ortak kullanabileceği FastAPI & SQLite destekli güvenli Kayıt Ol (`kayit.js`) ve Giriş Yap (`giris.js`) sayfaları arayüze entegre edildi.
-* **Ana Sayfa Arayüzü:** Platformun vitrini, orijinal şablonundaki saf siyah tema ve ikonik üçlü blok (Baskı Dükkanı, E-Kütüphane, Forum) düzenine göre React bileşenleri ile yeniden inşa edildi.
-* **Dinamik STL Analiz Motoru:** 3D Baskı Dükkanı'ndaki sabit 25 gram taklit (mock) veri yapısı çöpe atıldı; yerine backend tarafında `numpy-stl` entegrasyonu yapılarak yüklenen gerçek STL dosyalarının milimetrik hacim ve boyut analizini yapan dinamik motor devreye alındı.
+* **Ana Sayfa Arayüzü:** Platformun vitrini, orijinal şablonundaki saf siyah tema ve ikonik üçlü blok düzenine göre ile yeniden inşa edildi.
+* **Dinamik STL Analiz Motoru:** 3D Baskı Dükkanı'ndaki sabit "25 gram hatası" düzeltilerek, yüklenen gerçek STL dosyalarının milimetrik hacim ve boyut analizini yapan dinamik motor devreye alındı.
 * **React Router Köprüsü:** Sayfalar arası pürüzsüz ve yenilenmeyen geçişler için sayfa yönlendirme altyapısı kuruldu. 
 
 ###  v2.1 - Yeniden İnşa & Altyapı Taşınması
@@ -18,8 +24,3 @@ Karalevha; açık kaynak paylaşımını temel alan, maker topluluklarını bir 
 
 ---
 
-## 🛠️ Kullanılan Teknolojiler
-
-* **Frontend:** React.js, React Router DOM, Inline CSS (Karanlık Tema)
-* **Backend:** Python, FastAPI, Uvicorn, SQLite3, CryptContext (Bcrypt)
-* **Analiz Motoru:** `numpy-stl`, `tempfile`
