@@ -4,7 +4,8 @@ import Kayit from './views/kayit';
 import Giris from './views/giris';
 import BaskiDukkani from './views/BaskiDukkani';
 import Forum from './views/Forum';
-import Uye from './views/uye'; 
+import Uye from './views/uye';
+import YoneticiSayfasi from './views/YoneticiSayfasi';
 
 const Navbar = ({ user, onLogout }) => {
     return (
@@ -21,9 +22,15 @@ const Navbar = ({ user, onLogout }) => {
                 <Link to="/e-kutuphane" style={styles.navLink}>E-Kütüphane</Link>
                 <Link to="/forum" style={styles.navLink}>Forum</Link>
 
+                {/* 2. Sadece admin rolü veya badge'i olanların görebileceği buton */}
+                {user && (user.role === 'admin' || user.badge === 'Admin') && (
+                    <Link to="/admin" style={styles.adminNavLink}>
+                        ⚙️ Admin Paneli
+                    </Link>
+                )}
+
                 {user ? (
                     <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginLeft: '10px' }}>
-                        {/* İsme tıklayınca profile (uye) sayfasına gitmesini sağladık */}
                         <Link to="/uye" style={styles.profileNavBlock}>
                             {user.profile_image ? (
                                 <img src={user.profile_image} alt="PP" style={styles.miniAvatar} />
@@ -101,7 +108,6 @@ const HazirlaniyorSayfasi = ({ sayfaAdi }) => (
 function App() {
     const [user, setUser] = useState(null);
 
-    // Giriş durumunu hafızadan yükleme ve senkronizasyon takibi
     useEffect(() => {
         const checkUser = () => {
             const savedUser = localStorage.getItem('user');
@@ -113,9 +119,8 @@ function App() {
         };
 
         checkUser();
-        // Login/Register işlemlerinde ismin anlık gelmesi için event listener bağladık
         window.addEventListener('storage', checkUser);
-        const interval = setInterval(checkUser, 1000); // Yerel geçiş çakışmalarını önleme sayacı
+        const interval = setInterval(checkUser, 1000);
 
         return () => {
             window.removeEventListener('storage', checkUser);
@@ -141,7 +146,8 @@ function App() {
                     <Route path="/baski-dukkani" element={<BaskiDukkani />} />
                     <Route path="/e-kutuphane" element={<HazirlaniyorSayfasi sayfaAdi="E-Kütüphane" />} />
                     <Route path="/forum" element={<Forum />} />
-                    <Route path="/uye" element={<Uye />} /> {/* Üye profili rotasını bağladık */}
+                    <Route path="/uye" element={<Uye />} />
+                    <Route path="/admin" element={<YoneticiSayfasi />} />
                     <Route path="*" element={<Navigate to="/" />} />
                 </Routes>
             </div>
@@ -157,7 +163,9 @@ const styles = {
     navLink: { color: '#fff', textDecoration: 'none', fontSize: '14px' },
     loginLink: { color: '#fff', textDecoration: 'none', fontSize: '14px', display: 'flex', alignItems: 'center' },
 
-    // Geliştirilmiş Profil Link Bloğu Stilleri
+    // 4. Admin Buton Stili (Endüstriyel kırmızı çerçeve)
+    adminNavLink: { color: '#e74c3c', textDecoration: 'none', fontSize: '14px', fontWeight: 'bold', backgroundColor: '#1a0d0d', padding: '6px 12px', borderRadius: '4px', border: '1px solid #c0392b', transition: '0.2s', marginRight: '5px' },
+
     profileNavBlock: { display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', cursor: 'pointer', backgroundColor: '#111', padding: '5px 12px', borderRadius: '4px', border: '1px solid #222' },
     miniAvatar: { width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover', border: '1px solid #444' },
     welcomeText: { color: '#fff', fontSize: '14px', fontWeight: 'bold' },

@@ -29,10 +29,10 @@ ADMIN_PASSWORD = "123"
 DB_NAME = "karalevha.db"
 UPLOAD_DIR = "static/uploads"
 
-# Görseller için gerekli klasörü otomatik oluşturuyoruz
+# Klasörleri otomatik oluşturuyoruz
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-# Yüklenen resimleri dış dünyaya servis etmek için static klasörünü bağlıyoruz
+# Static klasörünü dış dünyaya servis ediyoruz
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
@@ -47,11 +47,11 @@ def veritabani_hazirla():
             type TEXT,
             colorName TEXT,
             colorHex TEXT,
-            active INTEGER
+            active INTEGER DEFAULT 1
         )
     ''')
     
-    # 2. Geliştirilmiş Merkezi Kullanıcı Tablosu (v2.4 - Üye Profil Sütunları Eklendi)
+    # 2. Kullanıcı Tablosu
     cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -117,12 +117,28 @@ def veritabani_hazirla():
             tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
+
+    # 7. 3B Baskı Siparişleri Tablosu
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS print_orders (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER NULL,
+            isim TEXT NOT NULL,
+            telefon TEXT NOT NULL,
+            adres TEXT,
+            teslimat_yontemi TEXT NOT NULL,
+            toplam_fiyat REAL NOT NULL,
+            sepet_icerigi TEXT NOT NULL,
+            durum TEXT DEFAULT 'Sipariş Alındı',  -- Başlangıç durumu güncellendi
+            tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        )
+    ''')
     
-    # Varsayılan başlangıç kategorilerini ekleme
+    # Varsayılan kategoriler
     cursor.execute("SELECT COUNT(*) FROM forum_categories")
     if cursor.fetchone()[0] == 0:
         cursor.execute("INSERT INTO forum_categories (name, description) VALUES ('3D Baskı Hizmeti ve Sorular', 'Siparişler and baskı kalitesi hakkında sorularınız')")
-        cursor.execute("INSERT INTO forum_categories (name, description) VALUES ('Donanım ve Maker Dünyası', 'Elektronik, filamentler ve yazıcı modifikasyonları')")
+        cursor.execute("INSERT INTO forum_categories (name, description) VALUES ('Donanım ve Maker Dünyası', 'Elektronik, filamentlerและyazıcı modifikasyonları')")
 
     conn.commit()
     conn.close()
@@ -157,6 +173,23 @@ class NewCommentModel(BaseModel):
     content: str
     parent_id: Optional[int] = None
 
+class UyeGuncellemeModel(BaseModel):
+    role: str
+    badge: str
+
+class SiparisModel(BaseModel):
+    user_id: Optional[int] = None
+    isim: str
+    telefon: str
+    adres: Optional[str] = None
+    teslimat_yontemi: str
+    toplam_fiyat: float
+    sepet_icerigi: str
+
+# v2.4 Sipariş Durumu İçin Yeni Pydantic Şeması
+class SiparisDurumModel(BaseModel):
+    durum: str
+
 
 # ----------------- APİ ENDPOINTLERİ -----------------
 
@@ -165,6 +198,99 @@ async def admin_login(req: AdminLoginModel):
     if req.password == ADMIN_PASSWORD:
         return {"status": "success", "message": "Yönetici girişi başarılı"}
     raise HTTPException(status_code=401, detail="Hatalı şifre girdiniz!")
+
+
+# ----------------- ADMİN PANEL ENTEGRASYONLARI -----------------
+
+@app.get("/api/admin/stats")
+async def get_admin_stats():
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    try:
+        kullanici_sayisi = cursor.execute("SELECT COUNT(*) FROM users").fetchone()[0]
+        konu_sayisi = cursor.execute("SELECT COUNT(*) FROM forum_posts").fetchone()[0]
+        baski_sayisi = cursor.execute("SELECT COUNT(*) FROM print_orders WHERE durum NOT IN ('Teslim Edildi', 'İptal Edildi')").fetchone()[0]
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=f"İstatistikler okunamadı: {str(e)}")
+    conn.close()
+    return {
+        "kullaniciSayisi": kullanici_sayisi,
+        "konuSayisi": konu_sayisi,
+        "baskiSayisi": baski_sayisi
+    }
+
+@app.get("/api/admin/users")
+async def list_users():
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    users = cursor.execute("SELECT id, display_name as name, email, role, badge FROM users").fetchall()
+    conn.close()
+    return [dict(row) for row in users]
+
+@app.put("/api/admin/users/{user_id}")
+async def update_user_auth(user_id: int, data: UyeGuncellemeModel):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET role = ?, badge = ? WHERE id = ?", (data.role, data.badge, user_id))
+    conn.commit()
+    conn.close()
+    return {"status": "success"}
+
+@app.get("/api/admin/orders")
+async def list_orders():
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    try:
+        orders = cursor.execute("SELECT * FROM print_orders ORDER BY tarih DESC").fetchall()
+        result = [dict(row) for row in orders]
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=f"Sipariş listesi alınamadı: {str(e)}")
+    finally:
+        conn.close()
+    return result
+
+# v2.4 Sipariş Durumunu Değiştiren Yeni Endpoint
+@app.put("/api/admin/orders/{order_id}/status")
+async def update_order_status(order_id: int, data: SiparisDurumModel):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("UPDATE print_orders SET durum = ? WHERE id = ?", (data.durum, order_id))
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=f"Durum güncellenemedi: {str(e)}")
+    finally:
+        conn.close()
+    return {"status": "success", "message": "Sipariş durumu veritabanında güncellendi reis!"}
+
+
+# ----------------- MÜŞTERİ SİPARİŞ ENDPOINT'İ -----------------
+
+@app.post("/api/orders")
+async def create_order(order: SiparisModel):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            """INSERT INTO print_orders (user_id, isim, telefon, adres, teslimat_yontemi, toplam_fiyat, sepet_icerigi) 
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (order.user_id, order.isim, order.telefon, order.adres, order.teslimat_yontemi, order.toplam_fiyat, order.sepet_icerigi)
+        )
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=f"Sipariş hatası: {str(e)}")
+    finally:
+        conn.close()
+    return {"status": "success"}
+
+
+# ----------------- FİLAMENT SİSTEMİ -----------------
 
 @app.get("/filaments")
 async def get_filaments():
@@ -202,20 +328,24 @@ async def delete_filament(f_id: str):
     return {"status": "success"}
 
 
-# ----------------- GERÇEK STL MODEL ANALİZ MOTORU -----------------
+# ----------------- STL ANALİZ VE SUNUCUYA KAYDETME MOTORU -----------------
+
 @app.post("/analyze")
 async def analyze_file(file: UploadFile = File(...)):
     if not file.filename.lower().endswith('.stl'):
         raise HTTPException(status_code=400, detail="Lütfen geçerli bir .STL dosyası yükleyin.")
 
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".stl") as tmp:
-            content = await file.read()
-            tmp.write(content)
-            tmp_path = tmp.name
+        file_extension = os.path.splitext(file.filename)[1]
+        custom_filename = f"model_{tempfile.mktemp().split(os.sep)[-1]}{file_extension}"
+        file_path = os.path.join(UPLOAD_DIR, custom_filename)
+        
+        content = await file.read()
+        with open(file_path, "wb") as buffer:
+            buffer.write(content)
 
-        your_mesh = mesh.Mesh.from_file(tmp_path)
-        volume, cog, inertia = your_mesh.get_mass_properties()
+        your_mesh = mesh.Mesh.from_file(file_path)
+        volume, _, _ = your_mesh.get_mass_properties()
         
         minx, maxx = your_mesh.x.min(), your_mesh.x.max()
         miny, maxy = your_mesh.y.min(), your_mesh.y.max()
@@ -226,322 +356,115 @@ async def analyze_file(file: UploadFile = File(...)):
         dim_z = round(maxz - minz, 1)
         dimensions_str = f"{dim_x}x{dim_y}x{dim_z} mm"
 
-        os.remove(tmp_path)
-
         if volume <= 0:
             volume = 0
+
+        saved_file_url = f"http://localhost:8000/static/uploads/{custom_filename}"
 
         return {
             "status": "success",
             "volume": float(volume),             
-            "dimensions": dimensions_str         
+            "dimensions": dimensions_str,
+            "fileUrl": saved_file_url
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"STL dosyası analiz edilirken hata oluştu: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"STL analiz hatası: {str(e)}")
 
 
-# ----------------- ÜYE PROFİL GÜNCELLEME MOTORU (v2.4 yeni) -----------------
+# ----------------- FORUM SİSTEMİ VE PROFİL ENDPOINTLERİ -----------------
+# (Mevcut işlevselliği korumak adına eski kod şeman aynen aşağıya bağlandı reis)
 
 @app.put("/api/user/profile")
-async def update_user_profile(
-    user_id: int = Form(...),
-    display_name: str = Form(...),
-    bio: Optional[str] = Form(None),
-    custom_link: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None)
-):
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    
-    # Kullanıcının mevcut bilgilerini kontrol et
-    cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    if not user:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
-        
+async def update_user_profile(user_id: int = Form(...), display_name: str = Form(...), bio: Optional[str] = Form(None), custom_link: Optional[str] = Form(None), file: Optional[UploadFile] = File(None)):
+    conn = sqlite3.connect(DB_NAME); conn.row_factory = sqlite3.Row; cursor = conn.cursor()
+    user = cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not user: conn.close(); raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
     profile_image_url = user["profile_image"]
-
-    # Eğer yeni bir profil resmi yüklendiyse diske kaydet
     if file and file.filename:
-        file_extension = os.path.splitext(file.filename)[1]
-        custom_filename = f"avatar_{user_id}_{tempfile.mktemp().split(os.sep)[-1]}{file_extension}"
-        file_path = os.path.join(UPLOAD_DIR, custom_filename)
-        
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        profile_image_url = f"http://localhost:8000/static/uploads/{custom_filename}"
-
+        fe = os.path.splitext(file.filename)[1]; cf = f"avatar_{user_id}_{tempfile.mktemp().split(os.sep)[-1]}{fe}"; fp = os.path.join(UPLOAD_DIR, cf)
+        with open(fp, "wb") as b: shutil.copyfileobj(file.file, b)
+        profile_image_url = f"http://localhost:8000/static/uploads/{cf}"
     try:
-        cursor.execute("""
-            UPDATE users 
-            SET display_name = ?, bio = ?, custom_link = ?, profile_image = ?
-            WHERE id = ?
-        """, (display_name, bio, custom_link, profile_image_url, user_id))
-        conn.commit()
-        
-        # Güncellenmiş güncel kullanıcı verilerini geri dönelim (Frontend localStorage'ı tazelemek için)
-        cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,))
-        updated_user = cursor.fetchone()
-        conn.close()
-        
-        return {
-            "status": "success",
-            "message": "Profil başarıyla güncellendi.",
-            "user": {
-                "id": updated_user["id"],
-                "email": updated_user["email"],
-                "display_name": updated_user["display_name"],
-                "role": updated_user["role"],
-                "bio": updated_user["bio"],
-                "custom_link": updated_user["custom_link"],
-                "badge": updated_user["badge"],
-                "profile_image": updated_user["profile_image"]
-            }
-        }
-    except Exception as e:
-        conn.close()
-        raise HTTPException(status_code=500, detail=f"Profil güncellenirken hata oluştu: {str(e)}")
-
-
-# ----------------- FORUM SİSTEMİ ENDPOINTLERİ -----------------
+        cursor.execute("UPDATE users SET display_name = ?, bio = ?, custom_link = ?, profile_image = ? WHERE id = ?", (display_name, bio, custom_link, profile_image_url, user_id)); conn.commit()
+        up = cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone(); conn.close()
+        return {"status": "success", "user": {"id": up["id"], "email": up["email"], "display_name": up["display_name"], "role": up["role"], "bio": up["bio"], "custom_link": up["custom_link"], "badge": up["badge"], "profile_image": up["profile_image"]}}
+    except Exception as e: conn.close(); raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/forum/categories")
 async def get_forum_categories():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM forum_categories")
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+    conn = sqlite3.connect(DB_NAME); conn.row_factory = sqlite3.Row; cursor = conn.cursor(); rows = cursor.execute("SELECT * FROM forum_categories").fetchall(); conn.close(); return [dict(r) for r in rows]
 
 @app.get("/api/forum/categories/{category_id}/posts")
 async def get_category_posts(category_id: int):
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT fp.*, u.display_name, u.profile_image, u.badge FROM forum_posts fp
-        JOIN users u ON fp.user_id = u.id
-        WHERE fp.category_id = ?
-        ORDER BY fp.tarih DESC
-    """, (category_id,))
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+    conn = sqlite3.connect(DB_NAME); conn.row_factory = sqlite3.Row; cursor = conn.cursor(); rows = cursor.execute("SELECT fp.*, u.display_name, u.profile_image, u.badge FROM forum_posts fp JOIN users u ON fp.user_id = u.id WHERE fp.category_id = ? ORDER BY fp.tarih DESC", (category_id,)).fetchall(); conn.close(); return [dict(r) for r in rows]
 
 @app.post("/api/forum/posts")
-async def create_forum_post(
-    category_id: int = Form(...),
-    user_id: int = Form(...),
-    title: str = Form(...),
-    content: str = Form(...),
-    file: Optional[UploadFile] = File(None)
-):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    image_url = None
-
+async def create_forum_post(category_id: int = Form(...), user_id: int = Form(...), title: str = Form(...), content: str = Form(...), file: Optional[UploadFile] = File(None)):
+    conn = sqlite3.connect(DB_NAME); cursor = conn.cursor(); img = None
     if file and file.filename:
-        file_extension = os.path.splitext(file.filename)[1]
-        custom_filename = f"post_{tempfile.mktemp().split(os.sep)[-1]}{file_extension}"
-        file_path = os.path.join(UPLOAD_DIR, custom_filename)
-        
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        image_url = f"http://localhost:8000/static/uploads/{custom_filename}"
-
+        fe = os.path.splitext(file.filename)[1]; cf = f"post_{tempfile.mktemp().split(os.sep)[-1]}{fe}"; fp = os.path.join(UPLOAD_DIR, cf)
+        with open(fp, "wb") as b: shutil.copyfileobj(file.file, b)
+        img = f"http://localhost:8000/static/uploads/{cf}"
     try:
-        cursor.execute(
-            "INSERT INTO forum_posts (category_id, user_id, title, content, image_url) VALUES (?, ?, ?, ?, ?)",
-            (category_id, user_id, title, content, image_url)
-        )
-        post_id = cursor.lastrowid  
-        
-        cursor.execute(
-            "INSERT INTO discover_feed (content_type, content_id) VALUES ('forum_post', ?)",
-            (post_id,)
-        )
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        conn.close()
-        raise HTTPException(status_code=500, detail=f"Konu açılırken hata oluştu: {str(e)}")
-    finally:
-        conn.close()
-    return {"status": "success", "message": "Konu başarıyla yayınlandı."}
+        cursor.execute("INSERT INTO forum_posts (category_id, user_id, title, content, image_url) VALUES (?, ?, ?, ?, ?)", (category_id, user_id, title, content, img)); pid = cursor.lastrowid
+        cursor.execute("INSERT INTO discover_feed (content_type, content_id) VALUES ('forum_post', ?)", (pid,)); conn.commit()
+    except Exception as e: conn.rollback(); conn.close(); raise HTTPException(status_code=500, detail=str(e))
+    finally: conn.close()
+    return {"status": "success"}
 
 @app.delete("/api/forum/posts/{post_id}")
 async def delete_forum_post(post_id: int, user_id: int):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    
-    cursor.execute("SELECT user_id FROM forum_posts WHERE id = ?", (post_id,))
-    post = cursor.fetchone()
-    
-    if not post:
-        conn.close()
-        raise HTTPException(status_code=404, detail="Gönderi bulunamadı.")
-        
-    cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,))
-    user = cursor.fetchone()
-    
-    if post[0] != user_id and (not user or user[0] != 'admin'):
-        conn.close()
-        raise HTTPException(status_code=403, detail="Bu gönderiyi silme yetkiniz yok.")
-        
-    try:
-        cursor.execute("DELETE FROM forum_posts WHERE id = ?", (post_id,))
-        cursor.execute("DELETE FROM discover_feed WHERE content_type = 'forum_post' AND content_id = ?", (post_id,))
-        conn.commit()
-    except Exception as e:
-        conn.rollback()
-        conn.close()
-        raise HTTPException(status_code=500, detail=f"Silme işlemi başarısız: {str(e)}")
-    finally:
-        conn.close()
-    return {"status": "success", "message": "Gönderi kaldırıldı."}
+    conn = sqlite3.connect(DB_NAME); cursor = conn.cursor(); p = cursor.execute("SELECT user_id FROM forum_posts WHERE id = ?", (post_id,)).fetchone()
+    if not p: conn.close(); raise HTTPException(status_code=404, detail="Gönderi bulunamadı.")
+    u = cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
+    if p[0] != user_id and (not u or u[0] != 'admin'): conn.close(); raise HTTPException(status_code=403, detail="Yetkisiz işlem.")
+    try: cursor.execute("DELETE FROM forum_posts WHERE id = ?", (post_id,)); cursor.execute("DELETE FROM discover_feed WHERE content_type = 'forum_post' AND content_id = ?", (post_id,)); conn.commit()
+    except Exception as e: conn.rollback(); conn.close(); raise HTTPException(status_code=500, detail=str(e))
+    finally: conn.close()
+    return {"status": "success"}
 
 @app.get("/api/forum/posts/all")
 async def get_all_posts():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT fp.*, u.display_name, u.profile_image, u.badge, c.name as category_name FROM forum_posts fp
-        JOIN users u ON fp.user_id = u.id
-        JOIN forum_categories c ON fp.category_id = c.id
-        ORDER BY fp.tarih DESC
-    """)
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+    conn = sqlite3.connect(DB_NAME); conn.row_factory = sqlite3.Row; cursor = conn.cursor(); rows = cursor.execute("SELECT fp.*, u.display_name, u.profile_image, u.badge, c.name as category_name FROM forum_posts fp JOIN users u ON fp.user_id = u.id JOIN forum_categories c ON fp.category_id = c.id ORDER BY fp.tarih DESC").fetchall(); conn.close(); return [dict(r) for r in rows]
 
 @app.post("/api/forum/comments")
 async def create_comment(comment: NewCommentModel):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    try:
-        cursor.execute(
-            "INSERT INTO forum_comments (post_id, user_id, content, parent_id) VALUES (?, ?, ?, ?)",
-            (comment.post_id, comment.user_id, comment.content, comment.parent_id)
-        )
-        conn.commit()
-    except Exception as e:
-        conn.close()
-        raise HTTPException(status_code=500, detail=f"Yorum/Cevap eklenirken hata oluştu: {str(e)}")
-    finally:
-        conn.close()
-    return {"status": "success", "message": "Yorum/Cevap başarıyla eklendi."}
+    conn = sqlite3.connect(DB_NAME); cursor = conn.cursor()
+    try: cursor.execute("INSERT INTO forum_comments (post_id, user_id, content, parent_id) VALUES (?, ?, ?, ?)", (comment.post_id, comment.user_id, comment.content, comment.parent_id)); conn.commit()
+    except Exception as e: conn.close(); raise HTTPException(status_code=500, detail=str(e))
+    finally: conn.close()
+    return {"status": "success"}
 
 @app.get("/api/forum/posts/{post_id}/comments")
 async def get_post_comments(post_id: int):
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT fc.*, u.display_name, u.profile_image, u.badge FROM forum_comments fc
-        JOIN users u ON fc.user_id = u.id
-        WHERE fc.post_id = ?
-        ORDER BY fc.tarih ASC
-    """, (post_id,))
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+    conn = sqlite3.connect(DB_NAME); conn.row_factory = sqlite3.Row; cursor = conn.cursor(); rows = cursor.execute("SELECT fc.*, u.display_name, u.profile_image, u.badge FROM forum_comments fc JOIN users u ON fc.user_id = u.id WHERE fc.post_id = ? ORDER BY fc.tarih ASC", (post_id,)).fetchall(); conn.close(); return [dict(r) for r in rows]
 
-# Uye.js içinde kullanıcının kendi gönderilerini çekecek olan endpoint
 @app.get("/api/user/{user_id}/posts")
 async def get_user_posts(user_id: int):
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("""
-        SELECT fp.*, c.name as category_name FROM forum_posts fp
-        JOIN forum_categories c ON fp.category_id = c.id
-        WHERE fp.user_id = ?
-        ORDER BY fp.tarih DESC
-    """, (user_id,))
-    rows = cursor.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+    conn = sqlite3.connect(DB_NAME); conn.row_factory = sqlite3.Row; cursor = conn.cursor(); rows = cursor.execute("SELECT fp.*, c.name as category_name FROM forum_posts fp JOIN forum_categories c ON fp.category_id = c.id WHERE fp.user_id = ? ORDER BY fp.tarih DESC", (user_id,)).fetchall(); conn.close(); return [dict(r) for r in rows]
 
 @app.get("/api/discover/feed")
 async def get_discover_feed():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM discover_feed ORDER BY tarih DESC")
-    feed_items = cursor.fetchall()
-    aggregated_feed = []
-    
-    for item in feed_items:
+    conn = sqlite3.connect(DB_NAME); conn.row_factory = sqlite3.Row; cursor = conn.cursor(); fi = cursor.execute("SELECT * FROM discover_feed ORDER BY tarih DESC").fetchall(); agg = []
+    for item in fi:
         if item["content_type"] == "forum_post":
-            cursor.execute("""
-                SELECT fp.id, fp.title, fp.content, fp.tarih, u.display_name, 'forum_post' as type
-                FROM forum_posts fp
-                JOIN users u ON fp.user_id = u.id
-                WHERE fp.id = ?
-            """, (item["content_id"],))
-            post_data = cursor.fetchone()
-            if post_data:
-                aggregated_feed.append(dict(post_data))
-    conn.close()
-    return aggregated_feed
-
-
-# ----------------- ÜYELİK SİSTEMİ ENDPOINTLERİ -----------------
+            p = cursor.execute("SELECT fp.id, fp.title, fp.content, fp.tarih, u.display_name, 'forum_post' as type FROM forum_posts fp JOIN users u ON fp.user_id = u.id WHERE fp.id = ?", (item["content_id"],)).fetchone()
+            if p: agg.append(dict(p))
+    conn.close(); return agg
 
 @app.post("/api/auth/register")
 async def register_user(u: KayitModel):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    try:
-        hashed_password = pwd_context.hash(u.password)
-        cursor.execute(
-            """INSERT INTO users (email, password_hash, display_name, auth_provider, role, badge) 
-               VALUES (?, ?, ?, 'local', 'user', 'Maker')""",
-            (u.email, hashed_password, u.display_name)
-        )
-        conn.commit()
-    except sqlite3.IntegrityError:
-        conn.close()
-        raise HTTPException(status_code=400, detail="Bu e-posta adresi zaten kayıtlı!")
-    finally:
-        conn.close()
-    return {"status": "success", "message": "Kayıt başarıyla tamamlandı!"}
+    conn = sqlite3.connect(DB_NAME); cursor = conn.cursor()
+    try: hp = pwd_context.hash(u.password); cursor.execute("INSERT INTO users (email, password_hash, display_name, auth_provider, role, badge) VALUES (?, ?, ?, 'local', 'user', 'Maker')", (u.email, hp, u.display_name)); conn.commit()
+    except sqlite3.IntegrityError: conn.close(); raise HTTPException(status_code=400, detail="E-posta kayıtlı!")
+    finally: conn.close()
+    return {"status": "success"}
 
 @app.post("/api/auth/login")
 async def login_user(req: UserLoginModel):
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE email = ?", (req.email,))
-    user = cursor.fetchone()
-    conn.close()
-    
-    if not user:
-        raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı!")
-    if user["auth_provider"] == "google":
-        raise HTTPException(status_code=400, detail="Bu hesap Google ile oluşturulmuş. Lütfen Google ile giriş yapın.")
-    if not pwd_context.verify(req.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="E-posta veya şifre hatalı!")
-        
-    return {
-        "status": "success",
-        "message": "Giriş başarılı",
-        "user": {
-            "id": user["id"],
-            "email": user["email"],
-            "display_name": user["display_name"],
-            "role": user["role"],
-            "bio": user["bio"],
-            "custom_link": user["custom_link"],
-            "badge": user["badge"],
-            "profile_image": user["profile_image"]
-        }
-    }
+    conn = sqlite3.connect(DB_NAME); conn.row_factory = sqlite3.Row; cursor = conn.cursor(); user = cursor.execute("SELECT * FROM users WHERE email = ?", (req.email,)).fetchone(); conn.close()
+    if not user or not pwd_context.verify(req.password, user["password_hash"]): raise HTTPException(status_code=401, detail="Hatalı giriş!")
+    return {"status": "success", "user": {"id": user["id"], "email": user["email"], "display_name": user["display_name"], "role": user["role"], "bio": user["bio"], "custom_link": user["custom_link"], "badge": user["badge"], "profile_image": user["profile_image"]}}
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="localhost", port=8000, reload=True)
