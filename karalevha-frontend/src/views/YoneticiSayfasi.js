@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_URL } from '../config';
 
 const YoneticiSayfasi = () => {
     const [istatistikler, setIstatistikler] = useState({ kullaniciSayisi: 0, konuSayisi: 0, baskiSayisi: 0 });
@@ -14,16 +15,16 @@ const YoneticiSayfasi = () => {
     const verileriYukle = async () => {
         try {
             setLoading(true);
-            const statsRes = await fetch('http://localhost:8000/api/admin/stats');
+            const statsRes = await fetch('http://185.233.164.253/api/admin/stats');
             setIstatistikler(await statsRes.json());
 
-            const filRes = await fetch('http://localhost:8000/filaments');
+            const filRes = await fetch('http://185.233.164.253/filaments');
             setFilamentler(await filRes.json());
 
-            const userRes = await fetch('http://localhost:8000/api/admin/users');
+            const userRes = await fetch('http://185.233.164.253/api/admin/users');
             setUyeler(await userRes.json());
 
-            const orderRes = await fetch('http://localhost:8000/api/admin/orders');
+            const orderRes = await fetch('http://185.233.164.253/api/admin/orders');
             setSiparisler(await orderRes.json());
         } catch (error) {
             console.error("Veri yükleme hatası:", error);
@@ -41,14 +42,14 @@ const YoneticiSayfasi = () => {
         if (!yeniRenk.trim()) return alert('Renk yaz reis!');
         const payload = { id: `fil_${Date.now()}`, type: yeniTip, colorName: yeniRenk.trim(), colorHex: yeniRenkKodu, active: true };
         try {
-            const res = await fetch('http://localhost:8000/filaments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const res = await fetch('http://185.233.164.253/filaments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (res.ok) { setYeniRenk(''); verileriYukle(); }
         } catch (e) { alert("Eklenemedi"); }
     };
 
     const filamentSil = async (id) => {
         if (!window.confirm("Silinsin mi?")) return;
-        try { await fetch(`http://localhost:8000/filaments/${id}`, { method: 'DELETE' }); verileriYukle(); } catch (e) { }
+        try { await fetch(`http://185.233.164.253/filaments/${id}`, { method: 'DELETE' }); verileriYukle(); } catch (e) { }
     };
 
     const uyeGuncelle = async (user_id, alan, deger) => {
@@ -57,19 +58,18 @@ const YoneticiSayfasi = () => {
         let r = u.role, b = u.badge;
         if (alan === 'role') { r = deger; if (deger === 'admin') b = 'Admin'; if (deger === 'user' && b === 'Admin') b = 'Maker'; }
         if (alan === 'badge') b = deger;
-        try { await fetch(`http://localhost:8000/api/admin/users/${user_id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: r, badge: b }) }); verileriYukle(); } catch (e) { }
+        try { await fetch(`http://185.233.164.253/api/admin/users/${user_id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: r, badge: b }) }); verileriYukle(); } catch (e) { }
     };
 
-    // --- v2.4 CANLI DURUM GÜNCELLEME MOTORU ---
     const durumGuncelle = async (order_id, yeniDurum) => {
         try {
-            const res = await fetch(`http://localhost:8000/api/admin/orders/${order_id}/status`, {
+            const res = await fetch(`http://185.233.164.253/api/admin/orders/${order_id}/status`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ durum: yeniDurum })
             });
             if (res.ok) {
-                verileriYukle(); // Sayaçları ve listeyi anlık veritabanından tazele reis
+                verileriYukle();
             }
         } catch (error) {
             alert("Durum güncellenemedi.");
@@ -78,17 +78,15 @@ const YoneticiSayfasi = () => {
 
     if (loading) return <div style={styles.loading}>Atölye veritabanı anlık senkronize ediliyor...</div>;
 
-    // Siparişleri Durumlarına Göre Ayırıyoruz
     const aktifSiparisler = siparisler.filter(o => o.durum !== 'Teslim Edildi' && o.durum !== 'İptal Edildi');
     const gecmisSiparisler = siparisler.filter(o => o.durum === 'Teslim Edildi' || o.durum === 'İptal Edildi');
 
-    // Durum renk belirteçleri
     const getDurumRenk = (durum) => {
-        if (durum === 'Sipariş Alındı') return '#2980b9';
+        if (durum === 'Sipariş Alındı') return '#8c52ff'; // Yeni Ruh: Mor
         if (durum === 'Hazırlanıyor') return '#f39c12';
         if (durum === 'Kargoya Verildi') return '#9b59b6';
         if (durum === 'Teslim Edildi') return '#27ae60';
-        return '#c0392b'; // İptal Edildi
+        return '#c0392b';
     };
 
     return (
@@ -100,12 +98,12 @@ const YoneticiSayfasi = () => {
 
             {/* İSTATİSTİKLER */}
             <div style={styles.grid}>
-                <div style={{ ...styles.kart, borderLeft: '4px solid #3498db' }}><h3 style={styles.kartBaslik}>Toplam Üye</h3><p style={styles.kartSayi}>{istatistikler.kullaniciSayisi}</p></div>
+                <div style={{ ...styles.kart, borderLeft: '4px solid #8c52ff' }}><h3 style={styles.kartBaslik}>Toplam Üye</h3><p style={styles.kartSayi}>{istatistikler.kullaniciSayisi}</p></div>
                 <div style={{ ...styles.kart, borderLeft: '4px solid #2ecc71' }}><h3 style={styles.kartBaslik}>Forum Konuları</h3><p style={styles.kartSayi}>{istatistikler.konuSayisi}</p></div>
-                <div style={{ ...styles.kart, borderLeft: '4px solid #e67e22' }}><h3 style={styles.kartBaslik}>Aktif Üretim Kuyruğu</h3><p style={styles.kartSayi}>{istatistikler.baskiSayisi}</p></div>
+                <div style={{ ...styles.kart, borderLeft: '4px solid #f39c12' }}><h3 style={styles.kartBaslik}>Aktif Üretim Kuyruğu</h3><p style={styles.kartSayi}>{istatistikler.baskiSayisi}</p></div>
             </div>
 
-            {/* ENERJİ ODALARI (FİLAMENT & ÜYELER) */}
+            {/* ENERJİ ODALARI */}
             <div style={styles.anaIcerikGrid}>
                 <div style={styles.SolBlok}>
                     <h2 style={styles.sectionTitle}>🧵 Filament Yönetimi</h2>
@@ -120,7 +118,7 @@ const YoneticiSayfasi = () => {
                     <div style={styles.listeBox}>
                         {filamentler.map(f => (
                             <div key={f.id} style={styles.filamentSatirKart}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><span style={{ ...styles.renkYuvarlak, backgroundColor: f.colorHex, border: f.colorHex === '#ffffff' ? '1px solid #444' : 'none' }}></span><span style={{ ...styles.tipBadge, backgroundColor: f.type === 'PLA' ? '#d35400' : '#2980b9' }}>{f.type}</span><span style={styles.beyazYazi}>{f.colorName}</span></div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><span style={{ ...styles.renkYuvarlak, backgroundColor: f.colorHex, border: f.colorHex === '#ffffff' ? '1px solid #444' : 'none' }}></span><span style={{ ...styles.tipBadge, backgroundColor: f.type === 'PLA' ? '#8c52ff' : '#2980b9' }}>{f.type}</span><span style={styles.beyazYazi}>{f.colorName}</span></div>
                                 <button style={styles.silLinkBtn} onClick={() => filamentSil(f.id)}>Kaldır</button>
                             </div>
                         ))}
@@ -143,9 +141,7 @@ const YoneticiSayfasi = () => {
                 </div>
             </div>
 
-            {/* ======================================================== */}
-            {/* 📥 1. AKTİF ÜRETİM KUYRUĞU PANELİ                          */}
-            {/* ======================================================== */}
+            {/* AKTİF ÜRETİM KUYRUĞU PANELİ */}
             <div style={{ ...styles.sectionContainer, marginTop: '40px' }}>
                 <h2 style={styles.sectionTitle}>📥 Üretim Kuyruğu (Aktif Baskı Siparişleri)</h2>
                 {aktifSiparisler.length === 0 ? (
@@ -161,7 +157,6 @@ const YoneticiSayfasi = () => {
                                             <span style={styles.siparisNo}>Sipariş #{order.id}</span>
                                             <span style={styles.siparisTarih}>{new Date(order.tarih).toLocaleString('tr-TR')}</span>
                                         </div>
-                                        {/* Akıllı Durum Atama Menüsü */}
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                                             <span style={{ ...styles.durumYaziAyar, color: getDurumRenk(order.durum) }}>● {order.durum}</span>
                                             <select
@@ -178,16 +173,19 @@ const YoneticiSayfasi = () => {
                                         </div>
                                     </div>
 
+                                    {/* ✨ v2.7.5: Yeni İletişim, E-posta ve Tercih Alanları Eklendi */}
                                     <div style={styles.siparisDetayGrid}>
                                         <div style={styles.detaySutun}>
-                                            <h5 style={styles.detayLabel}>Müşteri</h5>
+                                            <h5 style={styles.detayLabel}>Müşteri Künyesi</h5>
                                             <p style={styles.detayText}><b>İsim:</b> {order.isim}</p>
                                             <p style={styles.detayText}><b>Tel:</b> {order.telefon}</p>
+                                            <p style={styles.detayText}><b>E-Posta:</b> <span style={{ color: '#fff' }}>{order.eposta || 'Belirtilmedi'}</span></p>
+                                            <p style={styles.detayText}><b>Tercih Kanalı:</b> <span style={{ color: '#8c52ff', fontWeight: 'bold' }}>{order.iletisim_tercihi || 'WhatsApp'}</span></p>
                                         </div>
                                         <div style={{ ...styles.detaySutun, flex: 2 }}>
-                                            <h5 style={styles.detayLabel}>Teslimat Detayları</h5>
-                                            <p style={styles.detayText}><b>Yöntem:</b> {order.teslimat_yontemi === 'kargo' ? '📦 Kargo' : '🤝 Atölyeden Teslim'}</p>
-                                            <p style={styles.detayText}><b>Adres:</b> {order.adres}</p>
+                                            <h5 style={styles.detayLabel}>Lojistik ve Konum</h5>
+                                            <p style={styles.detayText}><b>Yöntem:</b> {order.teslimat_yontemi === 'kargo' ? '📦 Adrese Kargo' : '🤝 Atölyeden Elden Teslim'}</p>
+                                            <p style={styles.detayText}><b>Koordinat/Adres:</b> {order.adres}</p>
                                         </div>
                                         <div style={{ ...styles.detaySutun, textAlign: 'right', justifyContent: 'center' }}>
                                             <h5 style={styles.detayLabel}>Tutar</h5>
@@ -195,11 +193,21 @@ const YoneticiSayfasi = () => {
                                         </div>
                                     </div>
 
+                                    {/* ✨ v2.7.5: Eklenen Atölye Üretim Notu Bölümü */}
+                                    {order.not && (
+                                        <div style={styles.notArayuzu}>
+                                            <span style={{ fontWeight: 'bold', color: '#8c52ff' }}>📝 Atölye Üretim Notu: </span>
+                                            <span style={{ color: '#ddd', fontStyle: 'italic' }}>
+                                                {order.not || order.notlar || order.uretim_notu ? `"${order.not || order.notlar || order.uretim_notu}"` : "Kullanıcı özel bir üretim notu belirtmedi."}
+                                            </span>
+                                        </div>
+                                    )}
+
                                     <div style={styles.sepetMasa}>
                                         {sepet.map((parca, pIndex) => (
                                             <div key={pIndex} style={styles.parcaSatir}>
                                                 <div style={{ flex: 2, display: 'flex', alignItems: 'center', gap: '10px' }}><span style={styles.parcaIndis}>🧩</span><span style={styles.beyazYazi}>{parca.isim}</span></div>
-                                                <div style={{ flex: 1, color: '#ff9f43', fontSize: '13px', fontWeight: 'bold' }}>{parca.tur} ({parca.renk})</div>
+                                                <div style={{ flex: 1, color: '#8c52ff', fontSize: '13px', fontWeight: 'bold' }}>{parca.tur} ({parca.renk})</div>
                                                 <div style={{ flex: 0.5, color: '#888', fontSize: '13px' }}>{parca.hacim}</div>
                                                 <div style={{ flex: 1, textAlign: 'right' }}><a href={parca.fileUrl} download={parca.isim} style={styles.downloadLinkBtn}>⬇️ STL İndir</a></div>
                                             </div>
@@ -212,9 +220,7 @@ const YoneticiSayfasi = () => {
                 )}
             </div>
 
-            {/* ======================================================== */}
-            {/* 📦 2. GEÇMİŞ SİPARİŞLER (ARŞİV) PANELİ                       */}
-            {/* ======================================================== */}
+            {/* GEÇMİŞ SİPARİŞLER (ARŞİV) PANELİ */}
             <div style={{ ...styles.sectionContainer, marginTop: '40px', border: '1px solid #1c1c1c' }}>
                 <h2 style={{ ...styles.sectionTitle, color: '#666' }}>📁 Geçmiş Siparişler (Arşivlenmiş Kayıtlar)</h2>
                 {gecmisSiparisler.length === 0 ? (
@@ -222,9 +228,8 @@ const YoneticiSayfasi = () => {
                 ) : (
                     <div style={styles.siparisKuyrugu}>
                         {gecmisSiparisler.map((order) => {
-                            let sepet = []; try { sepet = JSON.parse(order.sepet_icerigi); } catch (e) { }
                             return (
-                                <div key={order.id} style={{ ...styles.siparisAnaKart, opacity: 0.5, backgroundColor: '#050505' }}>
+                                <div key={order.id} style={{ ...styles.siparisAnaKart, opacity: 0.4, backgroundColor: '#050505' }}>
                                     <div style={styles.siparisHeader}>
                                         <div>
                                             <span style={{ ...styles.siparisNo, color: '#888' }}>Sipariş #{order.id}</span>
@@ -239,7 +244,7 @@ const YoneticiSayfasi = () => {
 
                                     <div style={styles.siparisDetayGrid}>
                                         <div style={styles.detaySutun}>
-                                            <p style={styles.detayText}><b>Müşteri:</b> {order.isim} ({order.telefon})</p>
+                                            <p style={styles.detayText}><b>Müşteri:</b> {order.isim} ({order.telefon}) | {order.eposta}</p>
                                         </div>
                                         <div style={{ ...styles.detaySutun, flex: 2 }}>
                                             <p style={styles.detayText}><b>Adres/Yöntem:</b> {order.adres}</p>
@@ -254,7 +259,6 @@ const YoneticiSayfasi = () => {
                     </div>
                 )}
             </div>
-
         </div>
     );
 };
@@ -275,10 +279,9 @@ const styles = {
     sectionTitle: { color: '#fff', fontSize: '18px', marginBottom: '20px', borderBottom: '1px solid #161616', paddingBottom: '10px', fontWeight: 'bold' },
     formContainer: { backgroundColor: '#000', padding: '15px', borderRadius: '4px', border: '1px solid #161616', marginBottom: '20px' },
     formSatir: { display: 'flex', gap: '15px', marginBottom: '15px', alignItems: 'center' },
-    label: { color: '#666', fontSize: '12px', display: 'block', marginBottom: '5px' },
     input: { backgroundColor: '#0a0a0a', color: '#fff', border: '1px solid #222', padding: '10px', borderRadius: '4px', fontSize: '14px', width: '100%', boxSizing: 'border-box', outline: 'none' },
     colorInput: { backgroundColor: 'transparent', border: 'none', width: '100%', height: '40px', cursor: 'pointer', padding: 0 },
-    ekleBtn: { backgroundColor: '#27ae60', color: '#fff', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', width: '100%' },
+    ekleBtn: { backgroundColor: '#8c52ff', color: '#fff', border: 'none', padding: '10px 15px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', fontSize: '14px', width: '100%' },
     listeBox: { display: 'flex', flexDirection: 'column', gap: '10px' },
     filamentSatirKart: { backgroundColor: '#000', padding: '12px 15px', borderRadius: '4px', border: '1px solid #161616', display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
     renkYuvarlak: { width: '16px', height: '16px', borderRadius: '50%', display: 'inline-block' },
@@ -294,18 +297,20 @@ const styles = {
     siparisHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #161616', paddingBottom: '10px', marginBottom: '15px' },
     siparisNo: { color: '#fff', fontSize: '16px', fontWeight: 'bold', marginRight: '15px' },
     siparisTarih: { color: '#444', fontSize: '12px' },
-    siparisDetayGrid: { display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '20px' },
+    siparisDetayGrid: { display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '15px' },
     detaySutun: { flex: 1, minWidth: '150px', display: 'flex', flexDirection: 'column', gap: '5px' },
-    detayLabel: { color: '#444', margin: 0, textTransform: 'uppercase', fontSize: '11px', fontWeight: 'bold' },
+    detayLabel: { color: '#555', margin: 0, textTransform: 'uppercase', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.5px' },
     detayText: { color: '#bbb', margin: 0, fontSize: '13px' },
     siparisFiyat: { color: '#27ae60', margin: 0, fontSize: '24px', fontWeight: 'bold' },
+
+    // ✨ v2.7.5: Atölye Üretim Notu Arayüz Stili
+    notArayuzu: { backgroundColor: '#111', padding: '12px 15px', borderRadius: '4px', borderLeft: '3px solid #8c52ff', fontSize: '13px', marginBottom: '15px' },
+
     sepetMasa: { backgroundColor: '#050505', border: '1px solid #111', borderRadius: '4px', padding: '15px' },
     parcaSatir: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #111', gap: '15px' },
-    downloadLinkBtn: { display: 'inline-block', backgroundColor: '#2980b9', color: '#fff', textDecoration: 'none', fontSize: '12px', fontWeight: 'bold', padding: '6px 12px', borderRadius: '4px' },
+    downloadLinkBtn: { display: 'inline-block', backgroundColor: '#8c52ff', color: '#fff', textDecoration: 'none', fontSize: '12px', fontWeight: 'bold', padding: '6px 12px', borderRadius: '4px', transition: '0.2s' },
     bosMetin: { color: '#444', fontStyle: 'italic', padding: '10px', margin: 0 },
     loading: { padding: '60px', color: '#fff', backgroundColor: '#000', minHeight: '85vh', fontSize: '16px' },
-
-    // v2.4 Durum Yönetim Seçici Stilleri
     durumYaziAyar: { fontSize: '13px', fontWeight: 'bold', marginRight: '10px' },
     durumSelect: { backgroundColor: '#0a0a0a', color: '#fff', border: '1px solid #222', padding: '6px 12px', borderRadius: '4px', fontSize: '13px', cursor: 'pointer', outline: 'none' }
 };

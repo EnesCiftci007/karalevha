@@ -1,10 +1,16 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom'; // Yönlendirme köprüsü eklendi
+import { Link, useNavigate } from 'react-router-dom';
+import { API_URL } from '../config';
 
-const Giris = () => {
-    const [formData, setFormData] = useState({ email: '', password: '' });
+const Kayit = () => {
+    const [formData, setFormData] = useState({
+        display_name: '',
+        email: '',
+        password: ''
+    });
+    const [message, setMessage] = useState('');
     const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
+    const navigate = useNavigate();
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -12,11 +18,11 @@ const Giris = () => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setMessage('');
         setError('');
-        setSuccess('');
 
         try {
-            const response = await fetch('http://localhost:8000/api/auth/login', {
+            const response = await fetch(`${API_URL}/api/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(formData)
@@ -25,10 +31,18 @@ const Giris = () => {
             const data = await response.json();
 
             if (response.ok) {
-                setSuccess(`Hoş geldin, ${data.user.display_name}! Giriş başarılı.`);
-                localStorage.setItem('user', JSON.stringify(data.user));
+                setMessage(data.message || 'Kayıt başarıyla tamamlandı! Ana sayfaya yönlendiriliyorsunuz...');
+                setFormData({ display_name: '', email: '', password: '' });
+
+                if (data.user) {
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                }
+
+                setTimeout(() => {
+                    navigate('/');
+                }, 1500);
             } else {
-                setError(data.detail || 'E-posta veya şifre hatalı.');
+                setError(data.detail || 'Bir hata oluştu.');
             }
         } catch (err) {
             setError('Backend sunucusuna bağlanılamadı. Motorun açık olduğundan emin ol!');
@@ -38,13 +52,26 @@ const Giris = () => {
     return (
         <div style={styles.container}>
             <div style={styles.card}>
-                <h2 style={styles.title}>🔑 Giriş Yap</h2>
-                <p style={styles.subtitle}>Karalevha merkezine erişim sağlayın</p>
+                <h2 style={styles.title}>🖤 Karalevha'ya Katıl</h2>
+                <p style={styles.subtitle}>Kendi üretim dünyanı yönetmeye hazır mısın?</p>
 
-                {success && <div style={styles.successBox}>{success}</div>}
+                {message && <div style={styles.successBox}>{message}</div>}
                 {error && <div style={styles.errorBox}>{error}</div>}
 
                 <form onSubmit={handleSubmit} style={styles.form}>
+                    <div style={styles.inputGroup}>
+                        <label style={styles.label}>Görünür İsim (Forum için)</label>
+                        <input
+                            type="text"
+                            name="display_name"
+                            value={formData.display_name}
+                            onChange={handleChange}
+                            placeholder="Örn: MakerFatih"
+                            required
+                            style={styles.input}
+                        />
+                    </div>
+
                     <div style={styles.inputGroup}>
                         <label style={styles.label}>E-Posta Adresi</label>
                         <input
@@ -71,11 +98,10 @@ const Giris = () => {
                         />
                     </div>
 
-                    <button type="submit" style={styles.buttonGiris}>Sisteme Bağlan</button>
+                    <button type="submit" style={styles.buttonKayit}>Macerayı Başlat</button>
 
-                    {/* Kayıt olma linki tam formun bittiği yere yerleşti */}
                     <p style={{ marginTop: '20px', fontSize: '14px', color: '#aaa' }}>
-                        Hesabın yok mu? <Link to="/kayit" style={{ color: '#ff4757', textDecoration: 'none', fontWeight: 'bold' }}>Kayıt Ol</Link>
+                        Zaten üye misin? <Link to="/giris" style={{ color: '#2ed573', textDecoration: 'none', fontWeight: 'bold' }}>Giriş Yap</Link>
                     </p>
                 </form>
             </div>
@@ -98,4 +124,4 @@ const styles = {
     errorBox: { backgroundColor: '#ff4757', color: '#fff', padding: '12px', borderRadius: '6px', marginBottom: '20px', fontSize: '14px' }
 };
 
-export default Giris;
+export default Kayit;

@@ -7,10 +7,10 @@ Karalevha; açık kaynak paylaşımını temel alan, maker topluluklarını bir 
 ## Güncelleme Notları (Changelog)
 
 
-### v2.5 - Üye Profil Sistemi (30.05.2026)
-* **Admin paneli dinamik hale getirildi. 
-* **Adin paneli üzerinden rol ve rozet atama sistemi getirildi.
-* **Filament stoğu sistemi sıfırdan hazırlandı.
+### v2.5 - Admin Paneli (03.06.2026)
+* Admin paneli dinamik hale getirildi. 
+* Adin paneli üzerinden rol ve rozet atama sistemi getirildi.
+* Filament stoğu sistemi sıfırdan hazırlandı.
 
 ### v2.4 - Üye Profil Sistemi (30.05.2026)
 * **Sosyal Profil Yönetimi:** Kullanıcıların kendilerini tanıtabileceği Biyografi (`bio`), portfolyo/sosyal medya ekleyebileceği Özel Link (`custom_link`) ve platformdaki dijital kimliğini yansıtan Profil Resmi (PP) yükleme motoru arayüze (`uye.js`) entegre edildi.

@@ -1,28 +1,59 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, Link, useLocation } from 'react-router-dom';
 import Kayit from './views/kayit';
 import Giris from './views/giris';
-import BaskiDukkani from './views/BaskiDukkani';
+import BaskiIstasyonu from './views/BaskiIstasyonu';
 import Forum from './views/Forum';
 import Uye from './views/uye';
 import YoneticiSayfasi from './views/YoneticiSayfasi';
+import EKutuphane from './views/EKutuphane';
+import { API_URL } from './config';
+
+// 📂 Görsel ve Logo Importları
+import logoPna from './assets/logo.png';
+import forumGorseli from './assets/forum.png';
+import kutuphaneGorseli from './assets/kutuphane.png';
+import baskiGorseli from './assets/baski.png';
 
 const Navbar = ({ user, onLogout }) => {
+    const location = useLocation();
+
+    // 🎯 Aktif sekmeyi konuyla alakalı özel renklerle işaretleyen dinamik fonksiyon
+    const getNavLinkStyle = (path) => {
+        const isActive = location.pathname === path;
+
+        let activeColor = '#ffffff'; // Varsayılan (Ana Sayfa)
+        if (path === '/forum') activeColor = '#780000';         // Forum: Kırmızı
+        if (path === '/e-kutuphane') activeColor = '#007800';    // E-Kütüphane: Yeşil
+        if (path === '/baski-istasyonu') activeColor = '#780078'; // 3B Baskı İstasyonu: Mor
+
+        return {
+            ...styles.navLink,
+            color: isActive ? activeColor : '#fff',
+            fontWeight: isActive ? 'bold' : 'normal',
+            borderBottom: isActive ? `2px solid ${activeColor}` : '2px solid transparent',
+            paddingBottom: '5px',
+            transition: '0.2s'
+        };
+    };
+
     return (
         <nav style={styles.navbar}>
+            {/* 🎯 Logo ve Yazıyı kusursuz şekilde dikeyde ortalayan ve yakınlaştıran alan */}
             <div style={styles.logoAlani}>
                 <Link to="/" style={styles.navLinkLogo}>
-                    <span style={{ fontWeight: 'bold', fontSize: '24px' }}>KaraLevha</span>
+                    <img src={logoPna} alt="Logo" style={styles.logoImage} onError={(e) => e.target.style.display = 'none'} />
+                    <span style={styles.logoText}>KaraLevha</span>
                 </Link>
             </div>
 
             <div style={styles.navLinks}>
-                <Link to="/" style={styles.navLink}>Ana Sayfa</Link>
-                <Link to="/baski-dukkani" style={styles.navLink}>Baskı Dükkanı</Link>
-                <Link to="/e-kutuphane" style={styles.navLink}>E-Kütüphane</Link>
-                <Link to="/forum" style={styles.navLink}>Forum</Link>
+                <Link to="/" style={getNavLinkStyle('/')}>Ana Sayfa</Link>
+                <Link to="/forum" style={getNavLinkStyle('/forum')}>Forum</Link>
+                <Link to="/e-kutuphane" style={getNavLinkStyle('/e-kutuphane')}>E-Kütüphane</Link>
+                <Link to="/baski-istasyonu" style={getNavLinkStyle('/baski-istasyonu')}>3B Baskı İstasyonu</Link>
 
-                {/* 2. Sadece admin rolü veya badge'i olanların görebileceği buton */}
+                {/* Sadece admin rolü veya badge'i olanların görebileceği buton */}
                 {user && (user.role === 'admin' || user.badge === 'Admin') && (
                     <Link to="/admin" style={styles.adminNavLink}>
                         ⚙️ Admin Paneli
@@ -52,58 +83,52 @@ const Navbar = ({ user, onLogout }) => {
     );
 };
 
+// Fare ile üzerine gelindiğinde etkileşim sağlayan akıllı kart bileşeni
+const HoverCard = ({ to, imageSrc, altText, label }) => {
+    const [isHovered, setIsHovered] = useState(false);
+
+    return (
+        <Link
+            to={to}
+            style={styles.cardLinkWrapper}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
+        >
+            <div style={{
+                ...styles.card,
+                transform: isHovered ? 'translateY(-6px)' : 'translateY(0)',
+                boxShadow: isHovered ? '0 10px 20px rgba(255,255,255,0.08)' : 'none'
+            }}>
+                <div style={styles.cardImageArea}>
+                    <img src={imageSrc} alt={altText} style={styles.squareImage} />
+                </div>
+                <div style={styles.cardFooter}>
+                    <div style={styles.cardText}>{label}</div>
+                </div>
+            </div>
+        </Link>
+    );
+};
+
 const AnaSayfa = () => {
     return (
         <div style={styles.mainContainer}>
             <div style={styles.heroSection}>
                 <h1 style={styles.heroTitle}>Hoş Geldin!</h1>
                 <p style={styles.heroSub}>
-                    Karalevha, açık kaynak paylaşımını temel alan bir platformdur. 3D Baskı Dükkanı üzerinden projeleriniz için baskı hizmeti alabilir, E-Kütüphane kısmından teknik şema ve dokümanlara ulaşabilir, Forum alanında ise diğer makerlar ile fikir alışverişinde bulunabilirsiniz.
+                    Karalevha, açık kaynak paylaşımını temel alan bir platformdur. 3B Baskı İstasyonu üzerinden projeleriniz için endüstriyel analiz ve baskı hizmeti alabilir, E-Kütüphane kısmından teknik şema ve dokümanlara ulaşabilir, Forum alanında ise diğer makerlar ile fikir alışverişinde bulunabilirsiniz.
                 </p>
             </div>
 
+            {/* ANA SAYFA KARTLARI GRIDI (Büyük Gri Arka Plan) */}
             <div style={styles.cardsGrid}>
-                <div style={{ ...styles.card, border: '1px solid #d35400' }}>
-                    <div style={{ ...styles.cardImageArea, backgroundColor: '#d35400', backgroundImage: 'radial-gradient(circle, #e67e22 10%, transparent 11%)', backgroundSize: '12px 12px' }}>
-                        <div style={styles.iconMock}>𖖨️🛠️</div>
-                    </div>
-                    <div style={styles.cardFooter}>
-                        <Link to="/baski-dukkani" style={styles.cardLink}>Baskı Dükkanı</Link>
-                    </div>
-                </div>
-
-                <div style={{ ...styles.card, border: '1px solid #27ae60' }}>
-                    <div style={{ ...styles.cardImageArea, backgroundColor: '#27ae60', backgroundImage: 'linear-gradient(45deg, #2ecc71 12%, transparent 12%)', backgroundSize: '15px 15px' }}>
-                        <div style={styles.iconMock}>📖🔍</div>
-                    </div>
-                    <div style={styles.cardFooter}>
-                        <Link to="/e-kutuphane" style={styles.cardLink}>E-Kütüphane</Link>
-                    </div>
-                </div>
-
-                <div style={{ ...styles.card, border: '1px solid #2980b9' }}>
-                    <div style={{ ...styles.cardImageArea, backgroundColor: '#2980b9', backgroundImage: 'radial-gradient(circle, #3498db 8%, transparent 9%)', backgroundSize: '16px 16px' }}>
-                        <div style={styles.iconMock}>💬📌</div>
-                    </div>
-                    <div style={styles.cardFooter}>
-                        <Link to="/forum" style={styles.cardLink}>Forum</Link>
-                    </div>
-                </div>
+                <HoverCard to="/forum" imageSrc={forumGorseli} altText="Forum" label="Forum" />
+                <HoverCard to="/e-kutuphane" imageSrc={kutuphaneGorseli} altText="E-Kütüphane" label="E-Kütüphane" />
+                <HoverCard to="/baski-istasyonu" imageSrc={baskiGorseli} altText="3B Baskı İstasyonu" label="3B Baskı İstasyonu" />
             </div>
         </div>
     );
 };
-
-const HazirlaniyorSayfasi = ({ sayfaAdi }) => (
-    <div style={styles.pageContainer}>
-        <h2 style={{ fontSize: '32px', color: '#f1c40f', marginBottom: '15px' }}>🚧 {sayfaAdi}</h2>
-        <h3 style={{ fontSize: '24px', color: '#fff', marginBottom: '10px' }}>Bu Sayfa Hazırlanıyor...</h3>
-        <p style={{ color: '#aaa', fontSize: '16px', marginBottom: '30px' }}>
-            Karalevha üretim motorları bu bölümü inşa etmek için çalışıyor. Çok yakında buradayız!
-        </p>
-        <Link to="/" style={styles.backBtn}>Ana Sayfaya Dön</Link>
-    </div>
-);
 
 function App() {
     const [user, setUser] = useState(null);
@@ -143,8 +168,8 @@ function App() {
                     <Route path="/" element={<AnaSayfa />} />
                     <Route path="/kayit" element={<Kayit />} />
                     <Route path="/giris" element={<Giris />} />
-                    <Route path="/baski-dukkani" element={<BaskiDukkani />} />
-                    <Route path="/e-kutuphane" element={<HazirlaniyorSayfasi sayfaAdi="E-Kütüphane" />} />
+                    <Route path="/baski-istasyonu" element={<BaskiIstasyonu />} />
+                    <Route path="/e-kutuphane" element={<EKutuphane />} />
                     <Route path="/forum" element={<Forum />} />
                     <Route path="/uye" element={<Uye />} />
                     <Route path="/admin" element={<YoneticiSayfasi />} />
@@ -158,12 +183,16 @@ function App() {
 const styles = {
     navbar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px 60px', backgroundColor: '#000000', borderBottom: '1px solid #111' },
     logoAlani: { display: 'flex', alignItems: 'center' },
-    navLinkLogo: { color: '#fff', textDecoration: 'none', letterSpacing: '0.5px' },
+
+    // 🎯 gap: '6px' ile yaklaştırdık, alignItems: 'center' ile hayali ortalama çizgisini eşitledik
+    navLinkLogo: { display: 'flex', alignItems: 'center', gap: '6px', color: '#fff', textDecoration: 'none', letterSpacing: '0.5px' },
+    logoImage: { width: '32px', height: '32px', objectFit: 'contain', display: 'block' },
+    logoText: { fontWeight: 'bold', fontSize: '24px', color: '#ffffff', lineHeight: '1' }, // Yazı yüksekliği hizalama için eşitlendi
+
     navLinks: { display: 'flex', alignItems: 'center', gap: '25px' },
     navLink: { color: '#fff', textDecoration: 'none', fontSize: '14px' },
     loginLink: { color: '#fff', textDecoration: 'none', fontSize: '14px', display: 'flex', alignItems: 'center' },
 
-    // 4. Admin Buton Stili (Endüstriyel kırmızı çerçeve)
     adminNavLink: { color: '#e74c3c', textDecoration: 'none', fontSize: '14px', fontWeight: 'bold', backgroundColor: '#1a0d0d', padding: '6px 12px', borderRadius: '4px', border: '1px solid #c0392b', transition: '0.2s', marginRight: '5px' },
 
     profileNavBlock: { display: 'flex', alignItems: 'center', gap: '8px', textDecoration: 'none', cursor: 'pointer', backgroundColor: '#111', padding: '5px 12px', borderRadius: '4px', border: '1px solid #222' },
@@ -177,13 +206,15 @@ const styles = {
     heroTitle: { fontSize: '48px', fontWeight: 'bold', marginBottom: '20px', letterSpacing: '1px' },
     heroSub: { color: '#bbb', fontSize: '15px', lineHeight: '1.7', letterSpacing: '0.3px' },
     cardsGrid: { display: 'flex', gap: '25px', justifyContent: 'center', flexWrap: 'wrap', width: '100%', maxWidth: '1000px', padding: '20px', backgroundColor: '#1c1c1c', borderRadius: '4px' },
-    card: { width: '280px', height: '320px', backgroundColor: '#000', borderRadius: '4px', overflow: 'hidden', display: 'flex', flexDirection: 'column' },
-    cardImageArea: { flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative' },
-    iconMock: { fontSize: '40px', color: '#fff', filter: 'drop-shadow(0px 4px 6px rgba(0,0,0,0.4))' },
-    cardFooter: { height: '60px', backgroundColor: '#000', display: 'flex', alignItems: 'center', paddingLeft: '20px' },
-    cardLink: { color: '#fff', textDecoration: 'none', fontSize: '18px', fontWeight: 'bold', letterSpacing: '0.5px' },
-    pageContainer: { display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', height: '75vh', textAlign: 'center', padding: '0 20px' },
-    backBtn: { color: '#000', backgroundColor: '#fff', textDecoration: 'none', padding: '10px 20px', borderRadius: '4px', fontWeight: 'bold', fontSize: '14px' }
+
+    cardLinkWrapper: { display: 'block', width: '280px', textDecoration: 'none' },
+    card: { height: '320px', backgroundColor: '#000', borderRadius: '4px', overflow: 'hidden', display: 'flex', flexDirection: 'column', transition: 'transform 0.25s ease, box-shadow 0.25s ease' },
+
+    cardImageArea: { width: '100%', height: '100%', flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+    squareImage: { width: '100%', height: '100%', objectFit: 'cover' },
+
+    cardFooter: { height: '60px', backgroundColor: '#000', display: 'flex', alignItems: 'center', paddingLeft: '20px', boxSizing: 'border-box' },
+    cardText: { color: '#ffffff', textDecoration: 'underline', fontSize: '18px', fontWeight: 'bold', letterSpacing: '0.5px' }
 };
 
 export default App;

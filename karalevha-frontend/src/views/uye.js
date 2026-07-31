@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_URL } from '../config';
 
 const Uye = () => {
     const [posts, setPosts] = useState([]);
@@ -22,7 +23,13 @@ const Uye = () => {
             setCustomLink(user.custom_link || '');
 
             // Kullanıcının paylaştığı forum gönderilerini çek
-            fetch(`http://localhost:8000/api/user/${user.id}/posts`)
+            fetch(`http://
+
+
+
+
+
+            /api/user/${user.id}/posts`)
                 .then(res => res.json())
                 .then(data => {
                     if (Array.isArray(data)) setPosts(data);
@@ -45,7 +52,7 @@ const Uye = () => {
             formData.append('file', selectedFile);
         }
 
-        fetch('http://localhost:8000/api/user/profile', {
+        fetch('http://185.233.164.253/api/user/profile', {
             method: 'PUT',
             body: formData // Tarayıcı Content-Type'ı otomatik boundary ile ayarlayacak
         })

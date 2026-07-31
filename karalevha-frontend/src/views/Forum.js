@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_URL } from '../config';
 
 const Forum = () => {
     const [categories, setCategories] = useState([]);
@@ -10,7 +11,7 @@ const Forum = () => {
     // Form durumları
     const [title, setTitle] = useState('');
     const [content, setContent] = useState('');
-    const [selectedFile, setSelectedFile] = useState(null); // Seçilen dosya stateti
+    const [selectedFile, setSelectedFile] = useState(null);
     const [commentContent, setCommentContent] = useState('');
     const [replyToId, setReplyToId] = useState(null);
     const [replyContent, setReplyContent] = useState('');
@@ -20,7 +21,7 @@ const Forum = () => {
     const user = storedUser ? JSON.parse(storedUser) : null;
 
     useEffect(() => {
-        fetch('http://localhost:8000/api/forum/categories')
+        fetch(`${API_URL}/api/forum/categories`)
             .then(res => res.json())
             .then(data => {
                 if (Array.isArray(data)) setCategories(data);
@@ -34,7 +35,7 @@ const Forum = () => {
         const postsWithComments = await Promise.all(
             postsData.map(async (post) => {
                 try {
-                    const res = await fetch(`http://localhost:8000/api/forum/posts/${post.id}/comments`);
+                    const res = await fetch(`${API_URL}/api/forum/posts/${post.id}/comments`);
                     const commentsData = await res.json();
                     const previewComments = Array.isArray(commentsData)
                         ? commentsData.filter(c => c.parent_id === null).slice(0, 3)
@@ -51,7 +52,7 @@ const Forum = () => {
     const loadAllPosts = () => {
         setActiveCategory('all');
         setSelectedPost(null);
-        fetch('http://localhost:8000/api/forum/posts/all')
+        fetch(`${API_URL}/api/forum/posts/all`)
             .then(res => res.json())
             .then(data => {
                 if (Array.isArray(data)) fetchCommentsForPosts(data);
@@ -61,7 +62,7 @@ const Forum = () => {
     const handleCategorySelect = (categoryId) => {
         setActiveCategory(categoryId);
         setSelectedPost(null);
-        fetch(`http://localhost:8000/api/forum/categories/${categoryId}/posts`)
+        fetch(`${API_URL}/api/forum/categories/${categoryId}/posts`)
             .then(res => res.json())
             .then(data => {
                 if (Array.isArray(data)) fetchCommentsForPosts(data);
@@ -71,7 +72,7 @@ const Forum = () => {
     const handlePostSelect = (post) => {
         setSelectedPost(post);
         setReplyToId(null);
-        fetch(`http://localhost:8000/api/forum/posts/${post.id}/comments`)
+        fetch(`${API_URL}/api/forum/posts/${post.id}/comments`)
             .then(res => res.json())
             .then(data => {
                 if (Array.isArray(data)) setComments(data);
@@ -90,7 +91,6 @@ const Forum = () => {
             return;
         }
 
-        // Dosya transferi için FormData nesnesi oluşturuyoruz
         const formData = new FormData();
         formData.append('category_id', activeCategory);
         formData.append('user_id', user.id);
@@ -100,9 +100,9 @@ const Forum = () => {
             formData.append('file', selectedFile);
         }
 
-        fetch('http://localhost:8000/api/forum/posts', {
+        fetch(`${API_URL}/api/forum/posts`, {
             method: 'POST',
-            body: formData // Content-Type'ı tarayıcı otomatik FormData'ya göre ayarlayacak
+            body: formData
         })
             .then(res => res.json())
             .then(data => {
@@ -129,7 +129,7 @@ const Forum = () => {
             parent_id: parentId
         };
 
-        fetch('http://localhost:8000/api/forum/comments', {
+        fetch(`${API_URL}/api/forum/comments`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(newComment)
@@ -152,9 +152,9 @@ const Forum = () => {
             <div style={styles.forumLayout}>
                 <div style={styles.sidebar}>
                     <h3 style={styles.sidebarTitle}>Kategoriler</h3>
-                    <button onClick={loadAllPosts} style={{ ...styles.categoryBtn, backgroundColor: activeCategory === 'all' ? '#3498db' : '#1c1c1c' }}>🌐 Tüm Akış</button>
+                    <button onClick={loadAllPosts} style={{ ...styles.categoryBtn, backgroundColor: activeCategory === 'all' ? '#780000' : '#1c1c1c' }}>🌐 Tüm Akış</button>
                     {categories.map(cat => (
-                        <button key={cat.id} onClick={() => handleCategorySelect(cat.id)} style={{ ...styles.categoryBtn, backgroundColor: activeCategory === cat.id ? '#3498db' : '#1c1c1c' }}>{cat.name}</button>
+                        <button key={cat.id} onClick={() => handleCategorySelect(cat.id)} style={{ ...styles.categoryBtn, backgroundColor: activeCategory === cat.id ? '#780000' : '#1c1c1c' }}>{cat.name}</button>
                     ))}
                 </div>
 
@@ -188,7 +188,7 @@ const Forum = () => {
                                         </div>
                                         <p style={styles.postSummary}>{post.content}</p>
 
-                                        {/* Eğer postun resmi varsa ana akışta küçük bir önizleme basıyoruz */}
+                                        {/* Fotoğraf Önizlemesi */}
                                         {post.image_url && <img src={post.image_url} alt="Post" style={styles.previewPostImage} />}
 
                                         <div style={styles.postMeta}>
@@ -216,7 +216,7 @@ const Forum = () => {
                             <button onClick={loadAllPosts} style={styles.backBtn}>← Ana Akışa Dön</button>
 
                             <div style={styles.openedPostCard}>
-                                <h2 style={{ color: '#3498db', marginBottom: '15px' }}>{selectedPost.title}</h2>
+                                <h2 style={{ color: '#780000', marginBottom: '15px' }}>{selectedPost.title}</h2>
                                 <p style={styles.openedPostContent}>{selectedPost.content}</p>
 
                                 {/* Konu Detayındaki Tam Boyutlu Resim */}
@@ -233,7 +233,6 @@ const Forum = () => {
                             </div>
 
                             <h3 style={{ marginTop: '30px', marginBottom: '15px' }}>Cevaplar</h3>
-                            {/* Yorum ağacı alanları eski işlevini aynen koruyor */}
                             {comments.filter(c => c.parent_id === null).map(mainComment => (
                                 <div key={mainComment.id} style={styles.commentBox}>
                                     <div style={styles.mainCommentCard}>
@@ -283,7 +282,7 @@ const styles = {
     sidebarTitle: { fontSize: '18px', marginBottom: '10px', color: '#bbb' },
     categoryBtn: { width: '100%', padding: '15px', border: 'none', borderRadius: '4px', color: '#fff', textAlign: 'left', cursor: 'pointer', transition: '0.2s', fontWeight: 'bold' },
     mainContent: { flex: 1, backgroundColor: '#111', padding: '30px', borderRadius: '4px', border: '1px solid #222' },
-    tag: { backgroundColor: '#2980b9', padding: '4px 8px', borderRadius: '3px', fontSize: '12px', height: 'fit-content' },
+    tag: { backgroundColor: '#780000', padding: '4px 8px', borderRadius: '3px', fontSize: '12px', height: 'fit-content' },
     postForm: { backgroundColor: '#1c1c1c', padding: '20px', borderRadius: '4px', marginBottom: '20px' },
     input: { width: '100%', padding: '10px', backgroundColor: '#000', border: '1px solid #333', borderRadius: '4px', color: '#fff', marginBottom: '10px', outline: 'none' },
     textarea: { width: '100%', height: '100px', padding: '10px', backgroundColor: '#000', border: '1px solid #333', borderRadius: '4px', color: '#fff', marginBottom: '10px', outline: 'none', resize: 'none' },
@@ -293,13 +292,10 @@ const styles = {
     infoText: { color: '#f1c40f', backgroundColor: '#1c1c1c', padding: '12px', borderRadius: '4px', fontSize: '14px' },
     postCardContainer: { backgroundColor: '#1c1c1c', borderRadius: '4px', marginBottom: '20px', border: '1px solid #2a2a2a', overflow: 'hidden' },
     postCardClickableArea: { padding: '20px', cursor: 'pointer' },
-    postTitle: { fontSize: '18px', color: '#3498db', marginBottom: '10px' },
+    postTitle: { fontSize: '18px', color: '#780000', marginBottom: '10px' },
     postSummary: { color: '#aaa', fontSize: '14px', marginBottom: '15px', lineHeight: '1.4' },
-
-    // Resim Stilleri
     previewPostImage: { maxWidth: '200px', maxHeight: '150px', borderRadius: '4px', marginBottom: '15px', display: 'block', objectFit: 'cover', border: '1px solid #333' },
     fullPostImage: { maxWidth: '100%', maxHeight: '450px', borderRadius: '4px', objectFit: 'contain', border: '1px solid #333' },
-
     postMeta: { display: 'flex', justifyContent: 'space-between', color: '#666', fontSize: '12px', borderTop: '1px solid #2a2a2a', paddingTop: '10px' },
     previewCommentsSection: { backgroundColor: '#141414', padding: '15px 20px', borderTop: '1px solid #252525' },
     previewHeader: { fontSize: '11px', color: '#666', fontWeight: 'bold', textTransform: 'uppercase', marginBottom: '8px', letterSpacing: '0.5px' },
@@ -309,11 +305,11 @@ const styles = {
     backBtn: { backgroundColor: '#222', color: '#fff', border: '1px solid #444', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', marginBottom: '20px', fontSize: '14px' },
     openedPostCard: { backgroundColor: '#1c1c1c', padding: '25px', borderRadius: '4px', border: '1px solid #333' },
     openedPostContent: { color: '#fff', fontSize: '16px', lineHeight: '1.6', marginBottom: '20px' },
-    commentBox: { backgroundColor: '#151515', padding: '15px', borderRadius: '4px', marginBottom: '15px', borderLeft: '3px solid #3498db' },
+    commentBox: { backgroundColor: '#151515', padding: '15px', borderRadius: '4px', marginBottom: '15px', borderLeft: '3px solid #780000' },
     mainCommentCard: { marginBottom: '10px' },
     subCommentCard: { backgroundColor: '#0d0d0d', padding: '10px', borderRadius: '4px', marginTop: '8px', marginLeft: '30px', borderLeft: '2px solid #2ecc71' },
     commentMeta: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', color: '#555', fontSize: '11px', marginTop: '5px' },
-    replyBtn: { background: 'none', border: 'none', color: '#3498db', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' },
+    replyBtn: { background: 'none', border: 'none', color: '#780000', cursor: 'pointer', fontSize: '12px', fontWeight: 'bold' },
     commentForm: { marginTop: '25px' },
     commentTextarea: { width: '100%', height: '80px', padding: '10px', backgroundColor: '#1c1c1c', border: '1px solid #333', borderRadius: '4px', color: '#fff', marginBottom: '10px', outline: 'none', resize: 'none' }
 };
