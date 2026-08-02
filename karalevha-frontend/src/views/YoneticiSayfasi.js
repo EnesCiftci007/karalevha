@@ -12,19 +12,22 @@ const YoneticiSayfasi = () => {
     const [yeniRenk, setYeniRenk] = useState('');
     const [yeniRenkKodu, setYeniRenkKodu] = useState('#ffffff');
 
+    // Dinamik API Kökü (Config'ten gelir veya göreceli / olarak çalışır)
+    const BASE = API_URL || '';
+
     const verileriYukle = async () => {
         try {
             setLoading(true);
-            const statsRes = await fetch('http://185.233.164.253/api/admin/stats');
+            const statsRes = await fetch(`${BASE}/api/admin/stats`);
             setIstatistikler(await statsRes.json());
 
-            const filRes = await fetch('http://185.233.164.253/filaments');
+            const filRes = await fetch(`${BASE}/filaments`);
             setFilamentler(await filRes.json());
 
-            const userRes = await fetch('http://185.233.164.253/api/admin/users');
+            const userRes = await fetch(`${BASE}/api/admin/users`);
             setUyeler(await userRes.json());
 
-            const orderRes = await fetch('http://185.233.164.253/api/admin/orders');
+            const orderRes = await fetch(`${BASE}/api/admin/orders`);
             setSiparisler(await orderRes.json());
         } catch (error) {
             console.error("Veri yükleme hatası:", error);
@@ -42,14 +45,14 @@ const YoneticiSayfasi = () => {
         if (!yeniRenk.trim()) return alert('Renk yaz reis!');
         const payload = { id: `fil_${Date.now()}`, type: yeniTip, colorName: yeniRenk.trim(), colorHex: yeniRenkKodu, active: true };
         try {
-            const res = await fetch('http://185.233.164.253/filaments', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const res = await fetch(`${BASE}/filaments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (res.ok) { setYeniRenk(''); verileriYukle(); }
         } catch (e) { alert("Eklenemedi"); }
     };
 
     const filamentSil = async (id) => {
         if (!window.confirm("Silinsin mi?")) return;
-        try { await fetch(`http://185.233.164.253/filaments/${id}`, { method: 'DELETE' }); verileriYukle(); } catch (e) { }
+        try { await fetch(`${BASE}/filaments/${id}`, { method: 'DELETE' }); verileriYukle(); } catch (e) { }
     };
 
     const uyeGuncelle = async (user_id, alan, deger) => {
@@ -58,12 +61,12 @@ const YoneticiSayfasi = () => {
         let r = u.role, b = u.badge;
         if (alan === 'role') { r = deger; if (deger === 'admin') b = 'Admin'; if (deger === 'user' && b === 'Admin') b = 'Maker'; }
         if (alan === 'badge') b = deger;
-        try { await fetch(`http://185.233.164.253/api/admin/users/${user_id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: r, badge: b }) }); verileriYukle(); } catch (e) { }
+        try { await fetch(`${BASE}/api/admin/users/${user_id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: r, badge: b }) }); verileriYukle(); } catch (e) { }
     };
 
     const durumGuncelle = async (order_id, yeniDurum) => {
         try {
-            const res = await fetch(`http://185.233.164.253/api/admin/orders/${order_id}/status`, {
+            const res = await fetch(`${BASE}/api/admin/orders/${order_id}/status`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ durum: yeniDurum })
@@ -82,7 +85,7 @@ const YoneticiSayfasi = () => {
     const gecmisSiparisler = siparisler.filter(o => o.durum === 'Teslim Edildi' || o.durum === 'İptal Edildi');
 
     const getDurumRenk = (durum) => {
-        if (durum === 'Sipariş Alındı') return '#8c52ff'; // Yeni Ruh: Mor
+        if (durum === 'Sipariş Alındı') return '#8c52ff'; // Mor
         if (durum === 'Hazırlanıyor') return '#f39c12';
         if (durum === 'Kargoya Verildi') return '#9b59b6';
         if (durum === 'Teslim Edildi') return '#27ae60';
@@ -173,7 +176,6 @@ const YoneticiSayfasi = () => {
                                         </div>
                                     </div>
 
-                                    {/* ✨ v2.7.5: Yeni İletişim, E-posta ve Tercih Alanları Eklendi */}
                                     <div style={styles.siparisDetayGrid}>
                                         <div style={styles.detaySutun}>
                                             <h5 style={styles.detayLabel}>Müşteri Künyesi</h5>
@@ -189,16 +191,15 @@ const YoneticiSayfasi = () => {
                                         </div>
                                         <div style={{ ...styles.detaySutun, textAlign: 'right', justifyContent: 'center' }}>
                                             <h5 style={styles.detayLabel}>Tutar</h5>
-                                            <h2 style={styles.siparisFiyat}>{order.toplam_fiyat.toFixed(2)} TL</h2>
+                                            <h2 style={styles.siparisFiyat}>{order.toplam_fiyat ? order.toplam_fiyat.toFixed(2) : '0.00'} TL</h2>
                                         </div>
                                     </div>
 
-                                    {/* ✨ v2.7.5: Eklenen Atölye Üretim Notu Bölümü */}
-                                    {order.not && (
+                                    {(order.not || order.notlar || order.uretim_notu) && (
                                         <div style={styles.notArayuzu}>
                                             <span style={{ fontWeight: 'bold', color: '#8c52ff' }}>📝 Atölye Üretim Notu: </span>
                                             <span style={{ color: '#ddd', fontStyle: 'italic' }}>
-                                                {order.not || order.notlar || order.uretim_notu ? `"${order.not || order.notlar || order.uretim_notu}"` : "Kullanıcı özel bir üretim notu belirtmedi."}
+                                                "{order.not || order.notlar || order.uretim_notu}"
                                             </span>
                                         </div>
                                     )}
@@ -250,7 +251,7 @@ const YoneticiSayfasi = () => {
                                             <p style={styles.detayText}><b>Adres/Yöntem:</b> {order.adres}</p>
                                         </div>
                                         <div style={{ ...styles.detaySutun, textAlign: 'right' }}>
-                                            <span style={{ color: '#888', fontSize: '16px', fontWeight: 'bold' }}>{order.toplam_fiyat.toFixed(2)} TL</span>
+                                            <span style={{ color: '#888', fontSize: '16px', fontWeight: 'bold' }}>{order.toplam_fiyat ? order.toplam_fiyat.toFixed(2) : '0.00'} TL</span>
                                         </div>
                                     </div>
                                 </div>
@@ -302,10 +303,7 @@ const styles = {
     detayLabel: { color: '#555', margin: 0, textTransform: 'uppercase', fontSize: '11px', fontWeight: 'bold', letterSpacing: '0.5px' },
     detayText: { color: '#bbb', margin: 0, fontSize: '13px' },
     siparisFiyat: { color: '#27ae60', margin: 0, fontSize: '24px', fontWeight: 'bold' },
-
-    // ✨ v2.7.5: Atölye Üretim Notu Arayüz Stili
     notArayuzu: { backgroundColor: '#111', padding: '12px 15px', borderRadius: '4px', borderLeft: '3px solid #8c52ff', fontSize: '13px', marginBottom: '15px' },
-
     sepetMasa: { backgroundColor: '#050505', border: '1px solid #111', borderRadius: '4px', padding: '15px' },
     parcaSatir: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #111', gap: '15px' },
     downloadLinkBtn: { display: 'inline-block', backgroundColor: '#8c52ff', color: '#fff', textDecoration: 'none', fontSize: '12px', fontWeight: 'bold', padding: '6px 12px', borderRadius: '4px', transition: '0.2s' },

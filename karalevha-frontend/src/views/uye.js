@@ -12,6 +12,9 @@ const Uye = () => {
     const [selectedFile, setSelectedFile] = useState(null);
     const [message, setMessage] = useState({ type: '', text: '' });
 
+    // Dinamik API Kökü (Config'ten gelir veya göreceli / olarak çalışır)
+    const BASE = API_URL || '';
+
     // Tarayıcı oturumundan güncel kullanıcıyı çek
     const storedUser = localStorage.getItem('user');
     const user = storedUser ? JSON.parse(storedUser) : null;
@@ -22,14 +25,8 @@ const Uye = () => {
             setBio(user.bio || '');
             setCustomLink(user.custom_link || '');
 
-            // Kullanıcının paylaştığı forum gönderilerini çek
-            fetch(`http://
-
-
-
-
-
-            /api/user/${user.id}/posts`)
+            // Kullanıcının paylaştığı forum gönderilerini çek (Dinamik Yola Geçirildi)
+            fetch(`${BASE}/api/user/${user.id}/posts`)
                 .then(res => res.json())
                 .then(data => {
                     if (Array.isArray(data)) setPosts(data);
@@ -52,7 +49,8 @@ const Uye = () => {
             formData.append('file', selectedFile);
         }
 
-        fetch('http://185.233.164.253/api/user/profile', {
+        // Dinamik Yola Geçirildi
+        fetch(`${BASE}/api/user/profile`, {
             method: 'PUT',
             body: formData // Tarayıcı Content-Type'ı otomatik boundary ile ayarlayacak
         })

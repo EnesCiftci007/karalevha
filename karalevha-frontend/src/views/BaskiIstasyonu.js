@@ -7,11 +7,12 @@ import * as THREE from 'three';
 import istasyonLogosu from '../assets/baskikorsanlari.png'; // İstasyon görseli
 import { API_URL } from '../config';
 
-// Dinamik API Base URL Tanımlaması (Local & Production Uyumlu)
-const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8000";
+const BASE_URL = process.env.REACT_APP_API_URL || "";
 
 function Model({ url, color }) {
-    const geometry = useLoader(STLLoader, url);
+    // URL'in tam adres olduğundan emin oluyoruz (STLLoader'ın bozulmasını engeller)
+    const tamUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+    const geometry = useLoader(STLLoader, tamUrl);
 
     useEffect(() => {
         if (geometry) {

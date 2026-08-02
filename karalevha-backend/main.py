@@ -29,9 +29,6 @@ DB_NAME = "karalevha.db"
 UPLOAD_DIR = "static/uploads"
 LIBRARY_DIR = "static/library"  # Kütüphane dosyalarının saklanacağı ana dizin
 
-# DİNAMİK BASE URL (Localde localhost, VDS'te sunucu IP'sini kullanır)
-BASE_URL = os.getenv("BASE_URL", "http://localhost:8000").rstrip("/")
-
 # Klasörleri otomatik oluşturuyoruz
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(LIBRARY_DIR, exist_ok=True)
@@ -448,8 +445,8 @@ async def analyze_file(file: UploadFile = File(...)):
         if volume <= 0:
             volume = 0
 
-        # Dinamik URL oluşturuldu (Ortama göre otomatik şekillenir)
-        saved_file_url = f"{BASE_URL}/static/uploads/{custom_filename}"
+        # Göreceli Yol (Relative URL) - İster local ister sunucu, sorunsuz çalışır
+        saved_file_url = f"/static/uploads/{custom_filename}"
 
         return {
             "status": "success",
@@ -496,8 +493,8 @@ async def upload_library_file(folder_id: int = Form(...), user_id: int = Form(..
             shutil.copyfileobj(file.file, buffer)
             
         file_size_mb = round(os.path.getsize(physical_path) / (1024 * 1024), 2)
-        # Dinamik URL oluşturuldu
-        file_url = f"{BASE_URL}/static/library/{unique_filename}"
+        # Göreceli Yol (Relative URL)
+        file_url = f"/static/library/{unique_filename}"
         
         target_folder = folder_id if (folder_id != 0 and folder_id != "0") else None
         
@@ -800,8 +797,8 @@ async def update_user_profile(user_id: int = Form(...), display_name: str = Form
     if file and file.filename:
         fe = os.path.splitext(file.filename)[1]; cf = f"avatar_{user_id}_{tempfile.mktemp().split(os.sep)[-1]}{fe}"; fp = os.path.join(UPLOAD_DIR, cf)
         with open(fp, "wb") as b: shutil.copyfileobj(file.file, b)
-        # Dinamik URL
-        profile_image_url = f"{BASE_URL}/static/uploads/{cf}"
+        # Göreceli Yol
+        profile_image_url = f"/static/uploads/{cf}"
     try:
         cursor.execute("UPDATE users SET display_name = ?, bio = ?, custom_link = ?, profile_image = ? WHERE id = ?", (display_name, bio, custom_link, profile_image_url, user_id)); conn.commit()
         up = cursor.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone(); conn.close()
@@ -822,8 +819,8 @@ async def create_forum_post(category_id: int = Form(...), user_id: int = Form(..
     if file and file.filename:
         fe = os.path.splitext(file.filename)[1]; cf = f"post_{tempfile.mktemp().split(os.sep)[-1]}{fe}"; fp = os.path.join(UPLOAD_DIR, cf)
         with open(fp, "wb") as b: shutil.copyfileobj(file.file, b)
-        # Dinamik URL
-        img = f"{BASE_URL}/static/uploads/{cf}"
+        # Göreceli Yol
+        img = f"/static/uploads/{cf}"
     try:
         cursor.execute("INSERT INTO forum_posts (category_id, user_id, title, content, image_url) VALUES (?, ?, ?, ?, ?)", (category_id, user_id, title, content, img)); pid = cursor.lastrowid
         cursor.execute("INSERT INTO discover_feed (content_type, content_id) VALUES ('forum_post', ?)", (pid,)); conn.commit()
