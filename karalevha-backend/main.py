@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, File, UploadFile, Form
+from fastapi import FastAPI, HTTPException, File, UploadFile, Form, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, EmailStr, Field
@@ -7,7 +7,9 @@ import uvicorn
 import os
 import tempfile
 import shutil
-from typing import Optional, List
+import json
+import re
+from typing import Optional, List, Dict, Any
 from passlib.context import CryptContext
 from stl import mesh  # STL analizi için numpy-stl motoru
 
@@ -27,14 +29,18 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 DB_NAME = "karalevha.db"
 UPLOAD_DIR = "static/uploads"
-LIBRARY_DIR = "static/library"  # Kütüphane dosyalarının saklanacağı ana dizin
 
 # Klasörleri otomatik oluşturuyoruz
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(LIBRARY_DIR, exist_ok=True)
 
 # Static klasörünü dış dünyaya servis ediyoruz
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+from eoba import eoba_router, eoba_veritabani_hazirla
+app.include_router(eoba_router)
+
+from social import social_router, social_veritabani_hazirla
+app.include_router(social_router)
 
 
 def veritabani_hazirla():
@@ -138,47 +144,66 @@ def veritabani_hazirla():
         )
     ''')
     
-    # 8. E-Kütüphane Klasörler Tablosu
+    # 8. Akış Beğenileri (Likes)
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS library_folders (
+        CREATE TABLE IF NOT EXISTS feed_likes (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            parent_id INTEGER NULL,
-            user_id INTEGER NOT NULL DEFAULT 1,
-            is_private INTEGER NOT NULL DEFAULT 0,
-            FOREIGN KEY(parent_id) REFERENCES library_folders(id) ON DELETE CASCADE,
+            post_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(post_id, user_id),
+            FOREIGN KEY(post_id) REFERENCES forum_posts(id) ON DELETE CASCADE,
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     ''')
 
-    # 9. E-Kütüphane Dosyalar Tablosu
+    # 9. Akış Yer İmleri (Bookmarks)
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS library_files (
+        CREATE TABLE IF NOT EXISTS feed_bookmarks (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            folder_id INTEGER NULL,
+            post_id INTEGER NOT NULL,
             user_id INTEGER NOT NULL,
-            display_name TEXT NOT NULL,
-            file_path TEXT NOT NULL,
-            file_size REAL NOT NULL, 
             tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY(folder_id) REFERENCES library_folders(id) ON DELETE CASCADE,
+            UNIQUE(post_id, user_id),
+            FOREIGN KEY(post_id) REFERENCES forum_posts(id) ON DELETE CASCADE,
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         )
     ''')
-    
-    # 10. E-Kütüphane Gizli Klasör Beyaz Liste İzin Tablosu
+
+    # 10. Akış Anketleri (Polls)
     cursor.execute('''
-        CREATE TABLE IF NOT EXISTS library_folder_permissions (
+        CREATE TABLE IF NOT EXISTS feed_polls (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            folder_id INTEGER NOT NULL,
-            user_id INTEGER NOT NULL,
-            FOREIGN KEY(folder_id) REFERENCES library_folders(id) ON DELETE CASCADE,
-            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
-            UNIQUE(folder_id, user_id)
+            post_id INTEGER NOT NULL,
+            question TEXT NOT NULL,
+            options TEXT NOT NULL,
+            tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
-    
+
+    # 11. Anket Oyları (Poll Votes)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS feed_poll_votes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            poll_id INTEGER NOT NULL,
+            option_index INTEGER NOT NULL,
+            user_id INTEGER NOT NULL,
+            tarih TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(poll_id, user_id)
+        )
+    ''')
+
     # Geçiş Güvenliği (Migrations)
+    try:
+        cursor.execute("ALTER TABLE forum_posts ADD COLUMN images TEXT DEFAULT '[]'")
+    except sqlite3.OperationalError:
+        pass
+
+    try:
+        cursor.execute("ALTER TABLE forum_posts ADD COLUMN repost_of_id INTEGER DEFAULT NULL")
+    except sqlite3.OperationalError:
+        pass
+
     try:
         cursor.execute("ALTER TABLE print_orders ADD COLUMN eposta TEXT NULL")
     except sqlite3.OperationalError:
@@ -193,16 +218,6 @@ def veritabani_hazirla():
         cursor.execute("ALTER TABLE print_orders ADD COLUMN [not] TEXT NULL")
     except sqlite3.OperationalError:
         pass
-
-    try:
-        cursor.execute("ALTER TABLE library_folders ADD COLUMN user_id INTEGER NOT NULL DEFAULT 1")
-    except sqlite3.OperationalError:
-        pass
-
-    try:
-        cursor.execute("ALTER TABLE library_folders ADD COLUMN is_private INTEGER NOT NULL DEFAULT 0")
-    except sqlite3.OperationalError:
-        pass
     
     cursor.execute("SELECT COUNT(*) FROM forum_categories")
     if cursor.fetchone()[0] == 0:
@@ -213,6 +228,8 @@ def veritabani_hazirla():
     conn.close()
 
 veritabani_hazirla()
+eoba_veritabani_hazirla()
+social_veritabani_hazirla()
 
 
 # ----------------- PYDANTIC MODELLERİ -----------------
@@ -239,6 +256,16 @@ class NewCommentModel(BaseModel):
     content: str
     parent_id: Optional[int] = None
 
+class LikeToggleModel(BaseModel):
+    user_id: int
+
+class BookmarkToggleModel(BaseModel):
+    user_id: int
+
+class PollVoteModel(BaseModel):
+    user_id: int
+    option_index: int
+
 class UyeGuncellemeModel(BaseModel):
     role: str
     badge: str
@@ -261,25 +288,6 @@ class SiparisModel(BaseModel):
 
 class SiparisDurumModel(BaseModel):
     durum: str
-
-# E-Kütüphane Modelleri
-class FolderCreateModel(BaseModel):
-    name: str
-    parent_id: Optional[int] = None
-    user_id: int
-    is_private: Optional[int] = 0
-
-class ItemRenameModel(BaseModel):
-    name: str
-    user_id: int
-    is_private: Optional[int] = 0 
-
-class ItemMoveModel(BaseModel):
-    parent_id: Optional[int] = None  
-    user_id: int
-
-class WhitelistEmailModel(BaseModel):
-    email: EmailStr
 
 
 # ----------------- ADMİN PANEL ENTEGRASYONLARI -----------------
@@ -458,334 +466,6 @@ async def analyze_file(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"STL analiz hatası: {str(e)}")
 
 
-# ----------------- E-KÜTÜPHANE MODÜLÜ ENDPOINTLERİ -----------------
-
-@app.post("/api/library/folders")
-async def create_folder(folder: FolderCreateModel):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    try:
-        p_id = folder.parent_id if (folder.parent_id != 0 and folder.parent_id != "0") else None
-        cursor.execute(
-            "INSERT INTO library_folders (name, parent_id, user_id, is_private) VALUES (?, ?, ?, ?)",
-            (folder.name.strip(), p_id, folder.user_id, folder.is_private)
-        )
-        conn.commit()
-        folder_id = cursor.lastrowid
-    except Exception as e:
-        conn.close()
-        raise HTTPException(status_code=500, detail=f"Klasör oluşturulamadı: {str(e)}")
-    finally:
-        conn.close()
-    return {"status": "success", "folder_id": folder_id}
-
-
-@app.post("/api/library/files")
-async def upload_library_file(folder_id: int = Form(...), user_id: int = Form(...), file: UploadFile = File(...)):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    try:
-        file_extension = os.path.splitext(file.filename)[1]
-        unique_filename = f"lib_{tempfile.mktemp().split(os.sep)[-1]}{file_extension}"
-        physical_path = os.path.join(LIBRARY_DIR, unique_filename)
-        
-        with open(physical_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-            
-        file_size_mb = round(os.path.getsize(physical_path) / (1024 * 1024), 2)
-        # Göreceli Yol (Relative URL)
-        file_url = f"/static/library/{unique_filename}"
-        
-        target_folder = folder_id if (folder_id != 0 and folder_id != "0") else None
-        
-        cursor.execute(
-            "INSERT INTO library_files (folder_id, user_id, display_name, file_path, file_size) VALUES (?, ?, ?, ?, ?)",
-            (target_folder, user_id, file.filename, file_url, file_size_mb)
-        )
-        conn.commit()
-        return {"status": "success"}
-    except Exception as e:
-        conn.close()
-        raise HTTPException(status_code=500, detail=f"Dosya kütüphaneye kaydedilemedi: {str(e)}")
-    finally:
-        conn.close()
-
-
-@app.get("/api/library/contents")
-async def get_library_contents(parent_id: Optional[str] = None, current_user_id: Optional[str] = None):
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    try:
-        user_role = "user"
-        
-        try:
-            if current_user_id and str(current_user_id).strip() != "":
-                c_user_id = int(current_user_id)
-            else:
-                c_user_id = None
-        except:
-            c_user_id = None
-
-        try:
-            if parent_id is not None and str(parent_id).strip() != "" and str(parent_id) != "0":
-                p_id = int(parent_id)
-            else:
-                p_id = None
-        except:
-            p_id = None
-                
-        if c_user_id:
-            u_rec = cursor.execute("SELECT role FROM users WHERE id = ?", (c_user_id,)).fetchone()
-            if u_rec:
-                user_role = u_rec["role"]
-
-        if p_id is None:
-            folders_raw = cursor.execute("SELECT * FROM library_folders WHERE parent_id IS NULL ORDER BY name ASC").fetchall()
-            files_raw = cursor.execute("SELECT lf.*, u.display_name as uploader FROM library_files lf JOIN users u ON lf.user_id = u.id WHERE lf.folder_id IS NULL ORDER BY lf.tarih DESC").fetchall()
-        else:
-            folders_raw = cursor.execute("SELECT * FROM library_folders WHERE parent_id = ? ORDER BY name ASC", (p_id,)).fetchall()
-            files_raw = cursor.execute("SELECT lf.*, u.display_name as uploader FROM library_files lf JOIN users u ON lf.user_id = u.id WHERE lf.folder_id = ? ORDER BY lf.tarih DESC", (p_id,)).fetchall()
-
-        filtered_folders = []
-        for folder in folders_raw:
-            f_dict = dict(folder)
-            if f_dict.get("is_private") == 0:
-                filtered_folders.append(f_dict)
-            else:
-                if c_user_id is not None:
-                    has_whitelist_perm = cursor.execute(
-                        "SELECT 1 FROM library_folder_permissions WHERE folder_id = ? AND user_id = ?", 
-                        (f_dict["id"], c_user_id)
-                    ).fetchone()
-                    if f_dict["user_id"] == c_user_id or user_role == "admin" or has_whitelist_perm:
-                        filtered_folders.append(f_dict)
-
-        breadcrumbs = []
-        current_id = p_id
-        visited = set()
-        while current_id is not None and current_id not in visited:
-            visited.add(current_id)
-            folder_info = cursor.execute("SELECT id, name, parent_id FROM library_folders WHERE id = ?", (current_id,)).fetchone()
-            if folder_info:
-                breadcrumbs.insert(0, {"id": int(folder_info["id"]), "name": str(folder_info["name"])})
-                current_id = folder_info["parent_id"]
-            else:
-                break
-
-        return {
-            "status": "success",
-            "folders": filtered_folders,
-            "files": [dict(r) for r in files_raw],
-            "breadcrumbs": breadcrumbs
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        conn.close()
-
-@app.delete("/api/library/files/{file_id}")
-async def delete_library_file(file_id: int, user_id: int):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    try:
-        file_record = cursor.execute("SELECT user_id, file_path FROM library_files WHERE id = ?", (file_id,)).fetchone()
-        if not file_record:
-            raise HTTPException(status_code=404, detail="Dosya bulunamadı.")
-        
-        uploader_id, file_url = file_record[0], file_record[1]
-        user_record = cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
-        user_role = user_record[0] if user_record else "user"
-        
-        if uploader_id != user_id and user_role != "admin":
-            raise HTTPException(status_code=403, detail="Bu dosyayı silmeye yetkiniz bulunmamaktadır.")
-        
-        filename = file_url.split("/")[-1]
-        physical_path = os.path.join(LIBRARY_DIR, filename)
-        if os.path.exists(physical_path):
-            os.remove(physical_path)
-            
-        cursor.execute("DELETE FROM library_files WHERE id = ?", (file_id,))
-        conn.commit()
-        return {"status": "success", "message": "Dosya kütüphaneden kalıcı olarak silindi."}
-    finally:
-        conn.close()
-
-
-@app.delete("/api/library/folders/{folder_id}")
-async def delete_library_folder(folder_id: int, user_id: int):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    try:
-        folder_record = cursor.execute("SELECT user_id FROM library_folders WHERE id = ?", (folder_id,)).fetchone()
-        if not folder_record:
-            raise HTTPException(status_code=404, detail="Klasör bulunamadı.")
-        
-        uploader_id = folder_record[0]
-        user_record = cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
-        user_role = user_record[0] if user_record else "user"
-        
-        if uploader_id != user_id and user_role != "admin":
-            raise HTTPException(status_code=403, detail="Bu klasörü silmeye yetkiniz bulunmamaktadır.")
-            
-        cursor.execute("DELETE FROM library_folders WHERE id = ?", (folder_id,))
-        conn.commit()
-        return {"status": "success", "message": "Klasör ve tüm alt içerikleri başarıyla temizlendi."}
-    finally:
-        conn.close()
-
-
-@app.put("/api/library/folders/{folder_id}/update")
-async def update_folder(folder_id: int, req: ItemRenameModel):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    try:
-        folder_record = cursor.execute("SELECT user_id FROM library_folders WHERE id = ?", (folder_id,)).fetchone()
-        if not folder_record:
-            raise HTTPException(status_code=404, detail="Klasör bulunamadı.")
-            
-        uploader_id = folder_record[0]
-        user_record = cursor.execute("SELECT role FROM users WHERE id = ?", (req.user_id,)).fetchone()
-        user_role = user_record[0] if user_record else "user"
-        
-        if uploader_id != req.user_id and user_role != "admin":
-            raise HTTPException(status_code=403, detail="Bu klasörün ayarlarını değiştirmeye yetkiniz bulunmamaktadır.")
-
-        cursor.execute(
-            "UPDATE library_folders SET name = ?, is_private = ? WHERE id = ?", 
-            (req.name.strip(), req.is_private, folder_id)
-        )
-        conn.commit()
-        return {"status": "success", "message": "Klasör başarıyla güncellendi."}
-    except HTTPException as he:
-        raise he
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    finally:
-        conn.close()
-
-
-@app.put("/api/library/files/{file_id}/rename")
-async def rename_file(file_id: int, req: ItemRenameModel):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    try:
-        file_record = cursor.execute("SELECT user_id FROM library_files WHERE id = ?", (file_id,)).fetchone()
-        if not file_record:
-            raise HTTPException(status_code=404, detail="Dosya bulunamadı.")
-            
-        uploader_id = file_record[0]
-        user_record = cursor.execute("SELECT role FROM users WHERE id = ?", (req.user_id,)).fetchone()
-        user_role = user_record[0] if user_record else "user"
-        
-        if uploader_id != req.user_id and user_role != "admin":
-            raise HTTPException(status_code=403, detail="Bu dosyanın adını değiştirmeye yetkiniz bulunmamaktadır.")
-
-        cursor.execute("UPDATE library_files SET display_name = ? WHERE id = ?", (req.name.strip(), file_id))
-        conn.commit()
-        return {"status": "success", "message": "Dosya adı güncellendi."}
-    finally:
-        conn.close()
-
-
-@app.put("/api/library/folders/{folder_id}/move")
-async def move_folder(folder_id: int, req: ItemMoveModel):
-    if req.parent_id == folder_id:
-        raise HTTPException(status_code=400, detail="Bir klasörü kendi içine taşıyamazsınız.")
-    
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    try:
-        folder_record = cursor.execute("SELECT user_id FROM library_folders WHERE id = ?", (folder_id,)).fetchone()
-        if not folder_record:
-            raise HTTPException(status_code=404, detail="Klasör bulunamadı.")
-            
-        uploader_id = folder_record[0]
-        user_record = cursor.execute("SELECT role FROM users WHERE id = ?", (req.user_id,)).fetchone()
-        user_role = user_record[0] if user_record else "user"
-        
-        if uploader_id != req.user_id and user_role != "admin":
-            raise HTTPException(status_code=403, detail="Bu klasörü taşımaya yetkiniz bulunmamaktadır.")
-
-        target_parent = req.parent_id if (req.parent_id != 0 and req.parent_id != "0") else None
-        cursor.execute("UPDATE library_folders SET parent_id = ? WHERE id = ?", (target_parent, folder_id))
-        conn.commit()
-        return {"status": "success", "message": "Klasör başarıyla taşındı."}
-    finally:
-        conn.close()
-
-
-@app.put("/api/library/files/{file_id}/move")
-async def move_file(file_id: int, req: ItemMoveModel):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    try:
-        file_record = cursor.execute("SELECT user_id FROM library_files WHERE id = ?", (file_id,)).fetchone()
-        if not file_record:
-            raise HTTPException(status_code=404, detail="Dosya bulunamadı.")
-            
-        uploader_id = file_record[0]
-        user_record = cursor.execute("SELECT role FROM users WHERE id = ?", (req.user_id,)).fetchone()
-        user_role = user_record[0] if user_record else "user"
-        
-        if uploader_id != req.user_id and user_role != "admin":
-            raise HTTPException(status_code=403, detail="Bu dosyayı taşımaya yetkiniz bulunmamaktadır.")
-
-        target_folder = req.parent_id if (req.parent_id != 0 and req.parent_id != "0") else None
-        cursor.execute("UPDATE library_files SET folder_id = ? WHERE id = ?", (target_folder, file_id))
-        conn.commit()
-        return {"status": "success", "message": "Dosya başarıyla taşındı."}
-    finally:
-        conn.close()
-
-
-@app.get("/api/library/folders/{folder_id}/permissions")
-async def get_folder_permissions(folder_id: int):
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    try:
-        users = cursor.execute(
-            """SELECT u.id, u.email, u.display_name FROM library_folder_permissions p 
-               JOIN users u ON p.user_id = u.id WHERE p.folder_id = ?""", (folder_id,)
-        ).fetchall()
-        return {"status": "success", "users": [dict(r) for r in users]}
-    finally:
-        conn.close()
-
-
-@app.post("/api/library/folders/{folder_id}/permissions")
-async def add_folder_permission(folder_id: int, req: WhitelistEmailModel):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    try:
-        user = cursor.execute("SELECT id FROM users WHERE email = ?", (req.email.strip(),)).fetchone()
-        if not user:
-            raise HTTPException(status_code=404, detail="Bu e-posta adresine ait bir kullanıcı bulunamadı.")
-        
-        user_id = user[0]
-        cursor.execute(
-            "INSERT OR IGNORE INTO library_folder_permissions (folder_id, user_id) VALUES (?, ?)",
-            (folder_id, user_id)
-        )
-        conn.commit()
-        return {"status": "success", "message": "Kullanıcı beyaz listeye eklendi."}
-    finally:
-        conn.close()
-
-
-@app.delete("/api/library/folders/{folder_id}/permissions/{user_id}")
-async def remove_folder_permission(folder_id: int, user_id: int):
-    conn = sqlite3.connect(DB_NAME)
-    cursor = conn.cursor()
-    try:
-        cursor.execute("DELETE FROM library_folder_permissions WHERE folder_id = ? AND user_id = ?", (folder_id, user_id))
-        conn.commit()
-        return {"status": "success", "message": "Kullanıcının erişim izni kaldırıldı."}
-    finally:
-        conn.close()
-
-
 # ----------------- FORUM SİSTEMİ VE PROFİL ENDPOINTLERİ -----------------
 
 @app.put("/api/user/profile")
@@ -814,50 +494,335 @@ async def get_category_posts(category_id: int):
     conn = sqlite3.connect(DB_NAME); conn.row_factory = sqlite3.Row; cursor = conn.cursor(); rows = cursor.execute("SELECT fp.*, u.display_name, u.profile_image, u.badge FROM forum_posts fp JOIN users u ON fp.user_id = u.id WHERE fp.category_id = ? ORDER BY fp.tarih DESC", (category_id,)).fetchall(); conn.close(); return [dict(r) for r in rows]
 
 @app.post("/api/forum/posts")
-async def create_forum_post(category_id: int = Form(...), user_id: int = Form(...), title: str = Form(...), content: str = Form(...), file: Optional[UploadFile] = File(None)):
-    conn = sqlite3.connect(DB_NAME); cursor = conn.cursor(); img = None
+@app.post("/api/feed/posts")
+async def create_feed_post(
+    user_id: int = Form(...),
+    content: str = Form(""),
+    title: Optional[str] = Form(None),
+    category_id: Optional[int] = Form(1),
+    repost_of_id: Optional[int] = Form(None),
+    poll_question: Optional[str] = Form(None),
+    poll_options: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    files: Optional[List[UploadFile]] = File(None)
+):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    uploaded_images = []
+    all_files = []
     if file and file.filename:
-        fe = os.path.splitext(file.filename)[1]; cf = f"post_{tempfile.mktemp().split(os.sep)[-1]}{fe}"; fp = os.path.join(UPLOAD_DIR, cf)
-        with open(fp, "wb") as b: shutil.copyfileobj(file.file, b)
-        # Göreceli Yol
-        img = f"/static/uploads/{cf}"
+        all_files.append(file)
+    if files:
+        for f in files:
+            if f and f.filename:
+                all_files.append(f)
+
+    for f in all_files[:4]:  # En fazla 4 görsel
+        fe = os.path.splitext(f.filename)[1]
+        cf = f"post_{tempfile.mktemp().split(os.sep)[-1]}{fe}"
+        fp = os.path.join(UPLOAD_DIR, cf)
+        with open(fp, "wb") as b:
+            shutil.copyfileobj(f.file, b)
+        uploaded_images.append(f"/static/uploads/{cf}")
+
+    primary_img = uploaded_images[0] if uploaded_images else None
+    images_json = json.dumps(uploaded_images)
+
     try:
-        cursor.execute("INSERT INTO forum_posts (category_id, user_id, title, content, image_url) VALUES (?, ?, ?, ?, ?)", (category_id, user_id, title, content, img)); pid = cursor.lastrowid
-        cursor.execute("INSERT INTO discover_feed (content_type, content_id) VALUES ('forum_post', ?)", (pid,)); conn.commit()
-    except Exception as e: conn.rollback(); conn.close(); raise HTTPException(status_code=500, detail=str(e))
-    finally: conn.close()
+        cat_id = category_id if category_id else 1
+        post_title = title if (title and title.strip()) else (content[:60] + "..." if len(content) > 60 else content)
+        cursor.execute(
+            "INSERT INTO forum_posts (category_id, user_id, title, content, image_url, images, repost_of_id) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (cat_id, user_id, post_title, content, primary_img, images_json, repost_of_id)
+        )
+        pid = cursor.lastrowid
+        cursor.execute("INSERT INTO discover_feed (content_type, content_id) VALUES ('forum_post', ?)", (pid,))
+
+        # Anket varsa kaydet
+        if poll_question and poll_question.strip() and poll_options:
+            cursor.execute("INSERT INTO feed_polls (post_id, question, options) VALUES (?, ?, ?)", (pid, poll_question.strip(), poll_options))
+
+        # @Bahsetmeler (@mentions) için bildirim gönder
+        mentions = re.findall(r'@([a-zA-Z0-9_çğıöşüÇĞİÖŞÜ]+)', content)
+        if mentions:
+            user_author = cursor.execute("SELECT display_name FROM users WHERE id = ?", (user_id,)).fetchone()
+            author_name = user_author[0] if user_author else "Bir kullanıcı"
+            for mention in set(mentions):
+                m_user = cursor.execute("SELECT id FROM users WHERE display_name = ? OR email LIKE ?", (mention, f"{mention}@%")).fetchone()
+                if m_user and m_user[0] != user_id:
+                    cursor.execute(
+                        "INSERT INTO notifications (user_id, sender_id, type, title, content, link) VALUES (?, ?, 'feed', ?, ?, ?)",
+                        (m_user[0], user_id, "Senden Bahsetti", f"{author_name} bir paylaşımda senden bahsetti.", "/akis")
+                    )
+
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
     return {"status": "success"}
 
 @app.delete("/api/forum/posts/{post_id}")
+@app.delete("/api/feed/posts/{post_id}")
 async def delete_forum_post(post_id: int, user_id: int):
     conn = sqlite3.connect(DB_NAME); cursor = conn.cursor(); p = cursor.execute("SELECT user_id FROM forum_posts WHERE id = ?", (post_id,)).fetchone()
     if not p: conn.close(); raise HTTPException(status_code=404, detail="Gönderi bulunamadı.")
     u = cursor.execute("SELECT role FROM users WHERE id = ?", (user_id,)).fetchone()
     if p[0] != user_id and (not u or u[0] != 'admin'): conn.close(); raise HTTPException(status_code=403, detail="Yetkisiz işlem.")
-    try: cursor.execute("DELETE FROM forum_posts WHERE id = ?", (post_id,)); cursor.execute("DELETE FROM discover_feed WHERE content_type = 'forum_post' AND content_id = ?", (post_id,)); conn.commit()
+    try:
+        cursor.execute("DELETE FROM forum_posts WHERE id = ?", (post_id,))
+        cursor.execute("DELETE FROM discover_feed WHERE content_type = 'forum_post' AND content_id = ?", (post_id,))
+        cursor.execute("DELETE FROM feed_likes WHERE post_id = ?", (post_id,))
+        cursor.execute("DELETE FROM feed_bookmarks WHERE post_id = ?", (post_id,))
+        cursor.execute("DELETE FROM feed_polls WHERE post_id = ?", (post_id,))
+        conn.commit()
     except Exception as e: conn.rollback(); conn.close(); raise HTTPException(status_code=500, detail=str(e))
     finally: conn.close()
     return {"status": "success"}
 
 @app.get("/api/forum/posts/all")
-async def get_all_posts():
-    conn = sqlite3.connect(DB_NAME); conn.row_factory = sqlite3.Row; cursor = conn.cursor(); rows = cursor.execute("SELECT fp.*, u.display_name, u.profile_image, u.badge, c.name as category_name FROM forum_posts fp JOIN users u ON fp.user_id = u.id JOIN forum_categories c ON fp.category_id = c.id ORDER BY fp.tarih DESC").fetchall(); conn.close(); return [dict(r) for r in rows]
+@app.get("/api/feed/posts")
+async def get_all_feed_posts(
+    filter: str = Query("all"),
+    search: Optional[str] = Query(None),
+    user_id: Optional[int] = Query(None)
+):
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    query = """
+        SELECT fp.*, u.display_name, u.profile_image, u.badge, u.bio,
+               (SELECT COUNT(*) FROM feed_likes fl WHERE fl.post_id = fp.id) as likes_count,
+               (SELECT COUNT(*) FROM forum_comments fc WHERE fc.post_id = fp.id) as comments_count,
+               (SELECT COUNT(*) FROM forum_posts rp WHERE rp.repost_of_id = fp.id) as reposts_count
+        FROM forum_posts fp
+        JOIN users u ON fp.user_id = u.id
+    """
+    conditions = []
+    params = []
+
+    if filter == "media":
+        conditions.append("(fp.image_url IS NOT NULL OR (fp.images IS NOT NULL AND fp.images != '[]' AND fp.images != ''))")
+    elif filter == "bookmarks" and user_id:
+        conditions.append("fp.id IN (SELECT post_id FROM feed_bookmarks WHERE user_id = ?)")
+        params.append(user_id)
+
+    if search:
+        s = f"%{search.strip()}%"
+        conditions.append("(fp.content LIKE ? OR fp.title LIKE ? OR u.display_name LIKE ?)")
+        params.extend([s, s, s])
+
+    if conditions:
+        query += " WHERE " + " AND ".join(conditions)
+
+    if filter == "top":
+        query += " ORDER BY likes_count DESC, fp.tarih DESC"
+    else:
+        query += " ORDER BY fp.tarih DESC"
+
+    rows = cursor.execute(query, params).fetchall()
+    posts_list = []
+
+    for r in rows:
+        post = dict(r)
+
+        post["is_liked"] = False
+        post["is_bookmarked"] = False
+        if user_id:
+            liked = cursor.execute("SELECT id FROM feed_likes WHERE post_id = ? AND user_id = ?", (post["id"], user_id)).fetchone()
+            post["is_liked"] = bool(liked)
+            bookmarked = cursor.execute("SELECT id FROM feed_bookmarks WHERE post_id = ? AND user_id = ?", (post["id"], user_id)).fetchone()
+            post["is_bookmarked"] = bool(bookmarked)
+
+        # Görselleri listeye dönüştür
+        images_list = []
+        if post.get("images"):
+            try:
+                images_list = json.loads(post["images"])
+            except Exception:
+                images_list = []
+        if not images_list and post.get("image_url"):
+            images_list = [post["image_url"]]
+        post["images"] = images_list
+
+        # Alıntılanan / Yeniden Paylaşılan Gönderi (Repost)
+        post["repost_of"] = None
+        if post.get("repost_of_id"):
+            orig = cursor.execute("""
+                SELECT fp.id, fp.content, fp.image_url, fp.images, fp.tarih, u.display_name, u.profile_image, u.badge
+                FROM forum_posts fp
+                JOIN users u ON fp.user_id = u.id
+                WHERE fp.id = ?
+            """, (post["repost_of_id"],)).fetchone()
+            if orig:
+                orig_dict = dict(orig)
+                orig_images = []
+                if orig_dict.get("images"):
+                    try: orig_images = json.loads(orig_dict["images"])
+                    except Exception: orig_images = []
+                if not orig_images and orig_dict.get("image_url"):
+                    orig_images = [orig_dict["image_url"]]
+                orig_dict["images"] = orig_images
+                post["repost_of"] = orig_dict
+
+        # Anket Verisi
+        poll_row = cursor.execute("SELECT * FROM feed_polls WHERE post_id = ?", (post["id"],)).fetchone()
+        if poll_row:
+            poll_dict = dict(poll_row)
+            try:
+                raw_options = json.loads(poll_dict["options"])
+            except Exception:
+                raw_options = []
+
+            votes_rows = cursor.execute("SELECT option_index, COUNT(*) as vote_count FROM feed_poll_votes WHERE poll_id = ? GROUP BY option_index", (poll_dict["id"],)).fetchall()
+            votes_map = {vr["option_index"]: vr["vote_count"] for vr in votes_rows}
+            total_votes = sum(votes_map.values())
+
+            options_with_votes = []
+            for idx, opt in enumerate(raw_options):
+                count = votes_map.get(idx, 0)
+                pct = round((count / total_votes * 100)) if total_votes > 0 else 0
+                options_with_votes.append({"index": idx, "text": opt, "votes": count, "percentage": pct})
+
+            user_voted = None
+            if user_id:
+                uv = cursor.execute("SELECT option_index FROM feed_poll_votes WHERE poll_id = ? AND user_id = ?", (poll_dict["id"], user_id)).fetchone()
+                if uv: user_voted = uv["option_index"]
+
+            post["poll"] = {
+                "id": poll_dict["id"],
+                "question": poll_dict["question"],
+                "options": options_with_votes,
+                "total_votes": total_votes,
+                "user_voted": user_voted
+            }
+        else:
+            post["poll"] = None
+
+        posts_list.append(post)
+
+    conn.close()
+    return posts_list
+
+@app.post("/api/feed/posts/{post_id}/like")
+async def toggle_like(post_id: int, req: LikeToggleModel):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    try:
+        existing = cursor.execute("SELECT id FROM feed_likes WHERE post_id = ? AND user_id = ?", (post_id, req.user_id)).fetchone()
+        if existing:
+            cursor.execute("DELETE FROM feed_likes WHERE id = ?", (existing[0],))
+            liked = False
+        else:
+            cursor.execute("INSERT INTO feed_likes (post_id, user_id) VALUES (?, ?)", (post_id, req.user_id))
+            liked = True
+            # Gönderi sahibine bildirim gönder (kendisi değilse)
+            post_author = cursor.execute("SELECT user_id FROM forum_posts WHERE id = ?", (post_id,)).fetchone()
+            if post_author and post_author[0] != req.user_id:
+                liker = cursor.execute("SELECT display_name FROM users WHERE id = ?", (req.user_id,)).fetchone()
+                liker_name = liker[0] if liker else "Bir maker"
+                cursor.execute(
+                    "INSERT INTO notifications (user_id, sender_id, type, title, content, link) VALUES (?, ?, 'feed', ?, ?, ?)",
+                    (post_author[0], req.user_id, "Yeni Beğeni", f"{liker_name} paylaşımınızı beğendi.", "/akis")
+                )
+        conn.commit()
+        likes_count = cursor.execute("SELECT COUNT(*) FROM feed_likes WHERE post_id = ?", (post_id,)).fetchone()[0]
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+    return {"status": "success", "liked": liked, "likes_count": likes_count}
+
+@app.post("/api/feed/posts/{post_id}/bookmark")
+async def toggle_bookmark(post_id: int, req: BookmarkToggleModel):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    try:
+        existing = cursor.execute("SELECT id FROM feed_bookmarks WHERE post_id = ? AND user_id = ?", (post_id, req.user_id)).fetchone()
+        if existing:
+            cursor.execute("DELETE FROM feed_bookmarks WHERE id = ?", (existing[0],))
+            bookmarked = False
+        else:
+            cursor.execute("INSERT INTO feed_bookmarks (post_id, user_id) VALUES (?, ?)", (post_id, req.user_id))
+            bookmarked = True
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+    return {"status": "success", "bookmarked": bookmarked}
+
+@app.post("/api/feed/polls/{poll_id}/vote")
+async def vote_poll(poll_id: int, req: PollVoteModel):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT OR REPLACE INTO feed_poll_votes (poll_id, option_index, user_id) VALUES (?, ?, ?)", (poll_id, req.option_index, req.user_id))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
+    return {"status": "success"}
+
+@app.get("/api/user/{user_id}/mini_profile")
+async def get_user_mini_profile(user_id: int):
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    u = cursor.execute("SELECT id, display_name, profile_image, badge, bio, custom_link FROM users WHERE id = ?", (user_id,)).fetchone()
+    if not u:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı.")
+    u_dict = dict(u)
+    u_dict["posts_count"] = cursor.execute("SELECT COUNT(*) FROM forum_posts WHERE user_id = ?", (user_id,)).fetchone()[0]
+    u_dict["likes_received"] = cursor.execute("SELECT COUNT(*) FROM feed_likes fl JOIN forum_posts fp ON fl.post_id = fp.id WHERE fp.user_id = ?", (user_id,)).fetchone()[0]
+    conn.close()
+    return u_dict
 
 @app.post("/api/forum/comments")
+@app.post("/api/feed/comments")
 async def create_comment(comment: NewCommentModel):
-    conn = sqlite3.connect(DB_NAME); cursor = conn.cursor()
-    try: cursor.execute("INSERT INTO forum_comments (post_id, user_id, content, parent_id) VALUES (?, ?, ?, ?)", (comment.post_id, comment.user_id, comment.content, comment.parent_id)); conn.commit()
-    except Exception as e: conn.close(); raise HTTPException(status_code=500, detail=str(e))
-    finally: conn.close()
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    try:
+        cursor.execute("INSERT INTO forum_comments (post_id, user_id, content, parent_id) VALUES (?, ?, ?, ?)", (comment.post_id, comment.user_id, comment.content, comment.parent_id))
+        
+        # Gönderi sahibine bildirim gönder
+        post_author = cursor.execute("SELECT user_id FROM forum_posts WHERE id = ?", (comment.post_id,)).fetchone()
+        if post_author and post_author[0] != comment.user_id:
+            commenter = cursor.execute("SELECT display_name FROM users WHERE id = ?", (comment.user_id,)).fetchone()
+            commenter_name = commenter[0] if commenter else "Bir maker"
+            cursor.execute(
+                "INSERT INTO notifications (user_id, sender_id, type, title, content, link) VALUES (?, ?, 'feed', ?, ?, ?)",
+                (post_author[0], comment.user_id, "Yeni Yorum", f"{commenter_name} paylaşımınıza yorum yaptı.", "/akis")
+            )
+        conn.commit()
+    except Exception as e:
+        conn.close()
+        raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        conn.close()
     return {"status": "success"}
 
 @app.get("/api/forum/posts/{post_id}/comments")
+@app.get("/api/feed/posts/{post_id}/comments")
 async def get_post_comments(post_id: int):
     conn = sqlite3.connect(DB_NAME); conn.row_factory = sqlite3.Row; cursor = conn.cursor(); rows = cursor.execute("SELECT fc.*, u.display_name, u.profile_image, u.badge FROM forum_comments fc JOIN users u ON fc.user_id = u.id WHERE fc.post_id = ? ORDER BY fc.tarih ASC", (post_id,)).fetchall(); conn.close(); return [dict(r) for r in rows]
 
 @app.get("/api/user/{user_id}/posts")
 async def get_user_posts(user_id: int):
-    conn = sqlite3.connect(DB_NAME); conn.row_factory = sqlite3.Row; cursor = conn.cursor(); rows = cursor.execute("SELECT fp.*, c.name as category_name FROM forum_posts fp JOIN forum_categories c ON fp.category_id = c.id WHERE fp.user_id = ? ORDER BY fp.tarih DESC", (user_id,)).fetchall(); conn.close(); return [dict(r) for r in rows]
+    conn = sqlite3.connect(DB_NAME); conn.row_factory = sqlite3.Row; cursor = conn.cursor(); rows = cursor.execute("SELECT fp.*, u.display_name, u.profile_image, u.badge FROM forum_posts fp JOIN users u ON fp.user_id = u.id WHERE fp.user_id = ? ORDER BY fp.tarih DESC", (user_id,)).fetchall(); conn.close(); return [dict(r) for r in rows]
 
 @app.get("/api/discover/feed")
 async def get_discover_feed():

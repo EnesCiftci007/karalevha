@@ -1,7 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { API_URL } from '../config';
+import { useLanguage } from '../i18n/LanguageContext';
 
 const Uye = () => {
+    const { t } = useLanguage();
+    const location = useLocation();
     const [posts, setPosts] = useState([]);
     const [isEditing, setIsEditing] = useState(false);
 
@@ -18,6 +22,14 @@ const Uye = () => {
     // Tarayıcı oturumundan güncel kullanıcıyı çek
     const storedUser = localStorage.getItem('user');
     const user = storedUser ? JSON.parse(storedUser) : null;
+
+    // URL'de ?duzenle=1 varsa doğrudan düzenleme modunu aç
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        if (params.get('duzenle') === '1') {
+            setIsEditing(true);
+        }
+    }, [location.search]);
 
     useEffect(() => {
         if (user) {
@@ -59,22 +71,22 @@ const Uye = () => {
                 if (data.status === 'success') {
                     // LocalStorage'ı yeni gelen verilerle tazeleyelim
                     localStorage.setItem('user', JSON.stringify(data.user));
-                    setMessage({ type: 'success', text: 'Profiliniz başarıyla güncellendi!' });
+                    setMessage({ type: 'success', text: t('profile_updated_success') });
                     setIsEditing(false);
                     // Sayfadaki anlık görüntünün yenilenmesi için ufak bir gecikmeyle reload atabiliriz
                     setTimeout(() => window.location.reload(), 1000);
                 } else {
-                    setMessage({ type: 'error', text: data.detail || 'Bir hata oluştu.' });
+                    setMessage({ type: 'error', text: data.detail || t('error_occurred') });
                 }
             })
-            .catch(() => setMessage({ type: 'error', text: 'Sunucuyla haberleşirken hata oluştu.' }));
+            .catch(() => setMessage({ type: 'error', text: t('server_error') }));
     };
 
     if (!user) {
         return (
             <div style={styles.container}>
                 <div style={styles.infoBox}>
-                    <p style={{ color: '#f1c40f' }}>Profilinizi görüntülemek ve düzenlemek için lütfen giriş yapın.</p>
+                    <p style={{ color: '#f1c40f' }}>{t('profile_please_login')}</p>
                 </div>
             </div>
         );
@@ -112,9 +124,9 @@ const Uye = () => {
                             <p style={styles.emailText}>✉️ {user.email}</p>
 
                             <div style={styles.bioBox}>
-                                <h4 style={{ color: '#555', marginBottom: '5px', fontSize: '12px', textTransform: 'uppercase' }}>Biyografi</h4>
+                                <h4 style={{ color: '#555', marginBottom: '5px', fontSize: '12px', textTransform: 'uppercase' }}>{t('profile_bio')}</h4>
                                 <p style={{ color: user.bio ? '#ccc' : '#555', fontStyle: user.bio ? 'normal' : 'italic' }}>
-                                    {user.bio || 'Henüz bir biyografi eklenmemiş.'}
+                                    {user.bio || t('profile_bio_empty')}
                                 </p>
                             </div>
 
@@ -126,48 +138,43 @@ const Uye = () => {
                                     </a>
                                 </div>
                             )}
-
-                            <button onClick={() => setIsEditing(true)} style={styles.editBtn}>Profili Düzenle</button>
                         </>
                     ) : (
                         <form onSubmit={handleUpdateProfile} style={styles.formLayout}>
-                            <h3 style={{ color: '#3498db', marginBottom: '15px' }}>Profili Güncelle</h3>
+                            <h3 style={{ color: '#3498db', marginBottom: '15px' }}>{t('profile_update_title')}</h3>
 
-                            <label style={styles.label}>Görünüm Adı</label>
+                            <label style={styles.label}>{t('profile_display_name')}</label>
                             <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} style={styles.input} required />
 
-                            <label style={styles.label}>Biyografi</label>
-                            <textarea placeholder="Kendinizden, projelerinizden veya yazıcılarınızdan bahsedin..." value={bio} onChange={(e) => setBio(e.target.value)} style={styles.textarea} />
+                            <label style={styles.label}>{t('profile_bio')}</label>
+                            <textarea placeholder={t('profile_bio_placeholder')} value={bio} onChange={(e) => setBio(e.target.value)} style={styles.textarea} />
 
-                            <label style={styles.label}>Özel Link (Sosyal Medya, YT Videosu vb.)</label>
+                            <label style={styles.label}>{t('profile_custom_link')}</label>
                             <input type="url" placeholder="https://example.com" value={customLink} onChange={(e) => setCustomLink(e.target.value)} style={styles.input} />
 
-                            <label style={styles.label}>Profil Resmi Değiştir</label>
+                            <label style={styles.label}>{t('profile_change_image')}</label>
                             <input type="file" accept="image/*" onChange={(e) => setSelectedFile(e.target.files[0])} style={{ color: '#ccc', marginBottom: '20px' }} />
 
                             <div style={{ display: 'flex', gap: '10px' }}>
-                                <button type="submit" style={styles.saveBtn}>Değişiklikleri Kaydet</button>
-                                <button type="button" onClick={() => setIsEditing(false)} style={styles.cancelBtn}>İptal</button>
+                                <button type="submit" style={styles.saveBtn}>{t('profile_save_changes')}</button>
+                                <button type="button" onClick={() => setIsEditing(false)} style={styles.cancelBtn}>{t('profile_cancel')}</button>
                             </div>
                         </form>
                     )}
                 </div>
             </div>
 
-            {/* Alt Bölüm: Kullanıcının Paylaştığı Forum Gönderileri */}
+            {/* Alt Bölüm: Kullanıcının Paylaştığı Akış Gönderileri */}
             <div style={styles.historySection}>
-                <h3 style={styles.historyTitle}>Son Paylaştığım Konular</h3>
+                <h3 style={styles.historyTitle}>{t('profile_my_topics')}</h3>
                 {posts.length === 0 ? (
-                    <p style={{ color: '#555', fontStyle: 'italic' }}>Henüz forumda bir konu açmadınız.</p>
+                    <p style={{ color: '#555', fontStyle: 'italic' }}>{t('profile_no_topics')}</p>
                 ) : (
                     posts.map(post => (
                         <div key={post.id} style={styles.postMiniCard}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <h4 style={styles.postTitle}>{post.title}</h4>
-                                <span style={styles.categoryTag}>{post.category_name}</span>
-                            </div>
+                            <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#e4e4e7', lineHeight: '1.5' }}>{post.content}</p>
                             <div style={styles.postMeta}>
-                                <span>📅 {new Date(post.tarih).toLocaleDateString('tr-TR')}</span>
+                                <span>📅 {new Date(post.tarih).toLocaleDateString()}</span>
                             </div>
                         </div>
                     ))
@@ -178,9 +185,9 @@ const Uye = () => {
 };
 
 const styles = {
-    container: { padding: '40px 60px', backgroundColor: '#000000', minHeight: '90vh', color: '#fff' },
-    profileCard: { display: 'flex', gap: '40px', backgroundColor: '#111', padding: '40px', borderRadius: '4px', border: '1px solid #222', marginBottom: '30px' },
-    avatarSection: { display: 'flex', flexDirection: 'column', alignItems: 'center', width: '200px', gap: '15px' },
+    container: { padding: '30px 4%', backgroundColor: '#000000', minHeight: '90vh', color: '#fff' },
+    profileCard: { display: 'flex', flexWrap: 'wrap', gap: '30px', backgroundColor: '#111', padding: '30px 20px', borderRadius: '8px', border: '1px solid #222', marginBottom: '30px' },
+    avatarSection: { display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', maxWidth: '200px', margin: '0 auto', gap: '15px' },
     avatarContainer: { width: '130px', height: '130px', borderRadius: '50%', overflow: 'hidden', border: '2px solid #333', backgroundColor: '#050505' },
     avatar: { width: '100%', height: '100%', objectFit: 'cover' },
     avatarPlaceholder: { width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold', color: '#666', backgroundColor: '#1c1c1c' },

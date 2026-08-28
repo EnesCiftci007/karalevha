@@ -1,8 +1,216 @@
+* {
+    box-sizing: border-box;
+}
+
 body {
     margin: 0;
-    background-color: #1e1e24;
+    padding: 0;
+    background-color: #000000;
     color: #fff;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overflow-x: hidden;
 }
+
+/* Özel Şık İnce Kaydırma Çubuğu */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: #09090d;
+}
+
+::-webkit-scrollbar-thumb {
+    background: #252538;
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #3b82f6;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(-6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-15px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Mobil Uyumlu Yardımcı Sınıflar */
+@media (max-width: 768px) {
+    .hide-on-mobile {
+        display: none !important;
+    }
+    .show-on-mobile {
+        display: flex !important;
+    }
+}
+
+@media (min-width: 769px) {
+    .hide-on-desktop {
+        display: none !important;
+    }
+}
+
+/* ==========================================================================
+   E-OBA AĞAÇ ETKİLEŞİM EFEKTLERİ (Zarif, abartısız hare ve mikrovurgular)
+   ========================================================================== */
+
+/* 1. Çadır Başlığı */
+.eoba-tree-cadir {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    border-radius: 4px;
+}
+
+.eoba-tree-cadir:hover {
+    background-color: rgba(255, 255, 255, 0.04) !important;
+    box-shadow: 0 0 16px rgba(255, 255, 255, 0.04), inset 2px 0 0 rgba(255, 255, 255, 0.35) !important;
+    padding-left: 8px !important;
+}
+
+.eoba-tree-cadir:hover .eoba-cadir-name {
+    color: #ffffff !important;
+    letter-spacing: 0.8px !important;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.25);
+}
+
+.eoba-tree-cadir:hover .eoba-cadir-arrow {
+    color: #3b82f6 !important;
+}
+
+/* 2. Masa Satırı */
+.eoba-tree-masa {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    border-radius: 6px;
+}
+
+.eoba-tree-masa:hover {
+    background-color: rgba(59, 130, 246, 0.06) !important;
+    transform: translateX(3px) !important;
+    box-shadow: 0 0 14px rgba(59, 130, 246, 0.14), inset 2.5px 0 0 rgba(59, 130, 246, 0.85) !important;
+}
+
+.eoba-tree-masa:hover .eoba-masa-name {
+    color: #ffffff !important;
+    font-weight: 700 !important;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.2);
+}
+
+.eoba-tree-masa:hover .eoba-masa-arrow {
+    color: #3b82f6 !important;
+}
+
+/* 3. Levha Satırı */
+.eoba-tree-levha {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    border-radius: 4px;
+}
+
+.eoba-tree-levha:hover:not(.active) {
+    background-color: rgba(0, 102, 255, 0.09) !important;
+    transform: translateX(3px) !important;
+    box-shadow: 0 0 16px rgba(0, 102, 255, 0.16), inset 2.5px 0 0 rgba(59, 130, 246, 0.75) !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
+}
+
+.eoba-tree-levha:hover:not(.active) .eoba-levha-name {
+    color: #ffffff !important;
+    text-shadow: 0 0 8px rgba(0, 102, 255, 0.3);
+}
+
+.eoba-tree-levha.active {
+    box-shadow: 0 0 14px rgba(0, 102, 255, 0.2), inset 3px 0 0 #0066ff !important;
+}
+
+.eoba-tree-levha.active:hover {
+    background-color: rgba(0, 102, 255, 0.28) !important;
+    transform: translateX(2px) !important;
+    box-shadow: 0 0 18px rgba(0, 102, 255, 0.35), inset 3px 0 0 #3b82f6 !important;
+}
+
+/* 4. Yeni Çadır Butonu */
+.eoba-add-cadir-btn {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.eoba-add-cadir-btn:hover {
+    background-color: rgba(0, 102, 255, 0.15) !important;
+    border-color: #0066ff !important;
+    box-shadow: 0 0 14px rgba(0, 102, 255, 0.22) !important;
+    transform: translateY(-1px) !important;
+}
+
+/* 5. Üye Paneli Sağa Daraltma ve Genişletme Barı */
+.eoba-collapse-btn {
+    transition: all 0.15s ease !important;
+}
+
+.eoba-collapse-btn:hover {
+    color: #fff !important;
+    background-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+.eoba-collapsed-member-bar {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.eoba-collapsed-member-bar:hover {
+    background-color: #12121e !important;
+    border-left-color: #3b82f6 !important;
+    box-shadow: -2px 0 12px rgba(59, 130, 246, 0.15) !important;
+}
+
+.eoba-collapsed-member-bar:hover span {
+    color: #fff !important;
+}
+
+/* 6. Oba Ekle / Katıl Seçim Kartları */
+.eoba-choice-card {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.eoba-choice-card:hover {
+    background-color: #171726 !important;
+    border-color: #0066ff !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 6px 20px rgba(0, 102, 255, 0.16) !important;
+}
+
+.eoba-choice-card:hover .choice-arrow {
+    color: #38bdf8 !important;
+    transform: translateX(4px) !important;
+}
+
+/* 7. Navbar DM, Menü ve Açılır Menü Stilleri */
+.nav-icon-btn:hover, .nav-menu-btn:hover {
+    background-color: #1a1a26 !important;
+    border-color: #3b82f6 !important;
+    color: #fff !important;
+}
+
+.user-dropdown-item:hover {
+    background-color: #1c1c2b !important;
+    color: #fff !important;
+}
+
+
+

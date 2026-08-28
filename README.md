@@ -1,4 +1,4 @@
-# KaraLevha (v2.5)
+# KaraLevha (v2.6)
 
 Karalevha; açık kaynak paylaşımını temel alan, maker topluluklarını bir araya getiren ve 3D baskı hizmet analizlerini tek merkezden yöneten modern bir platform projesidir.
 
@@ -6,6 +6,17 @@ Karalevha; açık kaynak paylaşımını temel alan, maker topluluklarını bir 
 
 ## Güncelleme Notları (Changelog)
 
+
+### v2.6 - E-Oba Atölyeleri & Discord/Notion Mimarisi (27.08.2026)
+* **E-Oba Çalışma Alanı:** Discord ve Notion dünyalarını maker topluluğu için birleştiren E-Oba sistemi devreye alındı.
+* **Hiyerarşik Yapı:** `Oba` -> `Çadır (Kategori)` -> `Masa (Çalışma Odası)` -> `Levha` organizasyon modeli kuruldu.
+* **4 Temel Levha Motoru:**
+  * 💬 **Sohbet Levhası:** Discord tarzı canlı mesajlaşma, rol renkleri ve yetki denetimi.
+  * 📢 **Duyuru Levhası:** Pinned duyurular ve bültenler.
+  * 📊 **Tablo Levhası:** Excel / Notion tarzı dinamik hücre düzenlemeli BOM ve malzeme tablosu.
+  * 📌 **Görev Levhası:** Sürükle/bırak süreç aşamalı Kanban iş takip panosu.
+* **Discord Tarzı Rol & Tag Sistemi:** Her Oba için bağımsız renkli tag/rol oluşturma ve Çadır/Masa/Levha seviyesinde kademeli yetki ezme (permission overrides) altyapısı.
+* **KaraLevha Entegrasyonu:** Mavi tema rengiyle (`#0066ff`) Navbar ve Ana Sayfa kartlarına E-Oba Atölyeleri eklendi.
 
 ### v2.5 - Admin Paneli (03.06.2026)
 * Admin paneli dinamik hale getirildi. 

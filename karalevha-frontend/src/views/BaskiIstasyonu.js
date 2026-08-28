@@ -1,4 +1,4 @@
-﻿import React, { useState, Suspense, useEffect } from 'react';
+import React, { useState, Suspense, useEffect } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader';
@@ -6,6 +6,7 @@ import { useLoader } from '@react-three/fiber';
 import * as THREE from 'three';
 import istasyonLogosu from '../assets/baskikorsanlari.png'; // İstasyon görseli
 import { API_URL } from '../config';
+import { useLanguage } from '../i18n/LanguageContext';
 
 const BASE_URL = process.env.REACT_APP_API_URL || "";
 
@@ -34,6 +35,7 @@ function Model({ url, color }) {
 }
 
 export default function BaskiIstasyonu() {
+    const { t } = useLanguage();
     const [viewMode, setViewMode] = useState('customer');
 
     const [filaments, setFilaments] = useState([]);
@@ -425,15 +427,18 @@ export default function BaskiIstasyonu() {
                         )}
                     </>
                 ) : (
+                    /* ADMİN GÖRÜNÜMÜ: FİLAMENT VE ENVANTER YÖNETİMİ */
                     <div style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
-                        <h2 style={{ color: '#780078', marginTop: 0 }}>🛡️ İstasyon Matris Yönetimi (Veritabanı Entegre)</h2>
-                        <div style={{ display: 'flex', gap: '40px', marginTop: '30px' }}>
-                            <form onSubmit={handleAddFilament} style={{ flex: 1, background: '#1c1c24', padding: '25px', borderRadius: '10px', border: '1px solid #2d2d35', height: 'fit-content' }}>
-                                <h3 style={{ marginTop: 0, color: '#fff', fontSize: '16px', marginBottom: '20px' }}>➕ Yeni Makara Matrisi Tanımla</h3>
+                        <h2 style={{ marginTop: 0, color: '#780078' }}>⚙️ Üretim İstasyonu Hammadde ve Stok Yönetimi</h2>
+                        <p style={{ color: '#aaa', fontSize: '14px', marginBottom: '30px' }}>Atölyede halihazırda bulunan makaraları sisteme enjekte edin. Müşteriler sadece burada ekli olan renk ve malzemelerle üretim yaptırabilir.</p>
+
+                        <div style={{ display: 'flex', gap: '30px', flexWrap: 'wrap' }}>
+                            <form onSubmit={handleCreateFilament} style={{ flex: 1, background: '#1c1c24', padding: '25px', borderRadius: '10px', border: '1px solid #2d2d35', height: 'fit-content' }}>
+                                <h3 style={{ marginTop: 0, color: '#fff', fontSize: '16px', marginBottom: '20px' }}>Yeni Filament Tanımla</h3>
                                 <div style={{ marginBottom: '15px' }}>
-                                    <label style={{ display: 'block', fontSize: '13px', color: '#ccc', marginBottom: '5px' }}>Polimer Kimyası</label>
+                                    <label style={{ display: 'block', fontSize: '13px', color: '#ccc', marginBottom: '5px' }}>Polimer Tipi</label>
                                     <select value={newType} onChange={(e) => setNewType(e.target.value)} style={{ width: '100%', padding: '10px', background: '#2d2d35', color: '#fff', border: 'none', borderRadius: '6px' }}>
-                                        <option value="PLA">PLA</option>
+                                        <option value="PLA">PLA (Polilaktik Asit)</option>
                                         <option value="PETG">PETG</option>
                                     </select>
                                 </div>
@@ -480,11 +485,11 @@ export default function BaskiIstasyonu() {
             <div style={{ flex: 1, padding: '30px 25px', borderLeft: '1px solid #2d2d35', display: 'flex', flexDirection: 'column', justifyContent: 'space-between', boxSizing: 'border-box', overflowY: 'auto' }}>
                 {activeItem && viewMode === 'customer' ? (
                     <div>
-                        <h2 style={{ marginTop: 0, color: '#780078' }}>Parça {items.findIndex(i => i.id === activeId) + 1} Ayarları</h2>
+                        <h2 style={{ marginTop: 0, color: '#780078' }}>Parça {items.findIndex(i => i.id === activeId) + 1}</h2>
                         <hr style={{ borderColor: '#2d2d35', margin: '15px 0' }} />
 
                         <div style={{ marginBottom: '20px' }}>
-                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#ccc' }}>Malzeme Tipi</label>
+                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#ccc' }}>{t('print_material')}</label>
                             <select value={activeItem.material} onChange={(e) => updateActiveItem('material', e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: '6px', background: '#2d2d35', color: '#fff', border: 'none' }}>
                                 <option value="PLA">PLA</option>
                                 <option value="PETG">PETG</option>
@@ -492,12 +497,12 @@ export default function BaskiIstasyonu() {
                         </div>
 
                         <div style={{ marginBottom: '20px' }}>
-                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#ccc' }}>Doluluk Oranı (Infill): %{activeItem.infill}</label>
+                            <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', color: '#ccc' }}>{t('print_infill')}: %{activeItem.infill}</label>
                             <input type="range" min="10" max="100" step="10" value={activeItem.infill} onChange={(e) => updateActiveItem('infill', parseInt(e.target.value))} style={{ width: '100%', accentColor: '#780078' }} />
                         </div>
 
                         <div style={{ marginBottom: '20px' }}>
-                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#ccc' }}>Mevcut Spektrumlar ({activeItem.material})</label>
+                            <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', color: '#ccc' }}>Filament ({activeItem.material})</label>
                             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                                 {filteredColors.map((f) => (
                                     <button key={f.id} title={f.colorName} onClick={() => updateActiveItem('color', f.colorHex)} style={{ width: '32px', height: '32px', borderRadius: '50%', backgroundColor: f.colorHex, border: activeItem.color === f.colorHex ? '3px solid #780078' : '2px solid #555', cursor: 'pointer' }} />
@@ -511,16 +516,16 @@ export default function BaskiIstasyonu() {
                         </div>
 
                         <div style={{ background: '#2d2d35', padding: '12px', borderRadius: '6px', fontSize: '12px', color: '#ccc' }}>
-                            <b style={{ color: '#780078' }}>Ölçüm:</b> Hacim: {(activeItem.volume / 1000).toFixed(2)} cm³ | Tahmini Maliyet: {activeItem.price.toFixed(2)} TL
+                            <b style={{ color: '#780078' }}>{t('print_calculate')}:</b> Hacim: {(activeItem.volume / 1000).toFixed(2)} cm³ | {t('print_estimated_cost')}: {activeItem.price.toFixed(2)} TL
                         </div>
                     </div>
                 ) : (
-                    <div style={{ color: '#666', paddingTop: '40px', textAlign: 'center' }}>{viewMode === 'admin' ? 'İstasyon kontrol modundasınız.' : 'Sisteme parça yükleyin.'}</div>
+                    <div style={{ color: '#666', paddingTop: '40px', textAlign: 'center' }}>{viewMode === 'admin' ? 'İstasyon kontrol modundasınız.' : t('print_upload_model')}</div>
                 )}
 
                 <div style={{ background: '#2d2d35', padding: '20px', borderRadius: '12px', textAlign: 'center' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontSize: '14px', fontWeight: 'bold' }}>Maliyet Toplamı:</span>
+                        <span style={{ fontSize: '14px', fontWeight: 'bold' }}>{t('print_estimated_cost')}:</span>
                         <h1 style={{ margin: 0, color: '#780078', fontSize: '28px' }}>{totalCartPrice > 0 ? `${totalCartPrice.toFixed(2)} TL` : '---'}</h1>
                     </div>
                     <hr style={{ borderColor: '#3d3d45', margin: '15px 0' }} />
@@ -539,7 +544,7 @@ export default function BaskiIstasyonu() {
                             cursor: (items.length > 0 && viewMode === 'customer' && !hasUnavailableMaterialInCart) ? 'pointer' : 'not-allowed'
                         }}
                     >
-                        {hasUnavailableMaterialInCart ? '⚠️ Stok Hatası: Sipariş Engellendi' : 'İstasyona Gönder / Basımı Başlat'}
+                        {hasUnavailableMaterialInCart ? '⚠️ Stok Hatası: Sipariş Engellendi' : t('print_request_order')}
                     </button>
                 </div>
             </div>

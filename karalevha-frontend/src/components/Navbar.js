@@ -39,18 +39,12 @@ export default function Navbar() {
                 </h2>
             </Link>
 
-            {/* ORTA TARAF: SAYFA LİNKLERİ (Sıralama: Ana Sayfa, Forum, E-Kütüphane, 3B Baskı İstasyonu) */}
+            {/* ORTA TARAF: SAYFA LİNKLERİ */}
             <div style={{ display: 'flex', gap: '30px', alignItems: 'center' }}>
                 <Link to="/" style={linkStyle('/')}>Ana Sayfa</Link>
-
-                {/* Forum modülü */}
-                <Link to="/forum" style={linkStyle('/forum')} onClick={(e) => { e.preventDefault(); alert("Forum modülü yakında Karalevha'da aktif olacak!"); }}>Forum</Link>
-
-                {/* E-Kütüphane Bağlantısı */}
-                <Link to="/kutuphane" style={linkStyle('/kutuphane')}>E-Kütüphane</Link>
-
-                {/* 3B Baskı İstasyonu (Router yapındaki mevcut '/baski' path'i ile tam senkronize edildi) */}
-                <Link to="/baski" style={linkStyle('/baski')}>3B Baskı İstasyonu</Link>
+                <Link to="/forum" style={linkStyle('/forum')}>Forum</Link>
+                <Link to="/baski-istasyonu" style={linkStyle('/baski-istasyonu')}>3B Baskı İstasyonu</Link>
+                <Link to="/e-oba" style={linkStyle('/e-oba')}>E-Oba</Link>
             </div>
 
             {/* SAĞ TARAF: KULLANICI ALANI */}
