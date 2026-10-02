@@ -261,7 +261,7 @@ export default function Akis() {
         try {
             const res = await fetch(`${API_URL}/api/feed/posts`, {
                 method: 'POST',
-                body: formData
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }, body: formData
             });
             const data = await res.json();
             if (data.status === 'success') {
@@ -295,7 +295,7 @@ export default function Akis() {
         try {
             const res = await fetch(`${API_URL}/api/feed/posts`, {
                 method: 'POST',
-                body: formData
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }, body: formData
             });
             const data = await res.json();
             if (data.status === 'success') {
@@ -336,7 +336,7 @@ export default function Akis() {
         try {
             await fetch(`${API_URL}/api/feed/posts/${post.id}/like`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.id })
             });
         } catch (err) {
@@ -365,7 +365,7 @@ export default function Akis() {
         try {
             await fetch(`${API_URL}/api/feed/posts/${post.id}/bookmark`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.id })
             });
         } catch (err) {
@@ -383,7 +383,7 @@ export default function Akis() {
         try {
             const res = await fetch(`${API_URL}/api/feed/polls/${pollId}/vote`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: user.id, option_index: optionIndex })
             });
             if (res.ok) {
@@ -407,7 +407,7 @@ export default function Akis() {
         try {
             const res = await fetch(`${API_URL}/api/feed/posts/${postId}?user_id=${user.id}`, {
                 method: 'DELETE'
-            });
+            , headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
             if (res.ok) {
                 setPosts(prev => prev.filter(p => p.id !== postId));
                 showToast('Gönderi silindi');
@@ -452,7 +452,7 @@ export default function Akis() {
         try {
             const res = await fetch(`${API_URL}/api/feed/comments`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(newComment)
             });
             const data = await res.json();

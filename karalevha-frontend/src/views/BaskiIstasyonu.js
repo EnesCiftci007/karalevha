@@ -129,7 +129,7 @@ export default function BaskiIstasyonu() {
         try {
             const response = await fetch(`${BASE_URL}/analyze`, {
                 method: "POST",
-                body: formData,
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }, body: formData,
             });
             const data = await response.json();
 
@@ -224,7 +224,7 @@ export default function BaskiIstasyonu() {
         try {
             const response = await fetch(`${BASE_URL}/filaments/${id}`, {
                 method: "DELETE"
-            });
+            , headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
             if (response.ok) {
                 fetchFilaments();
             }

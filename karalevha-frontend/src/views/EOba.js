@@ -215,7 +215,7 @@ export default function EOba({ user }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/obalar`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: obaForm.name,
                     description: obaForm.description,
@@ -246,7 +246,7 @@ export default function EOba({ user }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/obalar/${activeObaId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     name: obaSettingsForm.name,
                     description: obaSettingsForm.description,
@@ -273,7 +273,7 @@ export default function EOba({ user }) {
     const handleDeleteOba = async () => {
         if (!window.confirm(`"${obaDetail?.name}" obasını kalıcı olarak silmek istediğinize emin misiniz? Bu işlem geri alınamaz!`)) return;
         try {
-            const res = await fetch(`${API_URL}/api/eoba/obalar/${activeObaId}?user_id=${currentUser.id}`, { method: 'DELETE' });
+            const res = await fetch(`${API_URL}/api/eoba/obalar/${activeObaId}?user_id=${currentUser.id}`, { method: 'DELETE' , headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
             if (res.ok) {
                 showToast("E-Oba kalıcı olarak silindi.");
                 setModalType(null);
@@ -295,7 +295,7 @@ export default function EOba({ user }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/cadirlar`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     oba_id: activeObaId,
                     name: cadirForm.name,
@@ -317,7 +317,7 @@ export default function EOba({ user }) {
     const handleDeleteCadir = async (cadirId) => {
         if (!window.confirm("Bu çadırı ve altındaki tüm masa/levhaları silmek istediğinize emin misiniz?")) return;
         try {
-            const res = await fetch(`${API_URL}/api/eoba/cadirlar/${cadirId}?user_id=${currentUser.id}`, { method: 'DELETE' });
+            const res = await fetch(`${API_URL}/api/eoba/cadirlar/${cadirId}?user_id=${currentUser.id}`, { method: 'DELETE' , headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
             if (res.ok) {
                 showToast("Çadır silindi.");
                 loadObaData(activeObaId);
@@ -334,7 +334,7 @@ export default function EOba({ user }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/masalar`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     cadir_id: selectedTarget.id,
                     name: masaForm.name,
@@ -357,7 +357,7 @@ export default function EOba({ user }) {
     const handleDeleteMasa = async (masaId) => {
         if (!window.confirm("Bu masayı ve tüm levhalarını silmek istediğinize emin misiniz?")) return;
         try {
-            const res = await fetch(`${API_URL}/api/eoba/masalar/${masaId}?user_id=${currentUser.id}`, { method: 'DELETE' });
+            const res = await fetch(`${API_URL}/api/eoba/masalar/${masaId}?user_id=${currentUser.id}`, { method: 'DELETE' , headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
             if (res.ok) {
                 showToast("Masa silindi.");
                 loadObaData(activeObaId);
@@ -374,7 +374,7 @@ export default function EOba({ user }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/levhalar`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     masa_id: selectedTarget.id,
                     title: levhaForm.title,
@@ -398,7 +398,7 @@ export default function EOba({ user }) {
     const handleDeleteLevha = async (levhaId) => {
         if (!window.confirm("Bu levhayı silmek istediğinize emin misiniz?")) return;
         try {
-            const res = await fetch(`${API_URL}/api/eoba/levhalar/${levhaId}?user_id=${currentUser.id}`, { method: 'DELETE' });
+            const res = await fetch(`${API_URL}/api/eoba/levhalar/${levhaId}?user_id=${currentUser.id}`, { method: 'DELETE' , headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
             if (res.ok) {
                 showToast("Levha silindi.");
                 loadObaData(activeObaId);
@@ -462,7 +462,7 @@ export default function EOba({ user }) {
 
             const res = await fetch(endpoint, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: renameForm.name, user_id: currentUser.id })
             });
             if (res.ok) {
@@ -488,7 +488,7 @@ export default function EOba({ user }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/permissions/${selectedTarget.type}/${selectedTarget.id}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     target_type: selectedTarget.type,
                     target_id: selectedTarget.id,
@@ -513,7 +513,7 @@ export default function EOba({ user }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/obalar/${activeObaId}/join`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: currentUser.id })
             });
             if (res.ok) {
@@ -531,7 +531,7 @@ export default function EOba({ user }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/obalar/${activeObaId}/leave`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: currentUser.id })
             });
             if (res.ok) {
@@ -555,7 +555,7 @@ export default function EOba({ user }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/obalar/${activeObaId}/invites`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ user_id: currentUser.id, max_uses: null, expires_days: null })
             });
             if (res.ok) {
@@ -591,7 +591,7 @@ export default function EOba({ user }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/obalar/${activeObaId}/invite-user`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     sender_id: currentUser.id,
                     target_username: targetUsername
@@ -621,7 +621,7 @@ export default function EOba({ user }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/invites/use`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     code: code,
                     user_id: currentUser.id
@@ -1873,7 +1873,7 @@ export default function EOba({ user }) {
                                         try {
                                             const res = await fetch(`${API_URL}/api/eoba/obalar/${activeObaId}/roles`, {
                                                 method: 'POST',
-                                                headers: { 'Content-Type': 'application/json' },
+                                                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                                                 body: JSON.stringify({
                                                     name: roleForm.name,
                                                     color: roleForm.color,
@@ -1940,7 +1940,7 @@ export default function EOba({ user }) {
                                                 <button
                                                     onClick={async () => {
                                                         if (!window.confirm("Bu rolü silmek istediğinize emin misiniz?")) return;
-                                                        const res = await fetch(`${API_URL}/api/eoba/obalar/${activeObaId}/roles/${r.id}?user_id=${currentUser.id}`, { method: 'DELETE' });
+                                                        const res = await fetch(`${API_URL}/api/eoba/obalar/${activeObaId}/roles/${r.id}?user_id=${currentUser.id}`, { method: 'DELETE' , headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
                                                         if (res.ok) {
                                                             showToast("Rol silindi.");
                                                             loadObaData(activeObaId);
@@ -2109,7 +2109,7 @@ export default function EOba({ user }) {
                                             try {
                                                 const res = await fetch(`${API_URL}/api/eoba/obalar/${activeObaId}/members/${selectedMember.user_id}/roles`, {
                                                     method: 'POST',
-                                                    headers: { 'Content-Type': 'application/json' },
+                                                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                                                     body: JSON.stringify({ role_ids: nextRoleIds, user_id: currentUser.id })
                                                 });
                                                 if (res.ok) {
@@ -2287,7 +2287,7 @@ function ChatLevhasi({ levha, user, showToast }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/levhalar/${levha.id}/chat`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     levha_id: levha.id,
                     user_id: user.id,
@@ -2310,7 +2310,7 @@ function ChatLevhasi({ levha, user, showToast }) {
 
     const handleDeleteMessage = async (msgId) => {
         try {
-            const res = await fetch(`${API_URL}/api/eoba/levhalar/chat/${msgId}?user_id=${user.id}`, { method: 'DELETE' });
+            const res = await fetch(`${API_URL}/api/eoba/levhalar/chat/${msgId}?user_id=${user.id}`, { method: 'DELETE' , headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
             if (res.ok) {
                 loadMessages();
             }
@@ -2421,7 +2421,7 @@ function DuyuruLevhasi({ levha, user, showToast }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/levhalar/${levha.id}/announcements`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     levha_id: levha.id,
                     user_id: user.id,
@@ -2449,7 +2449,7 @@ function DuyuruLevhasi({ levha, user, showToast }) {
     const handleDelete = async (id) => {
         if (!window.confirm("Bu duyuruyu silmek istiyor musunuz?")) return;
         try {
-            const res = await fetch(`${API_URL}/api/eoba/levhalar/announcements/${id}?user_id=${user.id}`, { method: 'DELETE' });
+            const res = await fetch(`${API_URL}/api/eoba/levhalar/announcements/${id}?user_id=${user.id}`, { method: 'DELETE' , headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
             if (res.ok) {
                 showToast("Duyuru silindi.");
                 loadAnnouncements();
@@ -2588,7 +2588,7 @@ function TabloLevhasi({ levha, user, showToast }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/levhalar/${levha.id}/table/row`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     row_data: newRowData,
                     user_id: user.id
@@ -2615,7 +2615,7 @@ function TabloLevhasi({ levha, user, showToast }) {
         try {
             await fetch(`${API_URL}/api/eoba/levhalar/table/row/${rowId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     row_data: nextData,
                     user_id: user?.id || 1
@@ -2629,7 +2629,7 @@ function TabloLevhasi({ levha, user, showToast }) {
 
     const handleDeleteRow = async (rowId) => {
         try {
-            const res = await fetch(`${API_URL}/api/eoba/levhalar/table/row/${rowId}?user_id=${user.id}`, { method: 'DELETE' });
+            const res = await fetch(`${API_URL}/api/eoba/levhalar/table/row/${rowId}?user_id=${user.id}`, { method: 'DELETE' , headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
             if (res.ok) {
                 loadTable();
             }
@@ -2645,7 +2645,7 @@ function TabloLevhasi({ levha, user, showToast }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/levhalar/${levha.id}/table/config`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     columns: nextCols,
                     user_id: user.id
@@ -2795,7 +2795,7 @@ function KanbanLevhasi({ levha, user, members, showToast }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/levhalar/${levha.id}/kanban/card`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     levha_id: levha.id,
                     column_name: targetCol || columns[0],
@@ -2821,7 +2821,7 @@ function KanbanLevhasi({ levha, user, members, showToast }) {
         try {
             const res = await fetch(`${API_URL}/api/eoba/levhalar/kanban/card/${cardId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     column_name: nextColumn,
                     user_id: user?.id || 1
@@ -2837,7 +2837,7 @@ function KanbanLevhasi({ levha, user, members, showToast }) {
 
     const handleDeleteCard = async (cardId) => {
         try {
-            const res = await fetch(`${API_URL}/api/eoba/levhalar/kanban/card/${cardId}?user_id=${user?.id || 1}`, { method: 'DELETE' });
+            const res = await fetch(`${API_URL}/api/eoba/levhalar/kanban/card/${cardId}?user_id=${user?.id || 1}`, { method: 'DELETE' , headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } });
             if (res.ok) {
                 loadKanban();
             }

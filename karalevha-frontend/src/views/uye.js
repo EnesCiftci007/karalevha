@@ -64,7 +64,7 @@ const Uye = () => {
         // Dinamik Yola Geçirildi
         fetch(`${BASE}/api/user/profile`, {
             method: 'PUT',
-            body: formData // Tarayıcı Content-Type'ı otomatik boundary ile ayarlayacak
+            headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }, body: formData // Tarayıcı Content-Type'ı otomatik boundary ile ayarlayacak
         })
             .then(res => res.json())
             .then(data => {

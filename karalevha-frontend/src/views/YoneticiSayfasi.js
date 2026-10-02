@@ -45,14 +45,14 @@ const YoneticiSayfasi = () => {
         if (!yeniRenk.trim()) return alert('Renk yaz reis!');
         const payload = { id: `fil_${Date.now()}`, type: yeniTip, colorName: yeniRenk.trim(), colorHex: yeniRenkKodu, active: true };
         try {
-            const res = await fetch(`${BASE}/filaments`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const res = await fetch(`${BASE}/filaments`, { method: 'POST', headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
             if (res.ok) { setYeniRenk(''); verileriYukle(); }
         } catch (e) { alert("Eklenemedi"); }
     };
 
     const filamentSil = async (id) => {
         if (!window.confirm("Silinsin mi?")) return;
-        try { await fetch(`${BASE}/filaments/${id}`, { method: 'DELETE' }); verileriYukle(); } catch (e) { }
+        try { await fetch(`${BASE}/filaments/${id}`, { method: 'DELETE' , headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` } }); verileriYukle(); } catch (e) { }
     };
 
     const uyeGuncelle = async (user_id, alan, deger) => {
@@ -61,14 +61,14 @@ const YoneticiSayfasi = () => {
         let r = u.role, b = u.badge;
         if (alan === 'role') { r = deger; if (deger === 'admin') b = 'Admin'; if (deger === 'user' && b === 'Admin') b = 'Maker'; }
         if (alan === 'badge') b = deger;
-        try { await fetch(`${BASE}/api/admin/users/${user_id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ role: r, badge: b }) }); verileriYukle(); } catch (e) { }
+        try { await fetch(`${BASE}/api/admin/users/${user_id}`, { method: 'PUT', headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ role: r, badge: b }) }); verileriYukle(); } catch (e) { }
     };
 
     const durumGuncelle = async (order_id, yeniDurum) => {
         try {
             const res = await fetch(`${BASE}/api/admin/orders/${order_id}/status`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify({ durum: yeniDurum })
             });
             if (res.ok) {
