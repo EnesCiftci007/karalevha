@@ -350,7 +350,7 @@ export default function DMWidget({ user, activePartnerId, onCloseDM }) {
                                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                                                         <span style={styles.partnerName}>{conv.display_name}</span>
                                                         <span style={styles.convTime}>
-                                                            {conv.last_message_time ? new Date(conv.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                                                            {conv.last_message_time ? parseUTC(conv.last_message_time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                                                         </span>
                                                     </div>
                                                     <div style={styles.lastMessagePreview}>
@@ -400,7 +400,7 @@ export default function DMWidget({ user, activePartnerId, onCloseDM }) {
                                                         ...styles.messageTime,
                                                         textAlign: isMe ? 'right' : 'left'
                                                     }}>
-                                                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                        {parseUTC(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                     </div>
                                                 </div>
                                             </div>

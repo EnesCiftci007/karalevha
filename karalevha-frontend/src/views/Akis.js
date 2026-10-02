@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { API_URL } from '../config';
 import { useLanguage } from '../i18n/LanguageContext';
+import { parseUTC } from '../config';
 
 // ----------------- SVG İKONLAR (Sade, Modern ve Emojisiz) -----------------
 const HeartIcon = ({ filled, size = 18, color = 'currentColor' }) => (
@@ -81,7 +82,7 @@ const CloseIcon = ({ size = 16, color = 'currentColor' }) => (
 function formatRelativeTime(dateString) {
     if (!dateString) return '';
     const now = new Date();
-    const then = new Date(dateString);
+    const then = parseUTC(dateString);
     const diffInSeconds = Math.floor((now - then) / 1000);
 
     if (diffInSeconds < 60) return 'az önce';

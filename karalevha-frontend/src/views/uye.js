@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { API_URL } from '../config';
 import { useLanguage } from '../i18n/LanguageContext';
+import { parseUTC } from '../config';
 
 const Uye = () => {
     const { t } = useLanguage();
@@ -174,7 +175,7 @@ const Uye = () => {
                         <div key={post.id} style={styles.postMiniCard}>
                             <p style={{ margin: '0 0 8px 0', fontSize: '14px', color: '#e4e4e7', lineHeight: '1.5' }}>{post.content}</p>
                             <div style={styles.postMeta}>
-                                <span>📅 {new Date(post.tarih).toLocaleDateString()}</span>
+                                <span>📅 {parseUTC(post.tarih).toLocaleDateString()}</span>
                             </div>
                         </div>
                     ))

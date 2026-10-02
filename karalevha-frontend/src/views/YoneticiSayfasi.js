@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { API_URL } from '../config';
+import { parseUTC } from '../config';
 
 const YoneticiSayfasi = () => {
     const [istatistikler, setIstatistikler] = useState({ kullaniciSayisi: 0, konuSayisi: 0, baskiSayisi: 0 });
@@ -158,7 +159,7 @@ const YoneticiSayfasi = () => {
                                     <div style={styles.siparisHeader}>
                                         <div>
                                             <span style={styles.siparisNo}>Sipariş #{order.id}</span>
-                                            <span style={styles.siparisTarih}>{new Date(order.tarih).toLocaleString('tr-TR')}</span>
+                                            <span style={styles.siparisTarih}>{parseUTC(order.tarih).toLocaleString('tr-TR')}</span>
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                                             <span style={{ ...styles.durumYaziAyar, color: getDurumRenk(order.durum) }}>● {order.durum}</span>
@@ -234,7 +235,7 @@ const YoneticiSayfasi = () => {
                                     <div style={styles.siparisHeader}>
                                         <div>
                                             <span style={{ ...styles.siparisNo, color: '#888' }}>Sipariş #{order.id}</span>
-                                            <span style={styles.siparisTarih}>{new Date(order.tarih).toLocaleString('tr-TR')}</span>
+                                            <span style={styles.siparisTarih}>{parseUTC(order.tarih).toLocaleString('tr-TR')}</span>
                                         </div>
                                         <div>
                                             <span style={{ ...styles.durumYaziAyar, color: getDurumRenk(order.durum), fontWeight: 'bold' }}>

@@ -165,7 +165,7 @@ export default function NotificationsDropdown({ user, onOpenDM }) {
                                         <div style={styles.notifTitle}>{notif.title}</div>
                                         <div style={styles.notifContent}>{notif.content}</div>
                                         <div style={styles.notifTime}>
-                                            {new Date(notif.created_at).toLocaleString('tr-TR', {
+                                            {parseUTC(notif.created_at).toLocaleString('tr-TR', {
                                                 month: 'short',
                                                 day: 'numeric',
                                                 hour: '2-digit',

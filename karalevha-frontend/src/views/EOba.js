@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { API_URL } from '../config';
 import { useLanguage } from '../i18n/LanguageContext';
+import { parseUTC } from '../config';
 
 const PRIMARY_BLUE = '#0066ff';
 const PRIMARY_BLUE_HOVER = '#0052cc';
@@ -2349,7 +2350,7 @@ function ChatLevhasi({ levha, user, showToast }) {
                                         </span>
                                     )}
                                     <span style={styles.chatTimestamp}>
-                                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                        {parseUTC(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </span>
                                 </div>
                                 <div style={styles.chatContentText}>{msg.content}</div>
@@ -2503,7 +2504,7 @@ function DuyuruLevhasi({ levha, user, showToast }) {
                             <p style={styles.annContent}>{ann.content}</p>
                             <div style={styles.annFooter}>
                                 <span>Yayınlayan: <strong>{ann.display_name}</strong></span>
-                                <span>{new Date(ann.created_at).toLocaleDateString('tr-TR')}</span>
+                                <span>{parseUTC(ann.created_at).toLocaleDateString('tr-TR')}</span>
                             </div>
                         </div>
                     ))
