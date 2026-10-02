@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+numpy-stl
+python-multipart
+bcrypt
+PyJWT
+psycopg2-binary

@@ -7,6 +7,7 @@ import Akis from './views/Akis';
 import Uye from './views/uye';
 import YoneticiSayfasi from './views/YoneticiSayfasi';
 import EOba from './views/EOba';
+import AnaSayfa from './views/AnaSayfa';
 import { API_URL } from './config';
 
 // 🔔 & 💬 Bildirim ve DM Bileşenleri
@@ -431,54 +432,7 @@ const Navbar = ({ user, onLogout, onOpenDM }) => {
     );
 };
 
-// Fare ile üzerine gelindiğinde etkileşim sağlayan akıllı kart bileşeni
-const HoverCard = ({ to, imageSrc, altText, label }) => {
-    const [isHovered, setIsHovered] = useState(false);
 
-    return (
-        <Link
-            to={to}
-            style={styles.cardLinkWrapper}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-        >
-            <div style={{
-                ...styles.card,
-                transform: isHovered ? 'translateY(-6px)' : 'translateY(0)',
-                boxShadow: isHovered ? '0 10px 20px rgba(255,255,255,0.08)' : 'none'
-            }}>
-                <div style={styles.cardImageArea}>
-                    <img src={imageSrc} alt={altText} style={styles.squareImage} />
-                </div>
-                <div style={styles.cardFooter}>
-                    <div style={styles.cardText}>{label}</div>
-                </div>
-            </div>
-        </Link>
-    );
-};
-
-const AnaSayfa = () => {
-    const { t } = useLanguage();
-
-    return (
-        <div style={styles.mainContainer}>
-            <div style={styles.heroSection}>
-                <h1 style={styles.heroTitle}>{t('home_welcome_title')}</h1>
-                <p style={styles.heroSub}>
-                    {t('home_welcome_sub')}
-                </p>
-            </div>
-
-            {/* ANA SAYFA KARTLARI GRIDI */}
-            <div style={styles.cardsGrid}>
-                <HoverCard to="/akis" imageSrc={forumGorseli} altText="Akış" label={t('home_card_feed')} />
-                <HoverCard to="/baski-istasyonu" imageSrc={baskiGorseli} altText="3B Baskı İstasyonu" label={t('home_card_print')} />
-                <HoverCard to="/e-oba" imageSrc={eobaGorseli} altText="E-Oba" label={t('home_card_eoba')} />
-            </div>
-        </div>
-    );
-};
 
 function App() {
     const [user, setUser] = useState(null);

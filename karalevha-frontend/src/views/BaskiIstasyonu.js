@@ -8,7 +8,7 @@ import istasyonLogosu from '../assets/baskikorsanlari.png'; // İstasyon görsel
 import { API_URL } from '../config';
 import { useLanguage } from '../i18n/LanguageContext';
 
-const BASE_URL = process.env.REACT_APP_API_URL || "";
+const BASE_URL = API_URL;
 
 function Model({ url, color }) {
     // URL'in tam adres olduğundan emin oluyoruz (STLLoader'ın bozulmasını engeller)

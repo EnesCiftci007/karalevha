@@ -78,6 +78,7 @@ export default function EOba({ user }) {
     // E-Oba Ekle veya Katıl State'leri
     const [addJoinStep, setAddJoinStep] = useState('choice'); // 'choice' | 'join'
     const [joinLinkInput, setJoinLinkInput] = useState('');
+    const [joinLoading, setJoinLoading] = useState(false);
 
     useEffect(() => {
         const handleGlobalClick = () => {

@@ -1,15 +1,10 @@
 from fastapi import APIRouter, HTTPException, Query, Body
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
-import sqlite3
+from database import get_db
 
 social_router = APIRouter(prefix="/api", tags=["Sosyal & DM & Bildirimler"])
-DB_NAME = "karalevha.db"
 
-def get_db():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
 
 def social_veritabani_hazirla():
     conn = get_db()

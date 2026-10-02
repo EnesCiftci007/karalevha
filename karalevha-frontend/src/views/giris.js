@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { API_URL } from '../config';
 
@@ -7,6 +7,12 @@ const Giris = () => {
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const navigate = useNavigate();
+
+    useEffect(() => {
+        if (localStorage.getItem('user')) {
+            navigate('/akis');
+        }
+    }, [navigate]);
 
     const handleChange = (e) => {
         setFormData({ ...formData, [e.target.name]: e.target.value });
@@ -30,6 +36,9 @@ const Giris = () => {
             if (response.ok) {
                 setSuccess(`Hoş geldin, ${data.user.display_name}! Giriş başarılı. Ana sayfaya yönlendiriliyorsunuz...`);
                 localStorage.setItem('user', JSON.stringify(data.user));
+                if (data.token) {
+                    localStorage.setItem('token', data.token);
+                }
 
                 setTimeout(() => {
                     navigate('/');

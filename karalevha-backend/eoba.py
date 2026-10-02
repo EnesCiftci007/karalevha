@@ -1,18 +1,13 @@
 from fastapi import APIRouter, HTTPException, Query, Body
 from pydantic import BaseModel
 from typing import Optional, List, Any, Dict
-import sqlite3
 import json
 import secrets
 from datetime import datetime, timedelta
+from database import get_db
 
 eoba_router = APIRouter(prefix="/api/eoba", tags=["E-Oba"])
-DB_NAME = "karalevha.db"
 
-def get_db():
-    conn = sqlite3.connect(DB_NAME)
-    conn.row_factory = sqlite3.Row
-    return conn
 
 # ----------------- VERİTABANI İLKLEME -----------------
 
@@ -412,6 +407,7 @@ class KanbanCardUpdateModel(BaseModel):
     description: Optional[str] = None
     tag: Optional[str] = None
     assigned_user_id: Optional[int] = None
+    order_index: Optional[int] = None
     user_id: int
 
 
@@ -1572,6 +1568,9 @@ def update_kanban_card(card_id: int, payload: KanbanCardUpdateModel):
     if payload.assigned_user_id is not None:
         updates.append("assigned_user_id = ?")
         params.append(payload.assigned_user_id)
+    if payload.order_index is not None:
+        updates.append("order_index = ?")
+        params.append(payload.order_index)
 
     if updates:
         params.append(card_id)
