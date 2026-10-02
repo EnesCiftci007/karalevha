@@ -3,8 +3,9 @@ from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import Request, HTTPException, Depends
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+import os
 
-SECRET_KEY = "karalevha_cok_gizli_anahtar_degistirilecek"
+SECRET_KEY = os.getenv("SECRET_KEY", "karalevha_cok_gizli_anahtar_degistirilecek")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24 * 7 # 1 week
 
