@@ -6,6 +6,7 @@ namespace Karalevha.API.DTOs
     {
         [Required]
         [StringLength(50, MinimumLength = 3, ErrorMessage = "Kullanıcı adı 3-50 karakter olmalıdır.")]
+        [RegularExpression(@"^[a-zA-Z0-9_]+$", ErrorMessage = "Sadece İngilizce harf, rakam ve alt çizgi kullanılabilir.")]
         public string Username { get; set; } = string.Empty;
 
         [Required]

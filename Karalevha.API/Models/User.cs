@@ -11,6 +11,9 @@ namespace Karalevha.API.Models
         [Required]
         [MaxLength(50)]
         public string Username { get; set; } = string.Empty;
+
+        [MaxLength(50)]
+        public string NormalizedUsername { get; set; } = string.Empty;
         
         [Required]
         [EmailAddress]
