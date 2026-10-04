@@ -22,7 +22,6 @@ dist-ssr/
 Thumbs.db
 
 # Secrets & Uploads
-Karalevha.API/appsettings.json
 Karalevha.API/appsettings.*.json
 *.db
 *.sqlite

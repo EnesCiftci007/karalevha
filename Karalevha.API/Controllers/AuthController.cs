@@ -25,19 +25,21 @@ namespace Karalevha.API.Controllers
             _configuration = configuration;
         }
 
+        private static readonly string DummyHash = BCrypt.Net.BCrypt.EnhancedHashPassword("dummy-password");
+
         [HttpPost("register")]
         [EnableRateLimiting("AuthLimiter")]
         public async Task<IActionResult> Register(RegisterDto dto)
         {
-            var emailNormal = dto.Email.ToLowerInvariant();
-            var usernameNormal = dto.Username.ToLowerInvariant();
+            var emailNormal = dto.Email.Trim().ToLowerInvariant();
+            var usernameNormal = dto.Username.Trim().ToLowerInvariant();
 
             if (await _context.Users.AnyAsync(u => u.Email == emailNormal || u.NormalizedUsername == usernameNormal))
                 return BadRequest(new { message = "Bu kullanıcı adı veya e-posta zaten kullanılıyor." });
 
             var user = new User
             {
-                Username = dto.Username,
+                Username = dto.Username.Trim(),
                 NormalizedUsername = usernameNormal,
                 Email = emailNormal,
                 PasswordHash = BCrypt.Net.BCrypt.EnhancedHashPassword(dto.Password),
@@ -61,12 +63,15 @@ namespace Karalevha.API.Controllers
         [EnableRateLimiting("AuthLimiter")]
         public async Task<IActionResult> Login(LoginDto dto)
         {
-            var loginNormal = dto.UsernameOrEmail.ToLowerInvariant();
+            var loginNormal = dto.UsernameOrEmail.Trim().ToLowerInvariant();
             
             var user = await _context.Users.FirstOrDefaultAsync(u => 
                 u.Email == loginNormal || u.NormalizedUsername == loginNormal);
 
-            if (user == null || !BCrypt.Net.BCrypt.EnhancedVerify(dto.Password, user.PasswordHash))
+            var hash = user?.PasswordHash ?? DummyHash;
+            var ok = BCrypt.Net.BCrypt.EnhancedVerify(dto.Password, hash);
+
+            if (user == null || !ok)
                 return Unauthorized(new { message = "Hatalı kullanıcı adı veya şifre." });
 
             var token = GenerateJwtToken(user);

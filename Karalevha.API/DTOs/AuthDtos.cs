@@ -15,7 +15,7 @@ namespace Karalevha.API.DTOs
         public string Email { get; set; } = string.Empty;
 
         [Required]
-        [StringLength(72, MinimumLength = 6, ErrorMessage = "Şifre 6-72 karakter arası olmalıdır (BCrypt güvenliği).")]
+        [StringLength(128, MinimumLength = 6, ErrorMessage = "Şifre 6-128 karakter arası olmalıdır.")]
         public string Password { get; set; } = string.Empty;
     }
 
