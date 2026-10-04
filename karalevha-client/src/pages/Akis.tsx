@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
 import { MessageSquare, Heart, Share2, Send, Flame } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Post } from '../types';
@@ -12,8 +13,7 @@ export default function Akis() {
 
   const fetchPosts = async () => {
     try {
-      const res = await fetch('http://localhost:5114/api/posts');
-      const data = await res.json();
+      const data = await api<any>('/api/posts');
       setPosts(data);
     } catch (error) {
       console.error('Gönderiler yüklenemedi:', error);

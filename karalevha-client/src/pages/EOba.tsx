@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
 import { Plus, Zap, Hash, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Oba } from '../types';
@@ -20,8 +21,7 @@ export default function EOba() {
 
   const fetchObalar = async () => {
     try {
-      const res = await fetch('http://localhost:5114/api/obalar');
-      const data = await res.json();
+      const data = await api<any>('/api/obalar');
       setObalar(data);
     } catch (error) {
       console.error('Obalar yüklenemedi:', error);

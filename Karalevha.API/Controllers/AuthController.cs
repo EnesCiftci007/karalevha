@@ -81,8 +81,8 @@ namespace Karalevha.API.Controllers
         private string GenerateJwtToken(User user)
         {
             var jwtKey = _configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key is missing from configuration.");
-            var jwtIssuer = _configuration["Jwt:Issuer"] ?? "Karalevha.API";
-            var jwtAudience = _configuration["Jwt:Audience"] ?? "Karalevha.Client";
+            var jwtIssuer = _configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer missing");
+            var jwtAudience = _configuration["Jwt:Audience"] ?? throw new InvalidOperationException("Jwt:Audience missing");
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);

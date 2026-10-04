@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { api } from '../services/api';
 import { Box, UploadCloud, Download, FileBox, CheckCircle2, Eye, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { PrintModel } from '../types';
@@ -21,8 +22,7 @@ export default function BaskiIstasyonu() {
 
   const fetchModels = async () => {
     try {
-      const res = await fetch('http://localhost:5114/api/printmodels');
-      const data = await res.json();
+      const data = await api<any>('/api/printmodels');
       setModels(data);
     } catch (error) {
       console.error('Modeller yüklenemedi:', error);

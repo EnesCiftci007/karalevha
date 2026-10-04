@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { api } from '../services/api';
 import { Terminal, FolderGit2, Star, GitFork, ExternalLink, Plus, Code2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Project } from '../types';
@@ -21,8 +22,7 @@ export default function Projeler() {
 
   const fetchProjects = async () => {
     try {
-      const res = await fetch('http://localhost:5114/api/projects');
-      const data = await res.json();
+      const data = await api<any>('/api/projects');
       setProjects(data);
     } catch (error) {
       console.error('Projeler yüklenemedi:', error);

@@ -7,24 +7,21 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
 
-// 1. WWWROOT KLASÖRÜNÜ BAŞTA OLUŞTUR
-// ASP.NET Core çalışırken klasörü bulamazsa StaticFileProvider devreye girmez.
 Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "stl"));
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 2. FORWARDED HEADERS (Reverse Proxy / Render / Vercel vb. IP'leri okumak için)
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    // Güvenlik: Eğer tüm proxy'lerden geliyorsa KnownNetworks/KnownProxies temizlenir.
     options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
 });
 
-// 3. CORS
 var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() 
-                     ?? new[] { "http://localhost:5173", "https://karalevha.vercel.app" };
+                     ?? (builder.Environment.IsDevelopment()
+                        ? new[] { "http://localhost:5173" }
+                        : new[] { "https://karalevha.vercel.app" });
 
 builder.Services.AddCors(options =>
 {
@@ -37,20 +34,19 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddControllers();
+builder.Services.AddHealthChecks();
 
-// 4. VERİTABANI
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// 5. JWT VE DOĞRULAMA (Key Uzunluğu Kontrolü)
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key is missing from configuration.");
 if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
 {
-    throw new InvalidOperationException("Jwt:Key en az 32 bayt olmalı. (HS256 için gerekli minumum uzunluk)");
+    throw new InvalidOperationException("Jwt:Key en az 32 bayt olmalı. (HS256 için gerekli minimum uzunluk)");
 }
 
-var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "Karalevha.API";
-var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "Karalevha.Client";
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer missing");
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? throw new InvalidOperationException("Jwt:Audience missing");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -67,7 +63,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// 6. RATE LIMITING (Parçalı / Partitioned Politikalar)
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -93,13 +88,18 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-// 7. MIDDLEWARE SIRALAMASI
-app.UseForwardedHeaders();         // 1. IP'yi düzelt
-app.UseExceptionHandler("/error"); // 2. Hata yakala
-app.UseHttpsRedirection();         // 3. HTTPS Zorla
-app.UseCors("AllowReact");         // 4. CORS (Rate limiter hata verirse header'lar gitsin diye önce eklenir)
+// YAYINDA (PRODUCTION) VERİTABANI MIGRATION'LARINI OTOMATİK UYGULA
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.Migrate();
+}
 
-// STL dosyalarının indirilmesine izin ver
+app.UseForwardedHeaders();
+app.UseExceptionHandler("/error");
+app.UseHttpsRedirection();
+app.UseCors("AllowReact");
+
 var provider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
 provider.Mappings[".stl"] = "application/octet-stream";
 app.UseStaticFiles(new StaticFileOptions
@@ -107,13 +107,12 @@ app.UseStaticFiles(new StaticFileOptions
     ContentTypeProvider = provider
 });
 
-app.UseAuthentication();           // 5. Kimliği bul (UploadLimiter userId'yi okuyabilsin)
-app.UseRateLimiter();              // 6. Hız sınırı
-app.UseAuthorization();            // 7. Yetki kontrolü
+app.UseAuthentication();
+app.UseRateLimiter();
+app.UseAuthorization();
 
 app.MapControllers();
-
-// Beklenmeyen hatalar için Endpoint
+app.MapHealthChecks("/health");
 app.Map("/error", () => Results.Problem("Beklenmeyen bir hata oluştu.")).AllowAnonymous();
 
 app.Run();
