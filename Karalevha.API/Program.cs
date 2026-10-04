@@ -25,7 +25,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Configure JWT Authentication
-var jwtKey = builder.Configuration["Jwt:Key"] ?? "super_gizli_ve_uzun_bir_sifreleme_anahtari_karalevha_v2_2026_!!";
+var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key is missing from configuration.");
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {

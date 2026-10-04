@@ -64,7 +64,7 @@ namespace Karalevha.API.Controllers
 
         private string GenerateJwtToken(User user)
         {
-            var jwtKey = _configuration["Jwt:Key"] ?? "super_gizli_ve_uzun_bir_sifreleme_anahtari_karalevha_v2_2026_!!";
+            var jwtKey = _configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key is missing from configuration.");
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 
