@@ -1,0 +1,31 @@
+# Node.js
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# .NET / C#
+[Bb]in/
+[Oo]bj/
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Secrets & Uploads
+Karalevha.API/appsettings.json
+Karalevha.API/appsettings.*.json
+*.db
+*.sqlite
+.env
+.env.*
+Karalevha.API/wwwroot/uploads/
