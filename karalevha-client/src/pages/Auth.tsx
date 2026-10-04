@@ -32,26 +32,18 @@ export default function Auth() {
     setErrorMsg('');
     setSuccessMsg('');
 
-    const url = isLogin 
-      ? 'http://localhost:5114/api/auth/login' 
-      : 'http://localhost:5114/api/auth/register';
+    const url = isLogin ? '/api/auth/login' : '/api/auth/register';
 
     const payload = isLogin
       ? { usernameOrEmail: email, password }
       : { username, email, password };
 
     try {
-      const response = await fetch(url, {
+      const data = await api<any>(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setErrorMsg(data.message || 'Bir hata oluştu. Lütfen tekrar deneyin.');
-      } else {
+      if (!data) return; else {
         if (isLogin) {
           // Context üzerinden global state'i güncelle
           login(data.user, data.token);

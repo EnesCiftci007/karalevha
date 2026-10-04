@@ -32,17 +32,11 @@ export default function Akis() {
 
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5114/api/posts', {
+      const newPost = await api<any>('/api/posts', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
         body: JSON.stringify({ content })
       });
-
-      if (res.ok) {
-        const newPost = await res.json();
+      if (newPost) {
         setPosts([newPost, ...posts]);
         setContent('');
       }

@@ -206,14 +206,14 @@ export default function BaskiIstasyonu() {
 
                 <div className="relative z-10 shrink-0 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
                   <button
-                    onClick={() => setPreviewUrl(`http://localhost:5114${model.fileUrl}`)}
+                    onClick={() => setPreviewUrl(`${import.meta.env.VITE_API_URL || 'http://localhost:5114'}${model.fileUrl}`)}
                     className="flex items-center justify-center bg-zinc-800 text-white hover:bg-zinc-700 border-2 border-zinc-600 px-4 py-3 text-sm font-black uppercase tracking-widest transition-all"
                   >
                     <Eye className="w-4 h-4 mr-2" strokeWidth={3} />
                     3B İNCELE
                   </button>
                   <a 
-                    href={`http://localhost:5114${model.fileUrl}`} 
+                    href={`${import.meta.env.VITE_API_URL || 'http://localhost:5114'}${model.fileUrl}`} 
                     download
                     target="_blank"
                     rel="noreferrer"
