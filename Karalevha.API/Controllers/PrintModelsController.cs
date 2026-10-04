@@ -25,6 +25,9 @@ namespace Karalevha.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetModels([FromQuery] int skip = 0, [FromQuery] int take = 50)
         {
+            skip = Math.Max(skip, 0);
+            take = Math.Clamp(take, 1, 100);
+
             var models = await _context.PrintModels
                 .OrderByDescending(m => m.UploadedAt)
                 .Skip(skip)

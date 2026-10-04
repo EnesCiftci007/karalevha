@@ -9,6 +9,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.RateLimiting;
+using System.Data.Common;
 
 namespace Karalevha.API.Controllers
 {
@@ -29,22 +30,32 @@ namespace Karalevha.API.Controllers
         [EnableRateLimiting("AuthLimiter")]
         public async Task<IActionResult> Register(RegisterDto dto)
         {
+            // Case-insensitive kayıt için normalizasyon
             var emailNormal = dto.Email.ToLowerInvariant();
             var usernameNormal = dto.Username.ToLowerInvariant();
 
-            if (await _context.Users.AnyAsync(u => u.Email.ToLower() == emailNormal || u.Username.ToLower() == usernameNormal))
+            // SQL'de fonksiyon kullanımını (LOWER) engellemek için doğrudan kıyaslıyoruz.
+            // Çünkü C#'da Normalize edilmiş hallerini veritabanına kaydedeceğiz (emailNormal).
+            if (await _context.Users.AnyAsync(u => u.Email == emailNormal || u.Username.ToLower() == usernameNormal))
                 return BadRequest(new { message = "Bu kullanıcı adı veya e-posta zaten kullanılıyor." });
 
             var user = new User
             {
-                Username = dto.Username, // Orijinal halini sakla
-                Email = emailNormal,
+                Username = dto.Username, // Gösterim için orijinal
+                Email = emailNormal,     // E-posta hep küçük harf tutulur
                 PasswordHash = BCrypt.Net.BCrypt.HashPassword(dto.Password),
                 AvatarSeed = usernameNormal
             };
 
-            _context.Users.Add(user);
-            await _context.SaveChangesAsync();
+            try
+            {
+                _context.Users.Add(user);
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException) // Race-condition durumunda unique index hatası yakalama
+            {
+                return BadRequest(new { message = "Bu kullanıcı adı veya e-posta zaten kullanılıyor." });
+            }
 
             return Ok(new { message = "Kayıt başarılı! Artık giriş yapabilirsiniz." });
         }
@@ -55,9 +66,9 @@ namespace Karalevha.API.Controllers
         {
             var loginNormal = dto.UsernameOrEmail.ToLowerInvariant();
             
-            // ToLower() EF Core'da ILIKE/LOWER SQL komutuna çevrilir
+            // Kullanıcı ya e-posta ya da username girmiş olabilir.
             var user = await _context.Users.FirstOrDefaultAsync(u => 
-                u.Email.ToLower() == loginNormal || u.Username.ToLower() == loginNormal);
+                u.Email == loginNormal || u.Username.ToLower() == loginNormal);
 
             if (user == null || !BCrypt.Net.BCrypt.Verify(dto.Password, user.PasswordHash))
                 return Unauthorized(new { message = "Hatalı kullanıcı adı veya şifre." });
