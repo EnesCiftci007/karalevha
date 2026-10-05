@@ -85,7 +85,7 @@ namespace Karalevha.API.Controllers
 
             var user = await _context.Users.FindAsync(userId);
 
-            return Ok(new {
+            var returnMessage = new {
                 message.Id,
                 message.Content,
                 message.CreatedAt,
@@ -93,7 +93,11 @@ namespace Karalevha.API.Controllers
                     user!.Id,
                     user.Username
                 }
-            });
+            };
+
+            await _hubContext.Clients.Group(channelId.ToString()).SendAsync("ReceiveMessage", returnMessage);
+
+            return Ok(returnMessage);
         }
     }
 }
