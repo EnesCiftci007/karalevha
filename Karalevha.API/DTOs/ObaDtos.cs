@@ -13,5 +13,7 @@ namespace Karalevha.API.DTOs
 
         [MaxLength(7)]
         public string Color { get; set; } = "#39ff14";
+        
+        public bool IsPrivate { get; set; } = false;
     }
 }

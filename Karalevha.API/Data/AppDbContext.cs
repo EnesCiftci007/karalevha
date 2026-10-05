@@ -16,6 +16,7 @@ namespace Karalevha.API.Data
         public DbSet<Project> Projects { get; set; }
         public DbSet<ObaChannel> ObaChannels { get; set; }
         public DbSet<ObaMessage> ObaMessages { get; set; }
+        public DbSet<ObaMember> ObaMembers { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

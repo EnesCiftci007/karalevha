@@ -23,6 +23,8 @@ namespace Karalevha.API.Models
 
         public int MemberCount { get; set; } = 1; // Kurucu dahil
 
+        public bool IsPrivate { get; set; } = false;
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Kurucu (Owner)

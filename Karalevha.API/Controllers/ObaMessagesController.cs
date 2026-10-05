@@ -56,6 +56,18 @@ namespace Karalevha.API.Controllers
             var channel = await _context.ObaChannels.FindAsync(channelId);
             if (channel == null) return NotFound("Kanal bulunamadı");
 
+            
+            // Slowmode Check (3 seconds)
+            var lastMessage = await _context.ObaMessages
+                .Where(m => m.UserId == userId && m.ChannelId == channelId)
+                .OrderByDescending(m => m.CreatedAt)
+                .FirstOrDefaultAsync();
+                
+            if (lastMessage != null && (DateTime.UtcNow - lastMessage.CreatedAt).TotalSeconds < 3)
+            {
+                return BadRequest(new { message = "Yavaş Mod Aktif: Lütfen ard arda mesaj göndermeden önce bekleyin." });
+            }
+
             var message = new ObaMessage
             {
                 Content = dto.Content,

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api, API_URL } from '../services/api';
-import { Plus, Zap, Hash, Users } from 'lucide-react';
+import { Plus, Zap, Hash, Users, Lock } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Oba } from '../types';
@@ -12,7 +12,8 @@ export default function EOba() {
   
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [color, setColor] = useState('#39ff14'); 
+  const [color, setColor] = useState('#39ff14');
+  const [isPrivate, setIsPrivate] = useState(false); 
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true); 
 
@@ -43,7 +44,7 @@ export default function EOba() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ name, description, color })
+        body: JSON.stringify({ name, description, color, isPrivate })
       });
 
       if (res.ok) {
@@ -53,6 +54,7 @@ export default function EOba() {
         setName('');
         setDescription('');
         setColor('#39ff14');
+        setIsPrivate(false);
       }
     } catch (error) {
       console.error('Oba oluşturulamadı:', error);
@@ -101,6 +103,7 @@ export default function EOba() {
           obalar.map((oba) => (
             <Link to={`/e-oba/${oba.id}`} key={oba.id} className="bg-[#0b0c10] border-2 border-[#1f2129] flex flex-col group hover:border-[#39ff14]/50 transition-colors relative overflow-hidden">
               
+              {oba.isPrivate && <Lock className="w-5 h-5 absolute top-3 right-3 text-red-500/80 z-20" />}
               <div className="h-24 bg-[#111216] border-b-2 border-[#1f2129] relative flex items-center justify-center overflow-hidden">
                 <div className="absolute inset-0 opacity-20 bg-cover bg-center" style={{ backgroundImage: "url('/forum.png')" }}></div>
                 <div 

@@ -32,7 +32,7 @@ namespace Karalevha.API.Controllers
                     o.Description,
                     o.AvatarSeed,
                     o.Color,
-                    o.MemberCount,
+                    o.MemberCount, o.IsPrivate,
                     Owner = o.Owner.Username
                 })
                 .ToListAsync();
@@ -59,7 +59,7 @@ namespace Karalevha.API.Controllers
                 Description = dto.Description,
                 Color = dto.Color,
                 AvatarSeed = seed,
-                OwnerId = userId,
+                OwnerId = userId, IsPrivate = dto.IsPrivate,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -83,7 +83,7 @@ namespace Karalevha.API.Controllers
                 oba.Description,
                 oba.AvatarSeed,
                 oba.Color,
-                oba.MemberCount,
+                oba.MemberCount, oba.IsPrivate,
                 Owner = username
             });
         }
