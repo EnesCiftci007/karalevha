@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import * as signalR from '@microsoft/signalr';
 import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Hash, Volume2, Send, Users, ChevronLeft, Zap, MessageSquare, Lock } from 'lucide-react';
@@ -31,8 +32,54 @@ export default function ObaDetay() {
   const [needsPassword, setNeedsPassword] = useState(false);
   const [password, setPassword] = useState('');
   const [joinError, setJoinError] = useState('');
+  const [connection, setConnection] = useState<signalR.HubConnection | null>(null);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Setup SignalR connection
+  useEffect(() => {
+    if (!token) return;
+
+    const newConnection = new signalR.HubConnectionBuilder()
+      .withUrl(`${import.meta.env.VITE_API_URL || API_URL}/chathub`)
+      .withAutomaticReconnect()
+      .build();
+
+    setConnection(newConnection);
+  }, [token]);
+
+  // Connect and subscribe to messages
+  useEffect(() => {
+    if (connection) {
+      connection.start()
+        .then(() => {
+          console.log('Connected to SignalR');
+          
+          connection.on('ReceiveMessage', (message: Message) => {
+            // Prevent duplicate messages if we are the sender and already optimistically updated
+            setMessages(prev => {
+              if (prev.some(m => m.id === message.id)) return prev;
+              return [...prev, message];
+            });
+          });
+        })
+        .catch(e => console.log('Connection failed: ', e));
+    }
+  }, [connection]);
+
+  // Join channel group when activeChannel changes
+  useEffect(() => {
+    if (connection && connection.state === signalR.HubConnectionState.Connected && activeChannel) {
+      connection.invoke('JoinChannel', activeChannel.id.toString())
+        .catch(err => console.error(err));
+        
+      return () => {
+        connection.invoke('LeaveChannel', activeChannel.id.toString())
+          .catch(err => console.error(err));
+      };
+    }
+  }, [connection, activeChannel]);
+
 
   useEffect(() => {
     fetchChannels();
@@ -42,8 +89,8 @@ export default function ObaDetay() {
     if (activeChannel) {
       fetchMessages();
       // Simple polling for new messages every 3 seconds
-      const interval = setInterval(fetchMessages, 3000);
-      return () => clearInterval(interval);
+
+
     }
   }, [activeChannel]);
 

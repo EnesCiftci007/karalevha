@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.SignalR;
+using Karalevha.API.Hubs;
 using Karalevha.API.Data;
 using Karalevha.API.Models;
 using System.Security.Claims;
@@ -12,10 +14,12 @@ namespace Karalevha.API.Controllers
     public class ObaMessagesController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly IHubContext<ChatHub> _hubContext;
 
-        public ObaMessagesController(AppDbContext context)
+        public ObaMessagesController(AppDbContext context, IHubContext<ChatHub> hubContext)
         {
             _context = context;
+            _hubContext = hubContext;
         }
 
         // GET: api/obamessages/{channelId}
