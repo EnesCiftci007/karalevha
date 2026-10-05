@@ -4,6 +4,7 @@ import MainLayout from './components/layout/MainLayout';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import Home from './pages/Home';
 import EOba from './pages/EOba';
+import ObaDetay from './pages/ObaDetay';
 import Akis from './pages/Akis';
 import BaskiIstasyonu from './pages/BaskiIstasyonu';
 import Auth from './pages/Auth';
@@ -24,6 +25,7 @@ function App() {
               <Route index element={<Home />} />
               <Route path="akis" element={<Akis />} />
               <Route path="e-oba" element={<EOba />} />
+              <Route path="e-oba/:id" element={<ObaDetay />} />
               <Route path="baski-istasyonu" element={<BaskiIstasyonu />} />
               <Route path="projeler" element={<Projeler />} />
             </Route>

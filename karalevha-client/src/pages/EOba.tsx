@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api, API_URL } from '../services/api';
 import { Plus, Zap, Hash, Users } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Oba } from '../types';
 
@@ -98,7 +99,7 @@ export default function EOba() {
           </div>
         ) : (
           obalar.map((oba) => (
-            <div key={oba.id} className="bg-[#0b0c10] border-2 border-[#1f2129] flex flex-col group hover:border-[#39ff14]/50 transition-colors relative overflow-hidden">
+            <Link to={`/e-oba/${oba.id}`} key={oba.id} className="bg-[#0b0c10] border-2 border-[#1f2129] flex flex-col group hover:border-[#39ff14]/50 transition-colors relative overflow-hidden">
               
               <div className="h-24 bg-[#111216] border-b-2 border-[#1f2129] relative flex items-center justify-center overflow-hidden">
                 <div className="absolute inset-0 opacity-20 bg-cover bg-center" style={{ backgroundImage: "url('/forum.png')" }}></div>
@@ -137,7 +138,7 @@ export default function EOba() {
                   </span>
                 </div>
               </div>
-            </div>
+            </Link>
           ))
         )}
       </div>

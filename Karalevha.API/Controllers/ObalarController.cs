@@ -64,6 +64,14 @@ namespace Karalevha.API.Controllers
             };
 
             _context.Obalar.Add(oba);
+            await _context.SaveChangesAsync(); // get Oba Id
+
+            var defaultChannel = new ObaChannel {
+                Name = "genel",
+                Type = "text",
+                ObaId = oba.Id
+            };
+            _context.ObaChannels.Add(defaultChannel);
             await _context.SaveChangesAsync();
 
             var username = User.FindFirst(ClaimTypes.Name)?.Value ?? "Bilinmeyen";
