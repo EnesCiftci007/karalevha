@@ -20,6 +20,7 @@ export interface Oba {
   avatarSeed: string;
   createdAt: string;
   owner: string;
+  isPrivate?: boolean;
 }
 
 export interface PrintModel {
