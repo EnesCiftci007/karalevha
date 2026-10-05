@@ -15,5 +15,7 @@ namespace Karalevha.API.DTOs
         public string Color { get; set; } = "#39ff14";
         
         public bool IsPrivate { get; set; } = false;
+        
+        public string? JoinPassword { get; set; }
     }
 }

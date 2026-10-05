@@ -20,8 +20,28 @@ namespace Karalevha.API.Controllers
 
         // GET: api/obachannels/{obaId}
         [HttpGet("{obaId}")]
+        [Authorize]
         public async Task<IActionResult> GetChannels(int obaId)
         {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null) return Unauthorized();
+            var userId = int.Parse(userIdClaim.Value);
+            
+            var oba = await _context.Obalar.FindAsync(obaId);
+            if (oba == null) return NotFound("Oba bulunamadı");
+            
+            var isMember = await _context.ObaMembers.AnyAsync(m => m.ObaId == obaId && m.UserId == userId);
+            
+            if (!isMember) {
+                if (oba.IsPrivate) {
+                    return StatusCode(403, "Bu gizli bir oba, katılmak için şifre girmelisiniz.");
+                } else {
+                    _context.ObaMembers.Add(new ObaMember { ObaId = obaId, UserId = userId, Role = "member" });
+                    oba.MemberCount += 1;
+                    await _context.SaveChangesAsync();
+                }
+            }
+
             var channels = await _context.ObaChannels
                 .Where(c => c.ObaId == obaId)
                 .OrderBy(c => c.CreatedAt)

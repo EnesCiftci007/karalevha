@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { api, API_URL } from '../services/api';
-import { Plus, Zap, Hash, Users, Lock } from 'lucide-react';
+import { Plus, Zap, Hash, Users, Lock, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Oba } from '../types';
@@ -13,7 +13,8 @@ export default function EOba() {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [color, setColor] = useState('#39ff14');
-  const [isPrivate, setIsPrivate] = useState(false); 
+  const [isPrivate, setIsPrivate] = useState(false);
+  const [joinPassword, setJoinPassword] = useState(''); 
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true); 
 
@@ -32,6 +33,26 @@ export default function EOba() {
     }
   };
 
+  
+  const handleDeleteOba = async (e: React.MouseEvent, id: number) => {
+    e.preventDefault(); // Prevent Link navigation
+    if (!window.confirm("Bu obayı tamamen silmek istediğine emin misin? Tüm kanallar ve mesajlar kalıcı olarak yok olacak!")) return;
+    
+    try {
+      const res = await fetch(`${API_URL}/api/obalar/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      if (res.ok) {
+        setObalar(obalar.filter(o => o.id !== id));
+      }
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
   const handleCreateOba = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
@@ -44,7 +65,7 @@ export default function EOba() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ name, description, color, isPrivate })
+        body: JSON.stringify({ name, description, color, isPrivate, joinPassword })
       });
 
       if (res.ok) {
@@ -55,6 +76,7 @@ export default function EOba() {
         setDescription('');
         setColor('#39ff14');
         setIsPrivate(false);
+        setJoinPassword('');
       }
     } catch (error) {
       console.error('Oba oluşturulamadı:', error);
@@ -103,6 +125,16 @@ export default function EOba() {
           obalar.map((oba) => (
             <Link to={`/e-oba/${oba.id}`} key={oba.id} className="bg-[#0b0c10] border-2 border-[#1f2129] flex flex-col group hover:border-[#39ff14]/50 transition-colors relative overflow-hidden">
               
+              
+              {user?.username === oba.owner && (
+                <button 
+                  onClick={(e) => handleDeleteOba(e, oba.id)}
+                  className="absolute top-3 left-3 z-20 text-zinc-500 hover:text-red-500 transition-colors p-2 bg-[#111216] border-2 border-[#1f2129] hover:border-red-500"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+
               {oba.isPrivate && <Lock className="w-5 h-5 absolute top-3 right-3 text-red-500/80 z-20" />}
               <div className="h-24 bg-[#111216] border-b-2 border-[#1f2129] relative flex items-center justify-center overflow-hidden">
                 <div className="absolute inset-0 opacity-20 bg-cover bg-center" style={{ backgroundImage: "url('/forum.png')" }}></div>
@@ -200,6 +232,7 @@ export default function EOba() {
                 </div>
               </div>
 
+              
               <div className="flex items-center mt-6 mb-6">
                   <input
                     type="checkbox"
@@ -212,6 +245,20 @@ export default function EOba() {
                     Gizli Oba (Sadece Üyeler)
                   </label>
               </div>
+
+              {isPrivate && (
+                <div className="space-y-2 mb-6 animate-in slide-in-from-top-2">
+                  <label className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">Katılım Şifresi</label>
+                  <input 
+                    type="text" 
+                    value={joinPassword}
+                    onChange={(e) => setJoinPassword(e.target.value)}
+                    placeholder="Oba şifresi belirle..."
+                    className="w-full bg-[#0b0c10] border-2 border-[#1f2129] px-4 py-3 text-white focus:border-[#39ff14] outline-none transition-colors"
+                  />
+                </div>
+              )}
+
 
               <button 
                 type="submit"
