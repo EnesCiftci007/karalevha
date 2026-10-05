@@ -9,6 +9,7 @@ import Akis from './pages/Akis';
 import BaskiIstasyonu from './pages/BaskiIstasyonu';
 import Auth from './pages/Auth';
 import Projeler from './pages/Projeler';
+import ProjeDetay from './pages/ProjeDetay';
 import { NotFound } from './pages/NotFound';
 
 function App() {
@@ -28,6 +29,7 @@ function App() {
               <Route path="e-oba/:id" element={<ObaDetay />} />
               <Route path="baski-istasyonu" element={<BaskiIstasyonu />} />
               <Route path="projeler" element={<Projeler />} />
+              <Route path="projeler/:id" element={<ProjeDetay />} />
             </Route>
           </Route>
 

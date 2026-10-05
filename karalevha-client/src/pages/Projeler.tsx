@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { api, API_URL } from '../services/api';
 import { Terminal, FolderGit2, Star, GitFork, ExternalLink, Plus, Code2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Project } from '../types';
 
@@ -104,7 +105,7 @@ export default function Projeler() {
           </div>
         ) : (
           projects.map((project) => (
-            <div key={project.id} className="bg-[#0b0c10] border-2 border-[#1f2129] p-6 hover:border-[#00e5ff]/50 transition-colors flex flex-col group relative overflow-hidden">
+            <Link to={`/projeler/${project.id}`} key={project.id} className="bg-[#0b0c10] block border-2 border-[#1f2129] p-6 hover:border-[#00e5ff]/50 transition-colors flex flex-col group relative overflow-hidden">
               <div className="absolute right-0 top-0 w-32 h-32 bg-[url('/baskikorsanlari.png')] bg-cover bg-center opacity-10 group-hover:opacity-20 transition-opacity filter grayscale pointer-events-none transform translate-x-10 -translate-y-10"></div>
               
               <div className="flex justify-between items-start mb-4 relative z-10">
@@ -141,10 +142,10 @@ export default function Projeler() {
                   className="flex items-center text-xs font-black uppercase tracking-widest text-[#00e5ff] hover:text-white transition-colors"
                 >
                   REPO'YA GİT <ExternalLink className="w-3 h-3 ml-1" />
-                </a>
-              </div>
-            </div>
-          ))
+                  </a>
+                </div>
+              </Link>
+            ))
         )}
       </div>
 
