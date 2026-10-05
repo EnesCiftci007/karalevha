@@ -48,15 +48,17 @@ export default function ObaDetay() {
     setConnection(newConnection);
   }, [token]);
 
+  const [isConnected, setIsConnected] = useState(false);
+
   // Connect and subscribe to messages
   useEffect(() => {
     if (connection) {
       connection.start()
         .then(() => {
           console.log('Connected to SignalR');
+          setIsConnected(true);
           
           connection.on('ReceiveMessage', (message: Message) => {
-            // Prevent duplicate messages if we are the sender and already optimistically updated
             setMessages(prev => {
               if (prev.some(m => m.id === message.id)) return prev;
               return [...prev, message];
@@ -67,18 +69,19 @@ export default function ObaDetay() {
     }
   }, [connection]);
 
-  // Join channel group when activeChannel changes
+  // Join channel group when activeChannel changes OR when connection establishes
   useEffect(() => {
-    if (connection && connection.state === signalR.HubConnectionState.Connected && activeChannel) {
+    if (isConnected && connection && activeChannel) {
       connection.invoke('JoinChannel', activeChannel.id.toString())
-        .catch(err => console.error(err));
+        .then(() => console.log("Joined channel: ", activeChannel.id))
+        .catch(err => console.error("JoinChannel error: ", err));
         
       return () => {
         connection.invoke('LeaveChannel', activeChannel.id.toString())
           .catch(err => console.error(err));
       };
     }
-  }, [connection, activeChannel]);
+  }, [isConnected, connection, activeChannel]);
 
 
   useEffect(() => {
