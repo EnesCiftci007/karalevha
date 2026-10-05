@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5114';
+export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5114';
 
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('token');
@@ -24,7 +24,17 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   }
   if (!res.ok) {
     const body = await res.json().catch(() => null);
-    throw new Error(body?.message ?? `İstek başarısız (${res.status})`);
+    let errorMsg = body?.message;
+    if (!errorMsg && body?.errors && typeof body.errors === 'object') {
+      const firstKey = Object.keys(body.errors)[0];
+      if (firstKey && Array.isArray(body.errors[firstKey]) && body.errors[firstKey].length > 0) {
+        errorMsg = body.errors[firstKey][0];
+      }
+    }
+    if (!errorMsg && body?.title) {
+      errorMsg = body.title;
+    }
+    throw new Error(errorMsg ?? `İstek başarısız (${res.status})`);
   }
   
   return res.json() as Promise<T>;

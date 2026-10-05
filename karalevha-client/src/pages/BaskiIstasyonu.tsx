@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { api } from '../services/api';
+import { api, API_URL } from '../services/api';
 import { Box, UploadCloud, Download, FileBox, CheckCircle2, Eye, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { PrintModel } from '../types';
@@ -53,7 +53,7 @@ export default function BaskiIstasyonu() {
     formData.append('file', file);
 
     try {
-      const res = await fetch('http://localhost:5114/api/printmodels', {
+      const res = await fetch(`${API_URL}/api/printmodels`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`
@@ -206,14 +206,14 @@ export default function BaskiIstasyonu() {
 
                 <div className="relative z-10 shrink-0 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
                   <button
-                    onClick={() => setPreviewUrl(`${import.meta.env.VITE_API_URL || 'http://localhost:5114'}${model.fileUrl}`)}
+                    onClick={() => setPreviewUrl(`${import.meta.env.VITE_API_URL || `${API_URL}`}${model.fileUrl}`)}
                     className="flex items-center justify-center bg-zinc-800 text-white hover:bg-zinc-700 border-2 border-zinc-600 px-4 py-3 text-sm font-black uppercase tracking-widest transition-all"
                   >
                     <Eye className="w-4 h-4 mr-2" strokeWidth={3} />
                     3B İNCELE
                   </button>
                   <a 
-                    href={`${import.meta.env.VITE_API_URL || 'http://localhost:5114'}${model.fileUrl}`} 
+                    href={`${import.meta.env.VITE_API_URL || `${API_URL}`}${model.fileUrl}`} 
                     download
                     target="_blank"
                     rel="noreferrer"

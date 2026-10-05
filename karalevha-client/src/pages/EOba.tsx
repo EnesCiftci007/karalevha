@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { api } from '../services/api';
+import { api, API_URL } from '../services/api';
 import { Plus, Zap, Hash, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Oba } from '../types';
@@ -36,7 +36,7 @@ export default function EOba() {
 
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5114/api/obalar', {
+      const res = await fetch(`${API_URL}/api/obalar`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

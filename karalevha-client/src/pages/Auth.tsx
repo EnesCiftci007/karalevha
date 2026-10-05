@@ -54,8 +54,8 @@ export default function Auth() {
           setPassword('');
         }
       }
-    } catch (error) {
-      setErrorMsg('Sunucuya bağlanılamadı. Backend çalışıyor mu?');
+    } catch (error: any) {
+      setErrorMsg(error?.message || 'Sunucuya bağlanılamadı. Backend çalışıyor mu?');
     } finally {
       setLoading(false);
     }
