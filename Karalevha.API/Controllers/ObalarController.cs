@@ -136,14 +136,30 @@ namespace Karalevha.API.Controllers
             if (userIdClaim == null) return Unauthorized();
             var userId = int.Parse(userIdClaim.Value);
 
-            var oba = await _context.Obalar.FindAsync(id);
+            var oba = await _context.Obalar
+                .Include(o => o.Owner) // Include it if we need it
+                .FirstOrDefaultAsync(o => o.Id == id);
+                
             if (oba == null) return NotFound("Oba bulunamadı");
 
-            // Sadece owner veya admin silebilir
-            var member = await _context.ObaMembers.FirstOrDefaultAsync(m => m.ObaId == id && m.UserId == userId);
-            if (member == null || (member.Role != "owner" && member.Role != "admin")) {
-                return Forbid("Bu obayı silme yetkiniz yok.");
+            // OwnerCheck based on OwnerId, fallback to ObaMembers for admins later
+            if (oba.OwnerId != userId) {
+                var member = await _context.ObaMembers.FirstOrDefaultAsync(m => m.ObaId == id && m.UserId == userId);
+                if (member == null || member.Role != "admin") {
+                    return StatusCode(403, "Bu obayı silme yetkiniz yok.");
+                }
             }
+
+            // Remove all related members and channels and messages manually if Cascade isn't working
+            var members = await _context.ObaMembers.Where(m => m.ObaId == id).ToListAsync();
+            _context.ObaMembers.RemoveRange(members);
+            
+            var channels = await _context.ObaChannels.Where(c => c.ObaId == id).ToListAsync();
+            foreach(var channel in channels) {
+                var messages = await _context.ObaMessages.Where(m => m.ChannelId == channel.Id).ToListAsync();
+                _context.ObaMessages.RemoveRange(messages);
+            }
+            _context.ObaChannels.RemoveRange(channels);
 
             _context.Obalar.Remove(oba);
             await _context.SaveChangesAsync();
