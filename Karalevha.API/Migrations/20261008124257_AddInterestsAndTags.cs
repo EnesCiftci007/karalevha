@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore.Migrations;
 
 #nullable disable
@@ -15,13 +15,15 @@ namespace Karalevha.API.Migrations
                 name: "Interests",
                 table: "Users",
                 type: "text[]",
-                nullable: false);
+                nullable: false,
+                defaultValue: new List<string>());
 
             migrationBuilder.AddColumn<List<string>>(
                 name: "Tags",
                 table: "Posts",
                 type: "text[]",
-                nullable: false);
+                nullable: false,
+                defaultValue: new List<string>());
         }
 
         /// <inheritdoc />
