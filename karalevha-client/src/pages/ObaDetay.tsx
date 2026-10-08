@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import * as signalR from '@microsoft/signalr';
 import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Hash, Volume2, Send, Users, ChevronLeft, Zap, MessageSquare, Lock } from 'lucide-react';
+import { Hash, Volume2, Send, Users, ChevronLeft, Zap, MessageSquare, Lock, Menu, X } from 'lucide-react';
 
 interface Channel {
   id: number;
@@ -33,6 +33,7 @@ export default function ObaDetay() {
   const [password, setPassword] = useState('');
   const [joinError, setJoinError] = useState('');
   const [connection, setConnection] = useState<signalR.HubConnection | null>(null);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -259,7 +260,20 @@ export default function ObaDetay() {
     <div className="flex h-[calc(100vh-100px)] bg-[#0b0c10] border-2 border-[#1f2129] overflow-hidden">
       
       {/* SIDEBAR (Channels) */}
-      <div className="w-64 bg-[#111216] border-r-2 border-[#1f2129] flex flex-col flex-shrink-0">
+      {/* Mobile Overlay */}
+      {isSidebarOpen && (
+        <div 
+          className="absolute inset-0 bg-black/80 z-40 md:hidden" 
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+      
+      {/* SIDEBAR (Channels) */}
+      <div className={`absolute inset-y-0 left-0 z-50 w-72 md:w-64 bg-[#111216] border-r-2 border-[#1f2129] flex flex-col flex-shrink-0 transform transition-transform duration-200 ease-in-out md:relative md:translate-x-0 ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        {/* Mobile close button inside sidebar header */}
+        <button onClick={() => setIsSidebarOpen(false)} className="md:hidden absolute top-4 right-4 text-zinc-400 hover:text-white z-50">
+           <X className="w-6 h-6" />
+        </button>
         <div className="h-16 flex items-center px-4 border-b-2 border-[#1f2129]">
           <Link to="/e-oba" className="text-zinc-400 hover:text-white transition-colors mr-3">
             <ChevronLeft className="w-6 h-6" />
@@ -274,7 +288,7 @@ export default function ObaDetay() {
             {channels.map(channel => (
               <button
                 key={channel.id}
-                onClick={() => setActiveChannel(channel)}
+                onClick={() => { setActiveChannel(channel); setIsSidebarOpen(false); }}
                 className={`w-full flex items-center px-3 py-2 text-left transition-colors ${
                   activeChannel?.id === channel.id 
                     ? 'bg-[#39ff14]/10 text-[#39ff14]' 
