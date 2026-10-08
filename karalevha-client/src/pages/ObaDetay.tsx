@@ -177,8 +177,13 @@ export default function ObaDetay() {
 
       if (res.ok) {
         const msg = await res.json();
-        // Gercegiyle degistir
-        setMessages(prev => prev.map(m => m.id === tempId ? msg : m));
+        // Gercegiyle degistir (SignalR bizden hizli davranip eklediyse sahtesini sil)
+        setMessages(prev => {
+          if (prev.some(m => m.id === msg.id)) {
+            return prev.filter(m => m.id !== tempId);
+          }
+          return prev.map(m => m.id === tempId ? msg : m);
+        });
       } else {
         setMessages(prev => prev.filter(m => m.id !== tempId));
       }
