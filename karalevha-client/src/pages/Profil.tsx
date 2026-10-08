@@ -136,7 +136,7 @@ export default function Profil() {
         <div className="absolute inset-0 bg-gradient-to-t from-[#0b0c10] to-transparent opacity-80" />
       </div>
 
-      <div className="px-6 relative -mt-16 mb-8">
+      <div className="px-6 md:px-8 relative -mt-16 mb-8">
         <div className="flex flex-col md:flex-row md:items-end justify-between">
           <div className="flex flex-col md:flex-row md:items-end space-y-4 md:space-y-0 md:space-x-6">
             <img 
@@ -209,7 +209,7 @@ export default function Profil() {
                 <textarea 
                   value={editBio}
                   onChange={(e) => setEditBio(e.target.value)}
-                  placeholder="Kendinden bahset..."
+                  placeholder="Biyografi ekle..."
                   className="w-full bg-[#0b0c10] border-2 border-zinc-800 p-3 text-zinc-300 focus:border-[#00e5ff] focus:outline-none min-h-[100px] resize-none"
                   maxLength={255}
                 />
@@ -313,3 +313,4 @@ export default function Profil() {
     </div>
   );
 }
+

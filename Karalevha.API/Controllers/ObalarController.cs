@@ -25,6 +25,13 @@ namespace Karalevha.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetObalar()
         {
+            var currentUserId = -1;
+            if (User.Identity?.IsAuthenticated == true)
+            {
+                var idClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+                if (idClaim != null) currentUserId = int.Parse(idClaim.Value);
+            }
+
             var obalar = await _context.Obalar
                 .Select(o => new
                 {
@@ -35,12 +42,12 @@ namespace Karalevha.API.Controllers
                     o.Color,
                     o.MemberCount,
                     o.IsPrivate,
-                    Owner = o.Owner != null ? o.Owner.Username : "Bilinmeyen"
+                    Owner = o.Owner != null ? o.Owner.Username : "Bilinmeyen",
+                    IsMember = currentUserId != -1 && _context.ObaMembers.Any(m => m.ObaId == o.Id && m.UserId == currentUserId)
                 })
                 .ToListAsync();
 
-            var rnd = new Random();
-            return Ok(obalar.OrderBy(x => rnd.Next()).ToList());
+            return Ok(obalar.OrderByDescending(x => x.Id).ToList());
         }
 
         // GET: api/obalar/{id}/channels
@@ -248,4 +255,5 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+
 

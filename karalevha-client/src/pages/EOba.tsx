@@ -8,6 +8,7 @@ import { Oba } from '../types';
 export default function EOba() {
   const { user, token } = useAuth();
   const [obalar, setObalar] = useState<Oba[]>([]);
+  const [activeTab, setActiveTab] = useState<'discover' | 'joined'>('discover');
   const [showModal, setShowModal] = useState(false);
   
   const [name, setName] = useState('');
@@ -110,6 +111,32 @@ export default function EOba() {
         )}
       </div>
 
+      
+      {/* Sekme Yapısı */}
+      <div className="flex border-b-2 border-[#1f2129] mb-6">
+        <button 
+          onClick={() => setActiveTab('discover')}
+          className={`flex-1 py-4 text-sm font-black uppercase tracking-widest transition-colors ${
+            activeTab === 'discover' 
+              ? 'text-[#39ff14] border-b-4 border-[#39ff14] bg-[#39ff14]/5' 
+              : 'text-zinc-500 hover:text-white bg-transparent'
+          }`}
+        >
+          OBALARI KEŞFET
+        </button>
+        <div className="w-[2px] bg-[#1f2129]"></div>
+        <button 
+          onClick={() => setActiveTab('joined')}
+          className={`flex-1 py-4 text-sm font-black uppercase tracking-widest transition-colors ${
+            activeTab === 'joined' 
+              ? 'text-[#39ff14] border-b-4 border-[#39ff14] bg-[#39ff14]/5' 
+              : 'text-zinc-500 hover:text-white bg-transparent'
+          }`}
+        >
+          KATILDIĞIM OBALAR
+        </button>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {initialLoad ? (
           <div className="col-span-full flex flex-col items-center justify-center py-20 text-[#39ff14]">
@@ -121,7 +148,7 @@ export default function EOba() {
             Hiç Oba Yok. İlk kuran sen ol!
           </div>
         ) : (
-          obalar.map((oba) => (
+          obalar.filter(oba => activeTab === 'discover' ? true : (oba as any).isMember || oba.owner === user?.username).map((oba) => (
             <Link to={`/e-oba/${oba.id}`} key={oba.id} className="bg-[#0b0c10] border-2 border-[#1f2129] flex flex-col group hover:border-[#39ff14]/50 transition-colors relative overflow-hidden">
               
               

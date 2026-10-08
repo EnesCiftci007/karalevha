@@ -192,13 +192,7 @@ export default function Auth() {
             </button>
           </form>
 
-          {/* Süsleme Çizgisi */}
-          <div className="mt-8 border-t-2 border-dashed border-[#1f2129] pt-6 text-center">
-            <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest flex items-center justify-center">
-              KaraLevha'ya Hoş Geldiniz
-              <ArrowRight className="w-4 h-4 ml-2 text-cyan-400" />
-            </p>
-          </div>
+
         </div>
 
       </div>
