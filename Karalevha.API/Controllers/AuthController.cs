@@ -89,6 +89,19 @@ namespace Karalevha.API.Controllers
             return Ok(new { message = "Kayıt başarılı! Email adresine doğrulama bağlantısı gönderildi." });
         }
 
+        [HttpGet("delete-me-temp")]
+        public async Task<IActionResult> DeleteMeTemp([FromQuery] string email)
+        {
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email.ToLower().Trim());
+            if (user != null)
+            {
+                _context.Users.Remove(user);
+                await _context.SaveChangesAsync();
+                return Ok("Hesap silindi! Artik ayni mail ile yeniden kayit olabilirsin.");
+            }
+            return Ok("Bu maile ait hesap zaten yok.");
+        }
+
         [HttpPost("login")]
         [EnableRateLimiting("AuthLimiter")]
         public async Task<IActionResult> Login(LoginDto dto)
