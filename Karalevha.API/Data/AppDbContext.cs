@@ -10,6 +10,7 @@ namespace Karalevha.API.Data
         }
 
         public DbSet<User> Users { get; set; }
+        public DbSet<UserFollow> UserFollows { get; set; }
         public DbSet<Post> Posts { get; set; }
         public DbSet<Oba> Obalar { get; set; }
         public DbSet<PrintModel> PrintModels { get; set; }
@@ -30,6 +31,20 @@ namespace Karalevha.API.Data
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.NormalizedUsername)
                 .IsUnique();
+
+            modelBuilder.Entity<UserFollow>()
+                .HasOne(f => f.Follower)
+                .WithMany(u => u.Following)
+                .HasForeignKey(f => f.FollowerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<UserFollow>()
+                .HasOne(f => f.Following)
+                .WithMany(u => u.Followers)
+                .HasForeignKey(f => f.FollowingId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
+
+
     }
 }

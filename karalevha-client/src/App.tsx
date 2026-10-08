@@ -10,6 +10,7 @@ import BaskiIstasyonu from './pages/BaskiIstasyonu';
 import Auth from './pages/Auth';
 import Projeler from './pages/Projeler';
 import ProjeDetay from './pages/ProjeDetay';
+import Profil from './pages/Profil';
 import { NotFound } from './pages/NotFound';
 
 function App() {
@@ -30,6 +31,7 @@ function App() {
               <Route path="baski-istasyonu" element={<BaskiIstasyonu />} />
               <Route path="projeler" element={<Projeler />} />
               <Route path="projeler/:id" element={<ProjeDetay />} />
+              <Route path="profil/:username" element={<Profil />} />
             </Route>
           </Route>
 
