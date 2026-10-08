@@ -1,4 +1,4 @@
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
 import { Bell, Search, LogOut, User } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 
@@ -71,9 +71,9 @@ export default function Navbar() {
                 alt="Profile" 
                 className="w-8 h-8 bg-zinc-800"
               />
-              <span className="text-[14px] font-black text-white uppercase tracking-widest hidden sm:block">
+              <Link to={`/profil/${user.username}`} className="text-[14px] font-black text-white uppercase tracking-widest hidden sm:block hover:text-[#00e5ff] transition-colors cursor-pointer">
                 {user.username}
-              </span>
+              </Link>
               <button onClick={handleLogout} className="text-zinc-500 hover:text-[#ff0055] p-1 ml-2 transition-colors" title="Çıkış Yap">
                 <LogOut className="w-5 h-5" strokeWidth={3} />
               </button>
