@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { User, Users, MapPin, Link as LinkIcon, Calendar, Edit2, Code2, AlertTriangle, Loader2, Save, X } from 'lucide-react';
+import { User, Users, MapPin, Link as LinkIcon, Calendar, Edit2, Code2, AlertTriangle, Loader2, Save, X, Box, Plus } from 'lucide-react';
 import { Project } from '../types';
 
 interface ProfileData {
@@ -15,6 +15,7 @@ interface ProfileData {
   followingCount: number;
   isFollowing: boolean;
   projects: Project[];
+  printModels?: any[];
 }
 
 export default function Profil() {
@@ -27,6 +28,7 @@ export default function Profil() {
   const [isEditing, setIsEditing] = useState(false);
   const [editBio, setEditBio] = useState('');
   const [saving, setSaving] = useState(false);
+  const [activeTab, setActiveTab] = useState<'projects' | 'models'>('projects');
 
   const isOwnProfile = user?.username.toLowerCase() === username?.toLowerCase();
 
@@ -169,6 +171,24 @@ export default function Profil() {
         </div>
       </div>
 
+      {/* Navigation Tabs */}
+      <div className="px-6 mb-6 border-b-2 border-[#1f2129]">
+        <div className="flex space-x-8">
+          <button 
+            onClick={() => setActiveTab('projects')}
+            className={`pb-3 text-sm font-black uppercase tracking-widest transition-colors ${activeTab === 'projects' ? 'text-[#00e5ff] border-b-2 border-[#00e5ff]' : 'text-zinc-500 hover:text-white'}`}
+          >
+            Projeler ({profile.projects.length})
+          </button>
+          <button 
+            onClick={() => setActiveTab('models')}
+            className={`pb-3 text-sm font-black uppercase tracking-widest transition-colors ${activeTab === 'models' ? 'text-[#a855f7] border-b-2 border-[#a855f7]' : 'text-zinc-500 hover:text-white'}`}
+          >
+            3B Modeller ({profile.printModels?.length || 0})
+          </button>
+        </div>
+      </div>
+
       <div className="px-6 grid grid-cols-1 md:grid-cols-3 gap-8">
         
         {/* Left Column - Info */}
@@ -201,33 +221,83 @@ export default function Profil() {
           </div>
         </div>
 
-        {/* Right Column - Projects */}
+        {/* Right Column - Content */}
         <div className="md:col-span-2 space-y-6">
-          <h3 className="text-xl font-black uppercase tracking-widest text-white border-b-2 border-[#1f2129] pb-3 flex items-center">
-            <Code2 className="w-6 h-6 mr-2 text-[#00e5ff]" />
-            Projeler ({profile.projects.length})
-          </h3>
-
-          <div className="space-y-4">
-            {profile.projects.length === 0 ? (
-              <div className="bg-[#111216] border-2 border-dashed border-[#1f2129] p-8 text-center text-zinc-500">
-                Bu kullanıcı henüz proje paylaşmamış.
+          {activeTab === 'projects' && (
+            <>
+              <div className="flex items-center justify-between border-b-2 border-[#1f2129] pb-3">
+                <h3 className="text-xl font-black uppercase tracking-widest text-white flex items-center">
+                  <Code2 className="w-6 h-6 mr-2 text-[#00e5ff]" />
+                  Açık Kaynak
+                </h3>
+                {isOwnProfile && (
+                  <Link to="/projeler?new=true" className="px-4 py-2 bg-[#00e5ff]/10 text-[#00e5ff] font-bold uppercase tracking-widest text-xs hover:bg-[#00e5ff] hover:text-black transition-colors flex items-center">
+                    <Plus className="w-4 h-4 mr-1" />
+                    Yeni Proje
+                  </Link>
+                )}
               </div>
-            ) : (
-              profile.projects.map(proj => (
-                <div key={proj.id} className="bg-[#111216] border-2 border-[#1f2129] p-5 hover:border-[#00e5ff]/50 transition-colors">
-                  <h4 className="text-lg font-bold text-white uppercase tracking-wider mb-2">{proj.title}</h4>
-                  <p className="text-zinc-400 text-sm mb-4 line-clamp-2">{proj.description}</p>
-                  <a 
-                    href={`/projeler/${proj.id}`}
-                    className="inline-block px-4 py-1.5 border-2 border-zinc-700 text-zinc-300 text-xs font-bold uppercase tracking-widest hover:border-[#00e5ff] hover:text-[#00e5ff] transition-colors"
-                  >
-                    İncele
-                  </a>
-                </div>
-              ))
-            )}
-          </div>
+
+              <div className="space-y-4">
+                {profile.projects.length === 0 ? (
+                  <div className="bg-[#111216] border-2 border-dashed border-[#1f2129] p-8 text-center text-zinc-500">
+                    Bu kullanıcı henüz proje paylaşmamış.
+                  </div>
+                ) : (
+                  profile.projects.map(proj => (
+                    <div key={proj.id} className="bg-[#111216] border-2 border-[#1f2129] p-5 hover:border-[#00e5ff]/50 transition-colors">
+                      <h4 className="text-lg font-bold text-white uppercase tracking-wider mb-2">{proj.title}</h4>
+                      <p className="text-zinc-400 text-sm mb-4 line-clamp-2">{proj.description}</p>
+                      <a 
+                        href={`/projeler/${proj.id}`}
+                        className="inline-block px-4 py-1.5 border-2 border-zinc-700 text-zinc-300 text-xs font-bold uppercase tracking-widest hover:border-[#00e5ff] hover:text-[#00e5ff] transition-colors"
+                      >
+                        İncele
+                      </a>
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          )}
+
+          {activeTab === 'models' && (
+            <>
+              <div className="flex items-center justify-between border-b-2 border-[#1f2129] pb-3">
+                <h3 className="text-xl font-black uppercase tracking-widest text-white flex items-center">
+                  <Box className="w-6 h-6 mr-2 text-[#a855f7]" />
+                  3B Modeller
+                </h3>
+                {isOwnProfile && (
+                  <Link to="/baski-istasyonu" className="px-4 py-2 bg-[#a855f7]/10 text-[#a855f7] font-bold uppercase tracking-widest text-xs hover:bg-[#a855f7] hover:text-white transition-colors flex items-center">
+                    <Plus className="w-4 h-4 mr-1" />
+                    Model Yükle
+                  </Link>
+                )}
+              </div>
+
+              <div className="space-y-4">
+                {!profile.printModels || profile.printModels.length === 0 ? (
+                  <div className="bg-[#111216] border-2 border-dashed border-[#1f2129] p-8 text-center text-zinc-500">
+                    Bu kullanıcı henüz model yüklememiş.
+                  </div>
+                ) : (
+                  profile.printModels.map((model: any) => (
+                    <div key={model.id} className="bg-[#111216] border-2 border-[#1f2129] p-5 hover:border-[#a855f7]/50 transition-colors">
+                      <h4 className="text-lg font-bold text-white uppercase tracking-wider mb-2">{model.title}</h4>
+                      <p className="text-zinc-400 text-sm mb-4 line-clamp-2">{model.description}</p>
+                      <a 
+                        href={`/baski-istasyonu`}
+                        className="inline-block px-4 py-1.5 border-2 border-zinc-700 text-zinc-300 text-xs font-bold uppercase tracking-widest hover:border-[#a855f7] hover:text-[#a855f7] transition-colors"
+                      >
+                        Tümünü Gör
+                      </a>
+                    </div>
+                  ))
+                )}
+              </div>
+            </>
+          )}
         </div>
 
       </div>
