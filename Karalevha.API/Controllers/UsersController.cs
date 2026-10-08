@@ -52,6 +52,7 @@ namespace Karalevha.API.Controllers
                 user.Id,
                 user.Username,
                 user.Bio,
+                user.Interests,
                 user.AvatarSeed,
                 user.CreatedAt,
                 FollowerCount = user.Followers.Count,

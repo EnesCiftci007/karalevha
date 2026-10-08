@@ -9,6 +9,7 @@ interface ProfileData {
   id: number;
   username: string;
   bio: string | null;
+  interests?: string[];
   avatarSeed: string;
   createdAt: string;
   followerCount: number;
@@ -27,6 +28,8 @@ export default function Profil() {
 
   const [isEditing, setIsEditing] = useState(false);
   const [editBio, setEditBio] = useState('');
+  const [editInterests, setEditInterests] = useState<string[]>([]);
+  const AVAILABLE_INTERESTS = ['Yazılım', 'Robotik', '3B Baskı', 'Elektronik', 'El İşi', 'Tasarım', 'Oyun Geliştirme', 'IoT'];
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'projects' | 'models'>('projects');
 
@@ -48,6 +51,7 @@ export default function Profil() {
       const data = await res.json();
       setProfile(data);
       setEditBio(data.bio || '');
+      setEditInterests(data.interests || []);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -76,6 +80,10 @@ export default function Profil() {
     }
   };
 
+  const toggleInterest = (interest: string) => {
+    setEditInterests(prev => prev.includes(interest) ? prev.filter(i => i !== interest) : [...prev, interest]);
+  };
+
   const saveProfile = async () => {
     setSaving(true);
     try {
@@ -85,11 +93,11 @@ export default function Profil() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ bio: editBio })
+        body: JSON.stringify({ bio: editBio, interests: editInterests })
       });
       if (res.ok) {
         const data = await res.json();
-        setProfile(prev => prev ? { ...prev, bio: data.bio } : null);
+        setProfile(prev => prev ? { ...prev, bio: data.bio, interests: data.interests } : null);
         setIsEditing(false);
       }
     } catch (err) {

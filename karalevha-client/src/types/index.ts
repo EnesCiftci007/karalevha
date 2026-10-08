@@ -9,7 +9,11 @@ export interface Post {
   id: number;
   content: string;
   createdAt: string;
-  user: { id: number; username: string; avatarSeed: string; };
+  tags?: string[];
+  likes?: number;
+  username?: string;
+  avatarSeed?: string;
+  user?: { id: number; username: string; avatarSeed: string; };
 }
 
 export interface Oba {
