@@ -145,6 +145,10 @@ export default function ObaDetay() {
     e.preventDefault();
     if (!newMessage.trim() || !activeChannel || !user) return;
 
+    // Optimistically clear the input so UX feels instant
+    const currentText = newMessage;
+    setNewMessage('');
+
     try {
       const res = await fetch(`${API_URL}/api/obamessages/${activeChannel.id}`, {
         method: 'POST',
@@ -152,7 +156,7 @@ export default function ObaDetay() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify({ content: newMessage })
+        body: JSON.stringify({ content: currentText })
       });
 
       if (res.ok) {

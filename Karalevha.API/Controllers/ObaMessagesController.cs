@@ -72,6 +72,8 @@ namespace Karalevha.API.Controllers
                 return BadRequest(new { message = "Yavaş Mod Aktif: Lütfen ard arda mesaj göndermeden önce bekleyin." });
             }
 
+            var username = User.FindFirst(ClaimTypes.Name)?.Value ?? "Bilinmeyen";
+
             var message = new ObaMessage
             {
                 Content = dto.Content,
@@ -83,19 +85,18 @@ namespace Karalevha.API.Controllers
             _context.ObaMessages.Add(message);
             await _context.SaveChangesAsync();
 
-            var user = await _context.Users.FindAsync(userId);
-
             var returnMessage = new {
                 message.Id,
                 message.Content,
                 message.CreatedAt,
                 User = new {
-                    user!.Id,
-                    user.Username
+                    Id = userId,
+                    Username = username
                 }
             };
 
-            await _hubContext.Clients.Group(channelId.ToString()).SendAsync("ReceiveMessage", returnMessage);
+            // Fire and forget SignalR broadcast
+            _ = _hubContext.Clients.Group(channelId.ToString()).SendAsync("ReceiveMessage", returnMessage);
 
             return Ok(returnMessage);
         }
