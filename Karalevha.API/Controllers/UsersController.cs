@@ -41,6 +41,11 @@ namespace Karalevha.API.Controllers
                 .OrderByDescending(p => p.CreatedAt)
                 .ToListAsync();
 
+            var printModels = await _context.PrintModels
+                .Where(p => p.UserId == user.Id)
+                .OrderByDescending(p => p.UploadedAt)
+                .ToListAsync();
+
             var isFollowing = user.Followers.Any(f => f.FollowerId == currentUserId);
 
             return Ok(new {
@@ -52,7 +57,8 @@ namespace Karalevha.API.Controllers
                 FollowerCount = user.Followers.Count,
                 FollowingCount = user.Following.Count,
                 IsFollowing = isFollowing,
-                Projects = projects
+                Projects = projects,
+                PrintModels = printModels
             });
         }
 
