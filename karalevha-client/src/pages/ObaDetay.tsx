@@ -1,143 +1,45 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import * as signalR from '@microsoft/signalr';
-import { api, API_URL } from '../services/api';
-import { useAuth } from '../context/AuthContext';
-import { Hash, Volume2, Send, Users, ChevronLeft, Zap, MessageSquare, Lock } from 'lucide-react';
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMessage.trim() || !activeChannel || !user) return;
 
-interface Channel {
-  id: number;
-  name: string;
-  type: string;
-}
+    const currentText = newMessage;
+    setNewMessage('');
 
-interface Message {
-  id: number;
-  content: string;
-  createdAt: string;
-  user: {
-    id: number;
-    username: string;
-  };
-}
+    // Optimistic UI: Ekrana aninda yansit
+    const tempId = -Math.floor(Math.random() * 1000000);
+    const optimisticMessage: Message = {
+      id: tempId,
+      content: currentText,
+      createdAt: new Date().toISOString(),
+      user: {
+        id: user.id,
+        username: user.username
+      }
+    };
 
-export default function ObaDetay() {
-  const { id } = useParams();
-  const { user, token } = useAuth();
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [needsPassword, setNeedsPassword] = useState(false);
-  const [password, setPassword] = useState('');
-  const [joinError, setJoinError] = useState('');
-  const [connection, setConnection] = useState<signalR.HubConnection | null>(null);
-  
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+    setMessages(prev => [...prev, optimisticMessage]);
 
-  // Setup SignalR connection
-  useEffect(() => {
-    if (!token) return;
-
-    const newConnection = new signalR.HubConnectionBuilder()
-      .withUrl(`${import.meta.env.VITE_API_URL || API_URL}/chathub`)
-      .withAutomaticReconnect()
-      .build();
-
-    setConnection(newConnection);
-  }, [token]);
-
-  const [isConnected, setIsConnected] = useState(false);
-
-  // Connect and subscribe to messages
-  useEffect(() => {
-    if (connection) {
-      connection.start()
-        .then(() => {
-          console.log('Connected to SignalR');
-          setIsConnected(true);
-          
-          connection.on('ReceiveMessage', (message: Message) => {
-            setMessages(prev => {
-              if (prev.some(m => m.id === message.id)) return prev;
-              return [...prev, message];
-            });
-          });
-        })
-        .catch(e => console.log('Connection failed: ', e));
-    }
-  }, [connection]);
-
-  // Join channel group when activeChannel changes OR when connection establishes
-  useEffect(() => {
-    if (isConnected && connection && activeChannel) {
-      connection.invoke('JoinChannel', activeChannel.id.toString())
-        .then(() => console.log("Joined channel: ", activeChannel.id))
-        .catch(err => console.error("JoinChannel error: ", err));
-        
-      return () => {
-        connection.invoke('LeaveChannel', activeChannel.id.toString())
-          .catch(err => console.error(err));
-      };
-    }
-  }, [isConnected, connection, activeChannel]);
-
-
-  useEffect(() => {
-    fetchChannels();
-  }, [id]);
-
-  useEffect(() => {
-    if (activeChannel) {
-      fetchMessages();
-      // Simple polling for new messages every 3 seconds
-
-
-    }
-  }, [activeChannel]);
-
-  useEffect(() => {
-    // Scroll to bottom when messages change
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-
-  const fetchChannels = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/obachannels/${id}`, {
+      const res = await fetch(`${API_URL}/api/obamessages/${activeChannel.id}`, {
+        method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
-        }
+        },
+        body: JSON.stringify({ content: currentText })
       });
-      
-      if (res.status === 403) {
-        setNeedsPassword(true);
-        setLoading(false);
-        return;
-      }
-      
-      if (res.ok) {
-        const data = await res.json();
-        setChannels(data);
-        if (data.length > 0) {
-          setActiveChannel(data[0]);
-        }
-      }
-    } catch (error) {
-      console.error('Kanallar yüklenemedi:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
-  const fetchMessages = async () => {
-    if (!activeChannel) return;
-    try {
-      const data = await api<Message[]>(`/api/obamessages/${activeChannel.id}`);
-      setMessages(data);
+      if (res.ok) {
+        const msg = await res.json();
+        // Gecici mesaji gercegiyle degistir (veya eger SignalR'dan coktan geldiyse bunu atla)
+        setMessages(prev => prev.map(m => m.id === tempId ? msg : m));
+      } else {
+        // Hata durumunda gecici mesaji sil
+        setMessages(prev => prev.filter(m => m.id !== tempId));
+      }
     } catch (error) {
-      console.error('Mesajlar yüklenemedi:', error);
+      console.error('Mesaj gonderilemedi:', error);
+      setMessages(prev => prev.filter(m => m.id !== tempId));
     }
   };
 
