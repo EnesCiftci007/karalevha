@@ -51,17 +51,12 @@ namespace Karalevha.API.Controllers
                 
                 if (currentUser != null && currentUser.Interests != null && currentUser.Interests.Any())
                 {
-                    var random = new Random();
-                    var sorted = query
-                        .OrderByDescending(p => p.Tags != null && p.Tags.Any(t => currentUser.Interests.Contains(t)))
-                        .ThenBy(p => random.Next())
-                        .ToList();
+                    var sorted = query.OrderByDescending(p => p.Tags != null && p.Tags.Any(t => currentUser.Interests.Contains(t))).ThenByDescending(p => p.CreatedAt).ThenBy(p => p.Id).ToList();
                     return Ok(sorted);
                 }
             }
 
-            var rnd = new Random();
-            var mixed = query.OrderBy(p => rnd.Next()).ToList();
+            var mixed = query.OrderByDescending(p => p.CreatedAt).ThenBy(p => p.Id).ToList();
             return Ok(mixed);
         }
 
@@ -105,5 +100,6 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+
 
 

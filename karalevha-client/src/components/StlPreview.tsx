@@ -148,7 +148,7 @@ export default function StlPreview({ url, color = '#a855f7' }: StlPreviewProps) 
         }
       });
       
-      renderer.dispose();
+      controls.dispose(); renderer.dispose();
     };
   }, [url, color]);
 
@@ -168,3 +168,4 @@ export default function StlPreview({ url, color = '#a855f7' }: StlPreviewProps) 
     </div>
   );
 }
+

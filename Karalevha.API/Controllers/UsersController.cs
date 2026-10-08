@@ -77,11 +77,7 @@ namespace Karalevha.API.Controllers
             var existingFollow = await _context.UserFollows
                 .FirstOrDefaultAsync(f => f.FollowerId == currentUserId && f.FollowingId == targetUser.Id);
 
-            if (existingFollow == null)
-            {
-                _context.UserFollows.Add(new UserFollow { FollowerId = currentUserId, FollowingId = targetUser.Id });
-                await _context.SaveChangesAsync();
-            }
+            if (existingFollow == null) { try { _context.UserFollows.Add(new UserFollow { FollowerId = currentUserId, FollowingId = targetUser.Id }); await _context.SaveChangesAsync(); } catch (Microsoft.EntityFrameworkCore.DbUpdateException) { return StatusCode(409, "Kullanýcý zaten takip ediliyor."); } }
 
             return Ok(new { message = "Takip edildi" });
         }
@@ -135,3 +131,4 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+

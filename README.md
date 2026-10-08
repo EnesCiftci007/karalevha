@@ -1,66 +1,64 @@
-﻿# Karalevha V2
+﻿# Karalevha
 
-Karalevha, dijital topluluklarin (Obalar), 3B baski projelerinin ve acik kaynakli projelerin paylasildigi modern bir platformdur.
+Karalevha, dijital toplulukların (Obalar), 3B baskı projelerinin ve açık kaynaklı projelerin paylaşıldığı modern bir platformdur.
 
 ## Teknolojiler
 - **Backend:** .NET 9 (C#), Entity Framework Core, PostgreSQL, SignalR, JWT Authentication, BCrypt
 - **Frontend:** React 19, TypeScript, Vite, TailwindCSS, Three.js, Zustand/Context
 
-## Proje Yapisi
-- /Karalevha.API - C# Backend klasoru (REST API, WebSocket, Veritabani Modelleri)
-- /karalevha-client - React + TypeScript Frontend klasoru
+## Proje Yapısı
+- /Karalevha.API - C# Backend klasörü (REST API, WebSocket, Veritabanı Modelleri)
+- /karalevha-client - React + TypeScript Frontend klasörü
 
-## Kurulum ve Calistirma (Local Development)
+## Kurulum ve Çalıştırma (Local Development)
 
 ### Backend (API)
-Proje .NET 9 kullanmaktadir. Veritabani olarak PostgreSQL gereklidir.
+Proje .NET 9 kullanmaktadır. Veritabanı olarak PostgreSQL gereklidir.
 
 1. Karalevha.API dizinine gidin.
-2. Kullanici sirlarini (User Secrets) veya ppsettings.json'i ayarlayin:
+2. Kullanıcı sırlarını (User Secrets) ayarlayın:
 \\\ash
 dotnet user-secrets init
 dotnet user-secrets set "Jwt:Key" "GIZLI_VE_EN_AZ_32_KARAKTER_UZUNLUGUNDA_BIR_SIFRE_YAZIN"
 dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Database=karalevha;Username=postgres;Password=postgres"
 \\\
-3. EF Core araclariyla veritabanini guncelleyin: dotnet ef database update
-4. Projeyi calistirin: dotnet run (Varsayilan olarak http://localhost:5114 portunda calisir)
+3. EF Core araçlarıyla veritabanını güncelleyin: \dotnet ef database update\
+4. Projeyi çalıştırın: \dotnet run\ (Varsayılan olarak http://localhost:5114 portunda çalışır)
 
 ### Frontend (Client)
 Node.js (v18+) gereklidir.
-1. karalevha-client dizinine gidin.
-2. Bagimliliklari yukleyin: 
-pm install
-3. Gelistirme sunucusunu baslatin: 
-pm run dev
+1. \karalevha-client\ dizinine gidin.
+2. Bağımlılıkları yükleyin: \
+pm install\
+3. Geliştirme sunucusunu başlatın: \
+pm run dev\
 
-## Canli Yayina Alma (Deployment)
+## Canlı Yayına Alma (Deployment)
 
-Karalevha mikro-servis mimarisine hazir tasarlanmistir ancak simdilik Monolitik calisir.
+Karalevha monolitik olarak canlıya çıkmaya hazırdır.
 
 **Frontend (Vercel):**
-- Projeyi Vercel'e baglayip karalevha-client klasorunu Root Directory olarak secin.
-- Build command: 
-pm run build
-- Output klasoru: dist
-- Environment Variables: VITE_API_URL (Backend URL'niz)
+- Projeyi Vercel'e bağlayıp \karalevha-client\ klasörünü Root Directory olarak seçin.
+- Build command: \
+pm run build\
+- Output klasörü: \dist\
+- Environment Variables: \VITE_API_URL\ (Backend URL'niz)
 
 **Backend (Render.com / Docker):**
-- Dockerfile yardimiyla veya Render Web Service (ASP.NET Core) ile yayinlayin.
+- Dockerfile yardımıyla veya doğrudan yayınlayın.
 - Environment Variables:
-  - Jwt__Key
-  - ConnectionStrings__DefaultConnection
-  - Cors__Origins__0 (Frontend Vercel URL'niz)
-  - ASPNETCORE_ENVIRONMENT = Production
+  - \Jwt__Key\
+  - \ConnectionStrings__DefaultConnection\
+  - \Cors__Origins__0\ (Frontend Vercel URL'niz)
+  - \ASPNETCORE_ENVIRONMENT\ = \Production\
 
-## Guvenlik (V1.0)
-Proje V1 itibariyle asagidaki guvenlik altyapisina sahiptir:
-- Private Oba mesajlari ve odalari SignalR dahil olmak uzere yetkisiz erisime kapalidir.
-- Oba sifreleri BCrypt ile hashlenerek saklanir.
-- Veritabani Race-Condition cift kayitlari DB Unique Index seviyesinde engellenmistir.
-- STL dosya yuklemeleri boyut, eklenti ve Path Traversal guvenlikleri ile kisitlanmistir.
-- Akis ve Mesaj gecmisleri Pagination (Take/Limit) ile korunmaktadir.
+## Güvenlik Altyapısı
+Proje aşağıdaki temel güvenlik adımlarını içermektedir:
+- Özel Oba mesajları ve odaları SignalR ve REST API seviyesinde yetkisiz erişime kapalıdır.
+- Oba şifreleri BCrypt ile hashlenerek korunur.
+- Eş zamanlı (Concurrency) işlemler Veritabanı Unique Constraint'leri ve EF Core Transaction'ları ile kontrol altındadır.
+- STL dosya yüklemeleri boyut ve Path Traversal güvenlikleri ile kısıtlanmıştır.
+- Akış ve Mesaj geçmişleri Pagination mantığı ile işlenmektedir.
 
-## Gelecek Gelistirmeler (Placeholder)
-- Projeler sayfasindaki Fork ve Star islemleri simdilik UI olarak mevcuttur.
-- E-Posta aktivasyonu ve sifre sifirlama sistemi eklenecektir.
-- Pazar (Marketplace) modulu entegre edilecektir.
+## Önemli Not (Placeholders)
+- Projeler sayfasındaki **Yıldız** ve **Fork** butonları ile Akış'taki **Beğen/Yorum/Paylaş** etkileşimleri şu aşamada salt UI Placeholder'dır (Görseldir) ve henüz gerçek entegrasyonu bulunmamaktadır.

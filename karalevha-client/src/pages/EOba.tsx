@@ -17,19 +17,6 @@ export default function EOba() {
   const [joinPassword, setJoinPassword] = useState(''); 
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
-  const [visibleCount, setVisibleCount] = useState(10); 
-
-  
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.innerHeight + document.documentElement.scrollTop >= document.documentElement.offsetHeight - 200) {
-        setVisibleCount(prev => prev + 5);
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
   useEffect(() => {
     fetchObalar();
   }, []);
@@ -289,3 +276,4 @@ export default function EOba() {
     </div>
   );
 }
+
