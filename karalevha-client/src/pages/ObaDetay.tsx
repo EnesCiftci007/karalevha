@@ -323,8 +323,17 @@ export default function ObaDetay() {
       {/* MAIN CHAT AREA */}
       <div className="flex-1 flex flex-col bg-[#0b0c10] relative">
         {/* Chat Header */}
-        <div className="h-16 border-b-2 border-[#1f2129] flex items-center px-6 justify-between flex-shrink-0 bg-[#111216]">
+        <div className="h-16 border-b-2 border-[#1f2129] flex items-center px-4 sm:px-6 justify-between flex-shrink-0 bg-[#111216] relative">
           <div className="flex items-center text-white">
+            <Link to="/e-oba" className="md:hidden text-zinc-400 hover:text-white transition-colors mr-2">
+              <ChevronLeft className="w-6 h-6" />
+            </Link>
+            <button 
+              onClick={() => setIsSidebarOpen(true)} 
+              className="md:hidden mr-3 sm:mr-4 text-zinc-400 hover:text-white"
+            >
+              <Menu className="w-6 h-6" />
+            </button>
             <Hash className="w-5 h-5 text-zinc-400 mr-2" />
             <h3 className="font-black text-lg tracking-wider">{activeChannel?.name || 'Kanal'}</h3>
           </div>
