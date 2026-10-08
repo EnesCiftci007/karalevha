@@ -67,7 +67,7 @@ namespace Karalevha.API.Controllers
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
                 
-                var corsOrigins = _configuration["Cors:Origins"]?.Split(',').FirstOrDefault();
+                var corsOriginsArray = _configuration.GetSection("Cors:Origins").Get<string[]>(); var corsOrigins = corsOriginsArray?.FirstOrDefault() ?? _configuration["Cors:Origins"]?.Split(',').FirstOrDefault();
                 if (string.IsNullOrEmpty(corsOrigins) && !_env.IsDevelopment())
                 {
                     throw new InvalidOperationException("Cors:Origins configuration is missing in production. Verification URL cannot be generated.");
@@ -167,7 +167,7 @@ namespace Karalevha.API.Controllers
 
             try
             {
-                var corsOrigins = _configuration["Cors:Origins"]?.Split(',').FirstOrDefault();
+                var corsOriginsArray = _configuration.GetSection("Cors:Origins").Get<string[]>(); var corsOrigins = corsOriginsArray?.FirstOrDefault() ?? _configuration["Cors:Origins"]?.Split(',').FirstOrDefault();
                 if (string.IsNullOrEmpty(corsOrigins) && !_env.IsDevelopment())
                 {
                     throw new InvalidOperationException("Cors:Origins configuration is missing in production. Verification URL cannot be generated.");
@@ -212,3 +212,4 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+
