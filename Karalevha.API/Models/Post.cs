@@ -16,6 +16,8 @@ namespace Karalevha.API.Models
 
         public int Likes { get; set; } = 0;
 
+        public List<string> Tags { get; set; } = new List<string>();
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
         // Foreign Key

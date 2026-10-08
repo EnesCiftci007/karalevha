@@ -26,6 +26,9 @@ namespace Karalevha.API.Models
         public string? AvatarSeed { get; set; } // Dicebear bottts için
         
         public string? Bio { get; set; }
+        
+        public List<string> Interests { get; set; } = new List<string>();
+
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public ICollection<UserFollow> Followers { get; set; } = new List<UserFollow>();
         public ICollection<UserFollow> Following { get; set; } = new List<UserFollow>();

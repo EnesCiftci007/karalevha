@@ -109,6 +109,7 @@ namespace Karalevha.API.Controllers
 
         public class UpdateProfileDto {
             public string? Bio { get; set; }
+            public List<string>? Interests { get; set; }
         }
 
         // PUT: api/users/me
@@ -122,9 +123,14 @@ namespace Karalevha.API.Controllers
             if (user == null) return NotFound();
 
             user.Bio = dto.Bio;
+            if (dto.Interests != null)
+            {
+                user.Interests = dto.Interests;
+            }
+
             await _context.SaveChangesAsync();
 
-            return Ok(new { user.Bio });
+            return Ok(new { user.Bio, user.Interests });
         }
     }
 }

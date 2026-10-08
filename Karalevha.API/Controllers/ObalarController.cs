@@ -24,7 +24,6 @@ namespace Karalevha.API.Controllers
         public async Task<IActionResult> GetObalar()
         {
             var obalar = await _context.Obalar
-                .OrderByDescending(o => o.CreatedAt)
                 .Select(o => new
                 {
                     o.Id,
@@ -32,12 +31,13 @@ namespace Karalevha.API.Controllers
                     o.Description,
                     o.AvatarSeed,
                     o.Color,
-                    o.MemberCount, o.IsPrivate,
-                    Owner = o.Owner.Username
+                    o.MemberCount,
+                    o.IsPrivate
                 })
                 .ToListAsync();
 
-            return Ok(obalar);
+            var rnd = new Random();
+            return Ok(obalar.OrderBy(x => rnd.Next()).ToList());
         }
 
 
