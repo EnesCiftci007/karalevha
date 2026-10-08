@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { api } from '../services/api';
 import { ChevronLeft, Code2, AlertTriangle, ExternalLink, GitBranch } from 'lucide-react';
 import { Project } from '../types';
+import NativeCodeViewer from '../components/NativeCodeViewer';
 
 export default function ProjeDetay() {
   const { id } = useParams();
@@ -81,18 +82,7 @@ export default function ProjeDetay() {
 
       <div className="bg-[#0b0c10] border-2 border-[#1f2129] relative overflow-hidden flex flex-col" style={{ height: '70vh' }}>
         {isGithub ? (
-          <>
-            <div className="bg-[#111216] border-b-2 border-[#1f2129] p-3 flex justify-between items-center text-xs font-bold uppercase tracking-widest text-zinc-400">
-              <span className="flex items-center"><Code2 className="w-4 h-4 mr-2 text-[#00e5ff]" /> İnteraktif Kod Görüntüleyici</span>
-              <span>VSCode Web Motoru</span>
-            </div>
-            <iframe 
-              src={viewerUrl} 
-              title="Code Viewer"
-              className="w-full flex-grow border-none"
-              allow="clipboard-read; clipboard-write"
-            />
-          </>
+          <NativeCodeViewer repoUrl={project.repoUrl} />
         ) : (
           <div className="flex flex-col items-center justify-center h-full text-zinc-500 p-8 text-center">
             <AlertTriangle className="w-12 h-12 mb-4" />
