@@ -21,12 +21,14 @@ namespace Karalevha.API.Controllers
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly IEmailService _emailService;
+        private readonly IWebHostEnvironment _env;
 
-        public AuthController(AppDbContext context, IConfiguration configuration, IEmailService emailService)
+        public AuthController(AppDbContext context, IConfiguration configuration, IEmailService emailService, IWebHostEnvironment env)
         {
             _context = context;
             _configuration = configuration;
             _emailService = emailService;
+            _env = env;
         }
 
         private static readonly string DummyHash = BCrypt.Net.BCrypt.EnhancedHashPassword("dummy-password");
@@ -65,7 +67,12 @@ namespace Karalevha.API.Controllers
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
                 
-                var frontendUrl = _configuration["Cors:Origins"]?.Split(',').FirstOrDefault() ?? "http://localhost:5173";
+                var corsOrigins = _configuration["Cors:Origins"]?.Split(',').FirstOrDefault();
+                if (string.IsNullOrEmpty(corsOrigins) && !_env.IsDevelopment())
+                {
+                    throw new InvalidOperationException("Cors:Origins configuration is missing in production. Verification URL cannot be generated.");
+                }
+                var frontendUrl = corsOrigins ?? "http://localhost:5173";
                 var verificationLink = $"{frontendUrl}/verify-email?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(verificationToken)}";
                 
                 await _emailService.SendVerificationEmailAsync(user.Email, verificationLink);
@@ -160,7 +167,12 @@ namespace Karalevha.API.Controllers
 
             try
             {
-                var frontendUrl = _configuration["Cors:Origins"]?.Split(',').FirstOrDefault() ?? "http://localhost:5173";
+                var corsOrigins = _configuration["Cors:Origins"]?.Split(',').FirstOrDefault();
+                if (string.IsNullOrEmpty(corsOrigins) && !_env.IsDevelopment())
+                {
+                    throw new InvalidOperationException("Cors:Origins configuration is missing in production. Verification URL cannot be generated.");
+                }
+                var frontendUrl = corsOrigins ?? "http://localhost:5173";
                 var verificationLink = $"{frontendUrl}/verify-email?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(verificationToken)}";
                 
                 await _emailService.SendVerificationEmailAsync(user.Email, verificationLink);
