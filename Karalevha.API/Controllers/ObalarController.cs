@@ -26,10 +26,18 @@ namespace Karalevha.API.Controllers
         public async Task<IActionResult> GetObalar()
         {
             var currentUserId = -1;
-            if (User.Identity?.IsAuthenticated == true)
+            var authHeader = Request.Headers["Authorization"].FirstOrDefault();
+            if (authHeader != null && authHeader.StartsWith("Bearer "))
             {
-                var idClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
-                if (idClaim != null) currentUserId = int.Parse(idClaim.Value);
+                try {
+                    var tokenStr = authHeader.Substring("Bearer ".Length).Trim();
+                    var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+                    if (handler.CanReadToken(tokenStr)) {
+                        var jwtToken = handler.ReadJwtToken(tokenStr);
+                        var idClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier || c.Type == "nameid");
+                        if (idClaim != null) int.TryParse(idClaim.Value, out currentUserId);
+                    }
+                } catch { }
             }
 
             var obalar = await _context.Obalar
@@ -255,5 +263,6 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+
 
 

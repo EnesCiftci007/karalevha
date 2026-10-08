@@ -34,6 +34,26 @@ export default function EOba() {
   };
 
   
+
+  const handleJoinPublicOba = async (e: React.MouseEvent, id: number) => {
+    e.preventDefault(); // Prevent Link navigation
+    try {
+      const res = await fetch(`${API_URL}/api/obalar/${id}/join`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({})
+      });
+      if (res.ok) {
+        setObalar(obalar.map(o => o.id === id ? { ...o, isMember: true } as any : o));
+      }
+    } catch(err) {
+      console.error(err);
+    }
+  };
+
   const handleDeleteOba = async (e: React.MouseEvent, id: number) => {
     e.preventDefault(); // Prevent Link navigation
     if (!window.confirm("Bu obayı tamamen silmek istediğine emin misin? Tüm kanallar ve mesajlar kalıcı olarak yok olacak!")) return;
