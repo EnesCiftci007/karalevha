@@ -3,12 +3,14 @@ import { useParams, Link } from 'react-router-dom';
 import * as signalR from '@microsoft/signalr';
 import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Hash, Volume2, Send, Users, ChevronLeft, Zap, MessageSquare, Lock, Menu, X } from 'lucide-react';
+import { Hash, Volume2, Send, Users, ChevronLeft, Zap, MessageSquare, Lock, Menu, X, Plus } from 'lucide-react';
 
 interface Channel {
   id: number;
   name: string;
   type: string;
+  category: string;
+  oba?: any;
 }
 
 interface Message {
@@ -282,26 +284,40 @@ export default function ObaDetay() {
         </div>
 
         <div className="flex-1 overflow-y-auto p-3">
-          <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-3 px-2">METİN KANALLARI</div>
-          
-          <div className="space-y-1">
-            {channels.map(channel => (
-              <button
-                key={channel.id}
-                onClick={() => { setActiveChannel(channel); setIsSidebarOpen(false); }}
-                className={`w-full flex items-center px-3 py-2 text-left transition-colors ${
-                  activeChannel?.id === channel.id 
-                    ? 'bg-[#39ff14]/10 text-[#39ff14]' 
-                    : 'text-zinc-400 hover:bg-[#1f2129] hover:text-zinc-200'
-                }`}
-              >
-                {channel.type === 'voice' ? (
-                  <Volume2 className="w-4 h-4 mr-2" />
-                ) : (
-                  <Hash className="w-4 h-4 mr-2" />
-                )}
-                <span className="font-bold truncate">{channel.name}</span>
-              </button>
+          <div className="space-y-4 px-2">
+            {Object.entries(channels.reduce((acc, ch) => {
+              if (!acc[ch.category]) acc[ch.category] = [];
+              acc[ch.category].push(ch);
+              return acc;
+            }, {} as Record<string, Channel[]>)).map(([categoryName, catChannels]) => (
+              <div key={categoryName}>
+                <div className="flex items-center justify-between text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 px-1">
+                  <span>{categoryName}</span>
+                  {user?.id === activeChannel?.oba?.ownerId && ( // Simplified auth check
+                    <Plus className="w-3 h-3 hover:text-white cursor-pointer transition-colors" />
+                  )}
+                </div>
+                <div className="space-y-0.5">
+                  {catChannels.map(channel => (
+                    <button
+                      key={channel.id}
+                      onClick={() => { setActiveChannel(channel); setIsSidebarOpen(false); }}
+                      className={`w-full flex items-center px-2 py-1.5 rounded text-left transition-colors ${
+                        activeChannel?.id === channel.id 
+                          ? 'bg-[#39ff14]/10 text-[#39ff14]' 
+                          : 'text-zinc-400 hover:bg-[#1f2129] hover:text-zinc-200'
+                      }`}
+                    >
+                      {channel.type === 'voice' ? (
+                        <Volume2 className="w-4 h-4 mr-2 opacity-70" />
+                      ) : (
+                        <Hash className="w-4 h-4 mr-2 opacity-70" />
+                      )}
+                      <span className="font-semibold truncate text-sm">{channel.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </div>
