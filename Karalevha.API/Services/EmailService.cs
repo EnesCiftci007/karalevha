@@ -1,5 +1,7 @@
-using System.Net.Mail;
-using System.Net;
+using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 
 namespace Karalevha.API.Services
 {
@@ -18,47 +20,47 @@ namespace Karalevha.API.Services
 
         public async Task SendVerificationEmailAsync(string toEmail, string verificationLink)
         {
-            var host = _configuration["Smtp:Host"];
-            var portStr = _configuration["Smtp:Port"];
-            var user = _configuration["Smtp:User"];
-            var pass = _configuration["Smtp:Pass"];
+            var apiKey = _configuration["Resend:ApiKey"];
+            var fromEmail = _configuration["Resend:FromEmail"] ?? "onboarding@resend.dev";
 
-            if (string.IsNullOrEmpty(host) || string.IsNullOrEmpty(user) || string.IsNullOrEmpty(pass))
+            if (string.IsNullOrEmpty(apiKey))
             {
                 if (_env.IsDevelopment())
                 {
-                    _logger.LogWarning("SMTP Configuration missing. MOCK EMAIL SENT:");
+                    _logger.LogWarning("Resend API Key missing. MOCK EMAIL SENT:");
                     _logger.LogWarning($"To: {toEmail}");
                     _logger.LogWarning($"Link: {verificationLink}");
                     return;
                 }
                 else
                 {
-                    throw new InvalidOperationException("SMTP Configuration is missing in Production environment.");
+                    throw new InvalidOperationException("Resend API Key is missing in Production environment.");
                 }
             }
 
-            int port = int.TryParse(portStr, out var p) ? p : 587;
+            using var client = new HttpClient();
+            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
-            using var client = new SmtpClient(host, port)
+            var payload = new
             {
-                Credentials = new NetworkCredential(user, pass),
-                EnableSsl = true
+                from = $"Karalevha E-Oba <{fromEmail}>",
+                to = new[] { toEmail },
+                subject = "Karalevha - E-posta Adresinizi Doğrulayın",
+                html = $"<p>Karalevha'ya hoş geldiniz!</p><p>Hesabınızı doğrulamak için aşağıdaki bağlantıya tıklayın:</p><p><a href=\"{verificationLink}\">E-postamı Doğrula</a></p>"
             };
 
-            var mailMessage = new MailMessage
-            {
-                From = new MailAddress(user, "Karalevha E-Oba"),
-                Subject = "Karalevha - E-posta Adresinizi Doğrulayın",
-                Body = $"<p>Karalevha'ya hoş geldiniz!</p><p>Hesabınızı doğrulamak için aşağıdaki bağlantıya tıklayın:</p><p><a href=\"{verificationLink}\">E-postamı Doğrula</a></p>",
-                IsBodyHtml = true
-            };
-
-            mailMessage.To.Add(toEmail);
+            var json = JsonSerializer.Serialize(payload);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
 
             try
             {
-                await client.SendMailAsync(mailMessage);
+                var response = await client.PostAsync("https://api.resend.com/emails", content);
+                if (!response.IsSuccessStatusCode)
+                {
+                    var responseBody = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Failed to send email via Resend. Status: {Status}, Body: {Body}", response.StatusCode, responseBody);
+                    throw new Exception("Resend API returned an error.");
+                }
             }
             catch (Exception ex)
             {
