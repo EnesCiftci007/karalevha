@@ -24,12 +24,29 @@ namespace Karalevha.API.Controllers
 
         // GET: api/obamessages/{channelId}
         [HttpGet("{channelId}")]
-        public async Task<IActionResult> GetMessages(int channelId)
+        public async Task<IActionResult> GetMessages(int channelId, [FromQuery] int limit = 50)
         {
+            var channel = await _context.ObaChannels.FindAsync(channelId);
+            if (channel == null) return NotFound("Kanal bulunamadı");
+            
+            var oba = await _context.Obalar.FindAsync(channel.ObaId);
+            if (oba == null) return NotFound("Oba bulunamadı");
+
+            if (oba.IsPrivate)
+            {
+                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+                if (userIdClaim == null) return Unauthorized();
+                
+                var userId = int.Parse(userIdClaim.Value);
+                var isMember = await _context.ObaMembers.AnyAsync(m => m.ObaId == oba.Id && m.UserId == userId);
+                if (!isMember) return StatusCode(403, "Bu private Oba'ya erişim yetkiniz yok.");
+            }
+
             var messages = await _context.ObaMessages
                 .Include(m => m.User)
                 .Where(m => m.ChannelId == channelId)
-                .OrderBy(m => m.CreatedAt)
+                .OrderByDescending(m => m.CreatedAt)
+                .Take(limit)
                 .Select(m => new {
                     m.Id,
                     m.Content,
@@ -41,6 +58,7 @@ namespace Karalevha.API.Controllers
                 })
                 .ToListAsync();
 
+            messages.Reverse(); // Return in chronological order
             return Ok(messages);
         }
 
@@ -60,6 +78,8 @@ namespace Karalevha.API.Controllers
             var channel = await _context.ObaChannels.FindAsync(channelId);
             if (channel == null) return NotFound("Kanal bulunamadı");
 
+            var isMember = await _context.ObaMembers.AnyAsync(m => m.ObaId == channel.ObaId && m.UserId == userId);
+            if (!isMember) return StatusCode(403, "Bu kanala mesaj göndermek için Oba'ya katılmalısınız.");
             
             // Slowmode Check (3 seconds)
             var lastMessage = await _context.ObaMessages

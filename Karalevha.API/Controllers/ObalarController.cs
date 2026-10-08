@@ -1,3 +1,4 @@
+using BCrypt.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -79,12 +80,21 @@ namespace Karalevha.API.Controllers
                 Color = dto.Color,
                 AvatarSeed = seed,
                 OwnerId = userId, IsPrivate = dto.IsPrivate,
-                JoinPassword = dto.JoinPassword,
+                JoinPassword = string.IsNullOrEmpty(dto.JoinPassword) ? null : BCrypt.Net.BCrypt.EnhancedHashPassword(dto.JoinPassword),
                 CreatedAt = DateTime.UtcNow
             };
 
             _context.Obalar.Add(oba);
             await _context.SaveChangesAsync(); // get Oba Id
+            
+            // Kurucuyu otomatik admin üye yap
+            _context.ObaMembers.Add(new ObaMember {
+                ObaId = oba.Id,
+                UserId = userId,
+                Role = "admin"
+            });
+            await _context.SaveChangesAsync();
+
 
             var defaultChannels = new List<ObaChannel> {
                 new ObaChannel { Name = "genel", Type = "text", Category = "BİLGİ", ObaId = oba.Id },
@@ -130,7 +140,17 @@ namespace Karalevha.API.Controllers
             if (existingMember != null) return Ok(new { success = true });
 
             if (oba.IsPrivate) {
-                if (string.IsNullOrEmpty(oba.JoinPassword) || oba.JoinPassword != dto.Password) {
+                if (string.IsNullOrEmpty(oba.JoinPassword)) return BadRequest("Yanlış şifre");
+                
+                bool isValid = false;
+                try {
+                    isValid = BCrypt.Net.BCrypt.EnhancedVerify(dto.Password, oba.JoinPassword);
+                } catch {
+                    // Fallback for old plaintext passwords
+                    isValid = (oba.JoinPassword == dto.Password);
+                }
+                
+                if (!isValid) {
                     return BadRequest("Yanlış şifre");
                 }
             }
