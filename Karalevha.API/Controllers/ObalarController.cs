@@ -40,6 +40,25 @@ namespace Karalevha.API.Controllers
             return Ok(obalar);
         }
 
+
+        // GET: api/obalar/{id}/channels
+        [HttpGet("{id}/channels")]
+        [Authorize]
+        public async Task<IActionResult> GetObaChannels(int id)
+        {
+            var channels = await _context.ObaChannels
+                .Where(c => c.ObaId == id)
+                .OrderBy(c => c.Id)
+                .Select(c => new {
+                    c.Id,
+                    c.Name,
+                    c.Type,
+                    c.Category
+                })
+                .ToListAsync();
+
+            return Ok(channels);
+        }
         // POST: api/obalar
         [HttpPost]
         [Authorize]
@@ -67,12 +86,14 @@ namespace Karalevha.API.Controllers
             _context.Obalar.Add(oba);
             await _context.SaveChangesAsync(); // get Oba Id
 
-            var defaultChannel = new ObaChannel {
-                Name = "genel",
-                Type = "text",
-                ObaId = oba.Id
+            var defaultChannels = new List<ObaChannel> {
+                new ObaChannel { Name = "genel", Type = "text", Category = "BİLGİ", ObaId = oba.Id },
+                new ObaChannel { Name = "kurallar", Type = "text", Category = "BİLGİ", ObaId = oba.Id },
+                new ObaChannel { Name = "sohbet", Type = "text", Category = "METİN KANALLARI", ObaId = oba.Id },
+                new ObaChannel { Name = "projeler", Type = "text", Category = "METİN KANALLARI", ObaId = oba.Id },
+                new ObaChannel { Name = "Genel Ses", Type = "voice", Category = "SES KANALLARI", ObaId = oba.Id }
             };
-            _context.ObaChannels.Add(defaultChannel);
+            _context.ObaChannels.AddRange(defaultChannels);
             await _context.SaveChangesAsync();
 
             var username = User.FindFirst(ClaimTypes.Name)?.Value ?? "Bilinmeyen";

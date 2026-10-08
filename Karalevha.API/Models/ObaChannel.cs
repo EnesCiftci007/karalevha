@@ -16,6 +16,10 @@ namespace Karalevha.API.Models
         [MaxLength(20)]
         public string Type { get; set; } = "text"; // "text" veya "voice"
 
+        [Required]
+        [MaxLength(50)]
+        public string Category { get; set; } = "METİN KANALLARI";
+
         public int ObaId { get; set; }
         
         [ForeignKey("ObaId")]
