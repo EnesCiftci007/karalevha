@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: karalevha-api
+    env: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    region: frankfurt
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: Jwt__Key
+        sync: false
+      - key: ConnectionStrings__DefaultConnection
+        sync: false
+      - key: Cors__Origins__0
+        sync: false
