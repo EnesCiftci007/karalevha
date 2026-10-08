@@ -32,7 +32,7 @@ namespace Karalevha.API.Controllers
             var user = await _context.Users
                 .Include(u => u.Followers)
                 .Include(u => u.Following)
-                .FirstOrDefaultAsync(u => u.NormalizedUsername == username.ToUpper());
+                .FirstOrDefaultAsync(u => u.NormalizedUsername == username.ToLowerInvariant());
 
             if (user == null) return NotFound("Kullanıcı bulunamadı");
 
@@ -62,7 +62,7 @@ namespace Karalevha.API.Controllers
         public async Task<IActionResult> Follow(string username)
         {
             var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
-            var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == username.ToUpper());
+            var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == username.ToLowerInvariant());
             
             if (targetUser == null) return NotFound("Kullanıcı bulunamadı");
             if (targetUser.Id == currentUserId) return BadRequest("Kendinizi takip edemezsiniz");
@@ -85,7 +85,7 @@ namespace Karalevha.API.Controllers
         public async Task<IActionResult> Unfollow(string username)
         {
             var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
-            var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == username.ToUpper());
+            var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == username.ToLowerInvariant());
             
             if (targetUser == null) return NotFound("Kullanıcı bulunamadı");
 
