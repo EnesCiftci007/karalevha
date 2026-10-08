@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
 import { MessageSquare, Heart, Share2, Send, Flame, Hash, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -17,13 +17,20 @@ export default function Akis() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const scrollState = useRef({ loadingMore: false, hasMore: true });
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
   const fetchPosts = async (pageNum: number) => {
     try {
-      if (pageNum > 1) setLoadingMore(true);
+      if (pageNum > 1) {
+        setLoadingMore(true);
+        scrollState.current.loadingMore = true;
+      }
       const data = await api<any>(`/api/posts?page=${pageNum}&pageSize=10`);
-      if (data.length < 10) setHasMore(false);
+      if (data.length < 10) {
+        setHasMore(false);
+        scrollState.current.hasMore = false;
+      }
       
       if (pageNum === 1) {
         setPosts(data);
@@ -40,13 +47,14 @@ export default function Akis() {
     } finally {
       setInitialLoad(false);
       setLoadingMore(false);
+      scrollState.current.loadingMore = false;
     }
   };
 
   useEffect(() => {
     const handleScroll = () => {
       if (window.innerHeight + document.documentElement.scrollTop >= document.documentElement.offsetHeight - 200) {
-        if (!loadingMore && hasMore) {
+        if (!scrollState.current.loadingMore && scrollState.current.hasMore) {
           setPage(prev => prev + 1);
         }
       }
@@ -288,3 +296,4 @@ export default function Akis() {
     </div>
   );
 }
+

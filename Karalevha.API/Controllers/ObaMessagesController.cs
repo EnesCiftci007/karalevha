@@ -24,8 +24,7 @@ namespace Karalevha.API.Controllers
 
         // GET: api/obamessages/{channelId}
         [HttpGet("{channelId}")]
-        public async Task<IActionResult> GetMessages(int channelId, [FromQuery] int limit = 50)
-        {
+        public async Task<IActionResult> GetMessages(int channelId, [FromQuery] int limit = 50) { limit = Math.Clamp(limit, 1, 100);
             var channel = await _context.ObaChannels.FindAsync(channelId);
             if (channel == null) return NotFound("Kanal bulunamadı");
             
@@ -122,3 +121,4 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+

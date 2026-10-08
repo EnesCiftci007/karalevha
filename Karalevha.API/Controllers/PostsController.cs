@@ -21,8 +21,7 @@ namespace Karalevha.API.Controllers
 
         // GET: api/posts
         [HttpGet]
-        public async Task<IActionResult> GetPosts([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
-        {
+        public async Task<IActionResult> GetPosts([FromQuery] int page = 1, [FromQuery] int pageSize = 10) { page = Math.Max(1, page); pageSize = Math.Clamp(pageSize, 1, 50);
             var query = await _context.Posts
                 .Include(p => p.User)
                 .OrderByDescending(p => p.CreatedAt)
@@ -100,6 +99,7 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+
 
 
 

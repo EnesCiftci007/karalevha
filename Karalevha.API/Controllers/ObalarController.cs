@@ -151,8 +151,7 @@ namespace Karalevha.API.Controllers
         }
 
         // POST: api/obalar/{id}/join
-        [HttpPost("{id}/join")]
-        [Authorize]
+        [HttpPost("{id}/join")] [Authorize] [EnableRateLimiting("AuthLimiter")]
         public async Task<IActionResult> JoinOba(int id, [FromBody] JoinObaDto dto)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
@@ -249,3 +248,4 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+
