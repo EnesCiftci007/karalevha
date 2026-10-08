@@ -32,5 +32,9 @@ namespace Karalevha.API.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public ICollection<UserFollow> Followers { get; set; } = new List<UserFollow>();
         public ICollection<UserFollow> Following { get; set; } = new List<UserFollow>();
+
+        public bool EmailConfirmed { get; set; } = false;
+        public string? EmailVerificationToken { get; set; }
+        public DateTime? EmailVerificationTokenExpiresAt { get; set; }
     }
 }

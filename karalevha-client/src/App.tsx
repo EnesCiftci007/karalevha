@@ -11,6 +11,7 @@ import Auth from './pages/Auth';
 import Projeler from './pages/Projeler';
 import ProjeDetay from './pages/ProjeDetay';
 import Profil from './pages/Profil';
+import VerifyEmail from './pages/VerifyEmail';
 import { NotFound } from './pages/NotFound';
 
 function App() {
@@ -20,6 +21,7 @@ function App() {
         <Routes>
           {/* Herkese Açık Yollar */}
           <Route path="/auth" element={<Auth />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
 
           {/* Korumalı Yollar */}
           <Route element={<ProtectedRoute />}>
@@ -44,3 +46,4 @@ function App() {
 }
 
 export default App;
+

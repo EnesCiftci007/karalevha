@@ -16,6 +16,8 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  const [requiresVerification, setRequiresVerification] = useState(false);
+  const [unverifiedEmail, setUnverifiedEmail] = useState('');
 
   const handleToggle = (loginMode: boolean) => {
     setIsLogin(loginMode);
@@ -24,13 +26,32 @@ export default function Auth() {
     setUsername('');
     setEmail('');
     setPassword('');
+    setRequiresVerification(false);
   };
+
+  const handleResend = async () => {
+    try {
+      setLoading(true);
+      const res = await api<any>('/api/auth/resend-verification', {
+        method: 'POST',
+        body: JSON.stringify({ email: unverifiedEmail })
+      });
+      setSuccessMsg(res.message || 'Doğrulama bağlantısı tekrar gönderildi.');
+      setErrorMsg('');
+      setRequiresVerification(false);
+    } catch(err: any) {
+      setErrorMsg(err.message || 'Mail gönderilemedi.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setErrorMsg('');
     setSuccessMsg('');
+    setRequiresVerification(false);
 
     const url = isLogin ? '/api/auth/login' : '/api/auth/register';
 
@@ -49,12 +70,16 @@ export default function Auth() {
           login(data.user, data.token);
           navigate('/');
         } else {
-          setSuccessMsg(data.message || 'Kayıt başarılı! Şimdi giriş yapabilirsiniz.');
+          setSuccessMsg(data.message || 'Kayıt başarılı! Email adresine doğrulama bağlantısı gönderildi.');
           setIsLogin(true);
           setPassword('');
         }
       }
     } catch (error: any) {
+      if (error?.message?.includes('doğrulaman gerekiyor')) {
+        setRequiresVerification(true);
+        setUnverifiedEmail(email);
+      }
       setErrorMsg(error?.message || 'Sunucuya bağlanılamadı. Backend çalışıyor mu?');
     } finally {
       setLoading(false);
@@ -111,12 +136,21 @@ export default function Auth() {
           
           {/* Uyarı Mesajları */}
           {errorMsg && (
-            <div className="mb-6 p-3 bg-red-500/10 border-l-4 border-red-500 text-red-500 text-sm font-bold tracking-wide">
-              {errorMsg}
+            <div className="mb-6 p-4 bg-red-500/10 border-l-4 border-red-500 flex flex-col">
+              <span className="text-red-500 text-sm font-bold tracking-wide">{errorMsg}</span>
+              {requiresVerification && (
+                <button 
+                  type="button"
+                  onClick={handleResend}
+                  className="mt-4 py-2 px-4 bg-red-500/20 hover:bg-red-500 text-white text-xs font-black uppercase tracking-widest border border-red-500/50 transition-colors self-start"
+                >
+                  Doğrulama Mailini Tekrar Gönder
+                </button>
+              )}
             </div>
           )}
           {successMsg && (
-            <div className="mb-6 p-3 bg-cyan-500/10 border-l-4 border-cyan-500 text-cyan-400 text-sm font-bold tracking-wide">
+            <div className="mb-6 p-4 bg-cyan-500/10 border-l-4 border-cyan-500 text-cyan-400 text-sm font-bold tracking-wide">
               {successMsg}
             </div>
           )}

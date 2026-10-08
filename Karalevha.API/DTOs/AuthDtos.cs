@@ -29,4 +29,20 @@ namespace Karalevha.API.DTOs
         [StringLength(72)]
         public string Password { get; set; } = string.Empty;
     }
+
+    public class VerifyEmailDto
+    {
+        [Required]
+        public string Email { get; set; } = string.Empty;
+        
+        [Required]
+        public string Token { get; set; } = string.Empty;
+    }
+
+    public class ResendVerificationDto
+    {
+        [Required]
+        [EmailAddress]
+        public string Email { get; set; } = string.Empty;
+    }
 }
