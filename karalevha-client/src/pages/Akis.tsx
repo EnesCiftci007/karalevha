@@ -10,6 +10,7 @@ export default function Akis() {
   const [content, setContent] = useState('');
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
+  const [visibleCount, setVisibleCount] = useState(10);
 
   const fetchPosts = async () => {
     try {
@@ -21,6 +22,17 @@ export default function Akis() {
       setInitialLoad(false);
     }
   };
+
+  
+  useEffect(() => {
+    const handleScroll = () => {
+      if (window.innerHeight + document.documentElement.scrollTop >= document.documentElement.offsetHeight - 200) {
+        setVisibleCount(prev => prev + 5);
+      }
+    };
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
 
   useEffect(() => {
     fetchPosts();
