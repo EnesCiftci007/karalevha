@@ -16,14 +16,14 @@ namespace Karalevha.API.Migrations
                 table: "Users",
                 type: "text[]",
                 nullable: false,
-                defaultValue: new List<string>());
+                defaultValueSql: "'{}'");
 
             migrationBuilder.AddColumn<List<string>>(
                 name: "Tags",
                 table: "Posts",
                 type: "text[]",
                 nullable: false,
-                defaultValue: new List<string>());
+                defaultValueSql: "'{}'");
         }
 
         /// <inheritdoc />
