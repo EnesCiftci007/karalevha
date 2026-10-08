@@ -4,7 +4,7 @@ Karalevha, dijital toplulukların (Obalar), 3B baskı projelerinin ve açık kay
 
 ## Teknolojiler
 - **Backend:** .NET 9 (C#), Entity Framework Core, PostgreSQL, SignalR, JWT Authentication, BCrypt
-- **Frontend:** React 19, TypeScript, Vite, TailwindCSS, Three.js, Zustand/Context
+- **Frontend:** React 19, TypeScript, Vite, TailwindCSS, Three.js, React Context
 
 ## Proje Yapısı
 - `/Karalevha.API` - C# Backend klasörü (REST API, WebSocket, Veritabanı Modelleri)
@@ -60,3 +60,4 @@ Proje aşağıdaki temel güvenlik adımlarını içermektedir:
 
 ## Önemli Not (Placeholders)
 - Projeler sayfasındaki **Yıldız** ve **Fork** butonları ile Akış'taki **Beğen/Yorum/Paylaş** etkileşimleri şu aşamada salt UI Placeholder'dır (Görseldir) ve henüz gerçek entegrasyonu bulunmamaktadır.
+
