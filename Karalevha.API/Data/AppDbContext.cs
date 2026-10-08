@@ -43,6 +43,15 @@ namespace Karalevha.API.Data
                 .WithMany(u => u.Followers)
                 .HasForeignKey(f => f.FollowingId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // Çift Kayıt Önleme (Unique Constraints)
+            modelBuilder.Entity<ObaMember>()
+                .HasIndex(m => new { m.ObaId, m.UserId })
+                .IsUnique();
+
+            modelBuilder.Entity<UserFollow>()
+                .HasIndex(f => new { f.FollowerId, f.FollowingId })
+                .IsUnique();
         }
 
 

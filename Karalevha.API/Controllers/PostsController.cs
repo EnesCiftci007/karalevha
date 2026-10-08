@@ -21,11 +21,12 @@ namespace Karalevha.API.Controllers
 
         // GET: api/posts
         [HttpGet]
-        public async Task<IActionResult> GetPosts()
+        public async Task<IActionResult> GetPosts([FromQuery] int limit = 100)
         {
             var query = await _context.Posts
                 .Include(p => p.User)
                 .OrderByDescending(p => p.CreatedAt)
+                .Take(limit)
                 .Select(p => new
                 {
                     p.Id,

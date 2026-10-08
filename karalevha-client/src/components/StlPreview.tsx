@@ -131,7 +131,23 @@ export default function StlPreview({ url, color = '#a855f7' }: StlPreviewProps) 
     return () => {
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(animationFrameId);
-      currentRef?.removeChild(renderer.domElement);
+      if (currentRef && renderer.domElement && currentRef.contains(renderer.domElement)) {
+        currentRef.removeChild(renderer.domElement);
+      }
+      
+      // Memory Leak Fix: Dispose geometry and materials
+      scene.traverse((object: any) => {
+        if (!object.isMesh) return;
+        if (object.geometry) object.geometry.dispose();
+        if (object.material) {
+          if (Array.isArray(object.material)) {
+            object.material.forEach((material: any) => material.dispose());
+          } else {
+            object.material.dispose();
+          }
+        }
+      });
+      
       renderer.dispose();
     };
   }, [url, color]);
