@@ -7,5 +7,7 @@ namespace Karalevha.API.DTOs
         [Required]
         [MaxLength(1000)]
         public string Content { get; set; } = string.Empty;
+
+        public List<string>? Tags { get; set; }
     }
 }

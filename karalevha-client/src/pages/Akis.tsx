@@ -14,24 +14,41 @@ export default function Akis() {
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
-  const [visibleCount, setVisibleCount] = useState(10);
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
 
-  const fetchPosts = async () => {
+  const fetchPosts = async (pageNum: number) => {
     try {
-      const data = await api<any>('/api/posts');
-      setPosts(data);
+      if (pageNum > 1) setLoadingMore(true);
+      const data = await api<any>(`/api/posts?page=${pageNum}&pageSize=10`);
+      if (data.length < 10) setHasMore(false);
+      
+      if (pageNum === 1) {
+        setPosts(data);
+      } else {
+        setPosts(prev => {
+          // Avoid duplicates in React Strict Mode
+          const existingIds = new Set(prev.map(p => p.id));
+          const newPosts = data.filter((p: any) => !existingIds.has(p.id));
+          return [...prev, ...newPosts];
+        });
+      }
     } catch (error) {
       console.error('Gönderiler yüklenemedi:', error);
     } finally {
       setInitialLoad(false);
+      setLoadingMore(false);
     }
   };
 
   useEffect(() => {
     const handleScroll = () => {
       if (window.innerHeight + document.documentElement.scrollTop >= document.documentElement.offsetHeight - 200) {
-        setVisibleCount(prev => prev + 5);
+        if (!loadingMore && hasMore) {
+          setPage(prev => prev + 1);
+        }
       }
     };
     window.addEventListener('scroll', handleScroll);
@@ -39,8 +56,8 @@ export default function Akis() {
   }, []);
 
   useEffect(() => {
-    fetchPosts();
-  }, []);
+    fetchPosts(page);
+  }, [page]);
 
   const toggleTag = (tag: string) => {
     if (selectedTags.includes(tag)) {
@@ -174,7 +191,7 @@ export default function Akis() {
                 Bu alanda henüz gönderi yok.
               </div>
             ) : (
-              filteredPosts.slice(0, visibleCount).map((post) => (
+              filteredPosts.map((post) => (
                 <div key={post.id} className="bg-[#0b0c10] border-2 border-[#1f2129] p-5 hover:border-[#ff5500]/50 transition-colors">
                   
                   <div className="flex justify-between items-start mb-4">
@@ -232,7 +249,7 @@ export default function Akis() {
               ))
             )}
 
-            {filteredPosts.length > visibleCount && (
+            {hasMore && posts.length > 0 && (
               <div className="flex justify-center py-6">
                 <Loader2 className="w-6 h-6 animate-spin text-[#ff5500]" />
               </div>

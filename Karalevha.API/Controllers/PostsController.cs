@@ -21,19 +21,19 @@ namespace Karalevha.API.Controllers
 
         // GET: api/posts
         [HttpGet]
-        public async Task<IActionResult> GetPosts([FromQuery] int limit = 100)
+        public async Task<IActionResult> GetPosts([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
         {
             var query = await _context.Posts
                 .Include(p => p.User)
                 .OrderByDescending(p => p.CreatedAt)
-                .Take(limit)
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .Select(p => new
                 {
                     p.Id,
                     p.Content,
                     p.Likes,
-                    p.CreatedAt,
-                    p.Tags,
+                    p.Tags, p.CreatedAt,
                     User = new
                     {
                         p.User!.Id,
@@ -78,9 +78,7 @@ namespace Karalevha.API.Controllers
 
             var post = new Post
             {
-                Content = dto.Content,
-                UserId = userId,
-                CreatedAt = DateTime.UtcNow
+                Content = dto.Content, Tags = dto.Tags?.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct().Take(3).ToList() ?? new List<string>(), UserId = userId, CreatedAt = DateTime.UtcNow
             };
 
             _context.Posts.Add(post);
@@ -94,9 +92,7 @@ namespace Karalevha.API.Controllers
                 {
                     p.Id,
                     p.Content,
-                    p.Likes,
-                    p.CreatedAt,
-                    User = new
+                    p.Likes, p.Tags, p.CreatedAt, User = new
                     {
                         p.User.Id,
                         p.User.Username,
@@ -109,3 +105,5 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+
+

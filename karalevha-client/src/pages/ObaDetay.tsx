@@ -44,7 +44,7 @@ export default function ObaDetay() {
     if (!token) return;
 
     const newConnection = new signalR.HubConnectionBuilder()
-      .withUrl(`${import.meta.env.VITE_API_URL || API_URL}/chathub`)
+      .withUrl(`${import.meta.env.VITE_API_URL || API_URL}/chathub`, { accessTokenFactory: () => token })
       .withAutomaticReconnect()
       .build();
 

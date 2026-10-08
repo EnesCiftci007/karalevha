@@ -33,7 +33,8 @@ namespace Karalevha.API.Controllers
                     o.AvatarSeed,
                     o.Color,
                     o.MemberCount,
-                    o.IsPrivate
+                    o.IsPrivate,
+                    Owner = o.Owner != null ? o.Owner.Username : "Bilinmeyen"
                 })
                 .ToListAsync();
 
