@@ -181,9 +181,7 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
     <div className="mt-4 bg-[#15161b] rounded-lg p-4">
       
       <div className="max-h-96 overflow-y-auto mb-4 pr-2 custom-scrollbar">
-        {comments.length === 0 ? (
-          <p className="text-zinc-500 text-center text-sm py-4">Henüz yorum yapılmamış. İlk yorumu sen yap!</p>
-        ) : (
+        {comments.length === 0 ? null : (
           comments.map(c => (
             <div key={c.id}>
               {renderComment(c, false, null)}
