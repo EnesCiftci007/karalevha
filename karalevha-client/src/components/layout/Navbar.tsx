@@ -56,7 +56,7 @@ export default function Navbar() {
       } finally {
         setIsSearching(false);
       }
-    }, 300);
+    }, 200);
 
     return () => {
       clearTimeout(delayDebounceFn);
