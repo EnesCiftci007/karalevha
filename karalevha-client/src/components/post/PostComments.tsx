@@ -17,7 +17,6 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
   
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
-  const [hasCommented, setHasCommented] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ id: number; username: string } | null>(null);
 
   const formRef = useRef<HTMLFormElement>(null);
@@ -77,7 +76,6 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
 
       setContent('');
       setReplyingTo(null);
-      setHasCommented(true);
       
       // Toplamı güncelle
       setComments(currentComments => {
@@ -154,7 +152,6 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
             <button 
               onClick={() => { 
                 setReplyingTo({ id: c.id, username: c.user.username }); 
-                setHasCommented(false);
                 setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth' }), 0); 
               }}
               className="text-xs font-semibold text-zinc-500 hover:text-[#ff5500] transition-colors flex items-center gap-1"
@@ -197,7 +194,7 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
         </div>
       )}
 
-      {user && !hasCommented ? (
+      {user ? (
         <form ref={formRef} onSubmit={handleSubmit} className="bg-[#15161b] rounded-lg p-4 mt-4">
           {replyingTo && (
             <div className="flex items-center justify-between mb-2 bg-[#ff5500]/10 text-[#ff5500] px-3 py-1.5 rounded-md text-xs font-semibold">
@@ -234,10 +231,6 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
             </button>
           </div>
         </form>
-      ) : user && hasCommented ? (
-        <div className="mt-4 text-center">
-          <p className="text-sm text-green-500/80 font-semibold">Yorum eklendi.</p>
-        </div>
       ) : (
         <div className="mt-4 bg-[#15161b] rounded-lg p-4 text-center">
           <p className="text-sm text-zinc-500">Yorum yapmak için giriş yapmalısın.</p>
