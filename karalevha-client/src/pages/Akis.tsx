@@ -19,6 +19,7 @@ export default function Akis() {
   const [loadingMore, setLoadingMore] = useState(false);
   const scrollState = useRef({ loadingMore: false, hasMore: true });
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
+  const likingPosts = useRef<Set<number>>(new Set());
 
   const fetchPosts = async (pageNum: number) => {
     try {
@@ -94,6 +95,36 @@ export default function Akis() {
       console.error('Gönderi paylaşılamadı:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLike = async (postId: number) => {
+    if (!user) return;
+    if (likingPosts.current.has(postId)) return;
+    
+    likingPosts.current.add(postId);
+    
+    setPosts(prevPosts => prevPosts.map(p => {
+      if (p.id === postId) {
+        const isCurrentlyLiked = p.isLikedByCurrentUser;
+        return { ...p, likes: isCurrentlyLiked ? Math.max(0, (p.likes || 0) - 1) : ((p.likes || 0) + 1), isLikedByCurrentUser: !isCurrentlyLiked };
+      }
+      return p;
+    }));
+
+    try {
+      const response = await api<any>(`/api/posts/${postId}/like`, { method: 'POST' });
+      setPosts(prevPosts => prevPosts.map(p => p.id === postId ? { ...p, likes: response.likes, isLikedByCurrentUser: response.isLiked } : p));
+    } catch (error) {
+      setPosts(prevPosts => prevPosts.map(p => {
+        if (p.id === postId) {
+          const isCurrentlyLiked = p.isLikedByCurrentUser;
+          return { ...p, likes: isCurrentlyLiked ? ((p.likes || 0) + 1) : Math.max(0, (p.likes || 0) - 1), isLikedByCurrentUser: !isCurrentlyLiked };
+        }
+        return p;
+      }));
+    } finally {
+      likingPosts.current.delete(postId);
     }
   };
 
@@ -240,8 +271,8 @@ export default function Akis() {
                   )}
 
                   <div className="flex items-center space-x-6 border-t-2 border-[#1f2129] pt-4">
-                    <button className="flex items-center text-zinc-500 hover:text-[#ff5500] font-bold transition-colors group">
-                      <Heart className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
+                    <button onClick={() => handleLike(post.id)} className={`flex items-center font-bold transition-colors group ${post.isLikedByCurrentUser ? 'text-[#ff5500]' : 'text-zinc-500 hover:text-[#ff5500]'}`}>
+                      <Heart className={`w-5 h-5 mr-2 group-hover:scale-110 transition-transform ${post.isLikedByCurrentUser ? 'fill-current' : ''}`} />
                       {post.likes || 0}
                     </button>
                     <button className="flex items-center text-zinc-500 hover:text-white font-bold transition-colors group">

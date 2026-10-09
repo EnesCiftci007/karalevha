@@ -12,6 +12,7 @@ namespace Karalevha.API.Data
         public DbSet<User> Users { get; set; }
         public DbSet<UserFollow> UserFollows { get; set; }
         public DbSet<Post> Posts { get; set; }
+        public DbSet<PostLike> PostLikes { get; set; }
         public DbSet<Oba> Obalar { get; set; }
         public DbSet<PrintModel> PrintModels { get; set; }
         public DbSet<Project> Projects { get; set; }
@@ -52,6 +53,9 @@ namespace Karalevha.API.Data
             modelBuilder.Entity<UserFollow>()
                 .HasIndex(f => new { f.FollowerId, f.FollowingId })
                 .IsUnique();
+
+            modelBuilder.Entity<PostLike>()
+                .HasKey(pl => new { pl.PostId, pl.UserId });
         }
 
 

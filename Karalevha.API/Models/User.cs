@@ -33,6 +33,8 @@ namespace Karalevha.API.Models
         public ICollection<UserFollow> Followers { get; set; } = new List<UserFollow>();
         public ICollection<UserFollow> Following { get; set; } = new List<UserFollow>();
 
+        public ICollection<PostLike> PostLikes { get; set; } = new List<PostLike>();
+
         public bool EmailConfirmed { get; set; } = false;
         public string? EmailVerificationToken { get; set; }
         public DateTime? EmailVerificationTokenExpiresAt { get; set; }

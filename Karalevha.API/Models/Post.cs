@@ -14,9 +14,9 @@ namespace Karalevha.API.Models
         [MaxLength(1000)]
         public string Content { get; set; } = string.Empty;
 
-        public int Likes { get; set; } = 0;
-
         public List<string> Tags { get; set; } = new List<string>();
+
+        public ICollection<PostLike> PostLikes { get; set; } = new List<PostLike>();
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

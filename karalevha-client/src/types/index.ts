@@ -11,6 +11,7 @@ export interface Post {
   createdAt: string;
   tags?: string[];
   likes?: number;
+  isLikedByCurrentUser?: boolean;
   username?: string;
   avatarSeed?: string;
   user?: { id: number; username: string; avatarSeed: string; };
