@@ -18,6 +18,30 @@ namespace Karalevha.API.Controllers
             _context = context;
         }
 
+        // GET: api/users/search?q={query}
+        [HttpGet("search")]
+        public async Task<IActionResult> Search([FromQuery] string q)
+        {
+            if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
+            {
+                return Ok(new List<object>());
+            }
+
+            var normalizedQuery = q.ToLowerInvariant();
+
+            var users = await _context.Users
+                .Where(u => u.NormalizedUsername.Contains(normalizedQuery))
+                .Select(u => new
+                {
+                    u.Username,
+                    u.AvatarSeed
+                })
+                .Take(10)
+                .ToListAsync();
+
+            return Ok(users);
+        }
+
         // GET: api/users/{username}
         [HttpGet("{username}")]
         public async Task<IActionResult> GetProfile(string username)
@@ -34,7 +58,7 @@ namespace Karalevha.API.Controllers
                 .Include(u => u.Following)
                 .FirstOrDefaultAsync(u => u.NormalizedUsername == username.ToLowerInvariant());
 
-            if (user == null) return NotFound("Kullanıcı bulunamadı");
+            if (user == null) return NotFound("KullanÄ±cÄ± bulunamadÄ±");
 
             var projects = await _context.Projects
                 .Where(p => p.UserId == user.Id)
@@ -71,13 +95,13 @@ namespace Karalevha.API.Controllers
             var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
             var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == username.ToLowerInvariant());
             
-            if (targetUser == null) return NotFound("Kullanıcı bulunamadı");
+            if (targetUser == null) return NotFound("KullanÄ±cÄ± bulunamadÄ±");
             if (targetUser.Id == currentUserId) return BadRequest("Kendinizi takip edemezsiniz");
 
             var existingFollow = await _context.UserFollows
                 .FirstOrDefaultAsync(f => f.FollowerId == currentUserId && f.FollowingId == targetUser.Id);
 
-            if (existingFollow == null) { try { _context.UserFollows.Add(new UserFollow { FollowerId = currentUserId, FollowingId = targetUser.Id }); await _context.SaveChangesAsync(); } catch (Microsoft.EntityFrameworkCore.DbUpdateException) { return StatusCode(409, "Kullan�c� zaten takip ediliyor."); } }
+            if (existingFollow == null) { try { _context.UserFollows.Add(new UserFollow { FollowerId = currentUserId, FollowingId = targetUser.Id }); await _context.SaveChangesAsync(); } catch (Microsoft.EntityFrameworkCore.DbUpdateException) { return StatusCode(409, "Kullanıcı zaten takip ediliyor."); } }
 
             return Ok(new { message = "Takip edildi" });
         }
@@ -90,7 +114,7 @@ namespace Karalevha.API.Controllers
             var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
             var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == username.ToLowerInvariant());
             
-            if (targetUser == null) return NotFound("Kullanıcı bulunamadı");
+            if (targetUser == null) return NotFound("KullanÄ±cÄ± bulunamadÄ±");
 
             var existingFollow = await _context.UserFollows
                 .FirstOrDefaultAsync(f => f.FollowerId == currentUserId && f.FollowingId == targetUser.Id);
@@ -101,7 +125,7 @@ namespace Karalevha.API.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            return Ok(new { message = "Takipten çıkıldı" });
+            return Ok(new { message = "Takipten Ã§Ä±kÄ±ldÄ±" });
         }
 
         public class UpdateProfileDto {
