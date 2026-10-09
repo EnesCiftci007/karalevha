@@ -30,7 +30,7 @@ namespace Karalevha.API.Controllers
             var normalizedQuery = q.ToLowerInvariant();
 
             var users = await _context.Users
-                .Where(u => u.NormalizedUsername.Contains(normalizedQuery))
+                .Where(u => u.NormalizedUsername.Contains(normalizedQuery) || u.Username.ToLower().Contains(normalizedQuery))
                 .Select(u => new
                 {
                     u.Username,
