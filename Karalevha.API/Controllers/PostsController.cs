@@ -43,6 +43,7 @@ namespace Karalevha.API.Controllers
                     p.Id,
                     p.Content,
                     Likes = p.PostLikes.Count,
+                    CommentsCount = p.PostComments.Count,
                     IsLikedByCurrentUser = currentUserId != null && p.PostLikes.Any(pl => pl.UserId == currentUserId),
                     p.Tags, p.CreatedAt,
                     User = new
@@ -97,6 +98,7 @@ namespace Karalevha.API.Controllers
                     p.Id,
                     p.Content,
                     Likes = p.PostLikes.Count, 
+                    CommentsCount = 0,
                     IsLikedByCurrentUser = false, 
                     p.Tags, p.CreatedAt, User = new
                     {

@@ -11,10 +11,24 @@ export interface Post {
   createdAt: string;
   tags?: string[];
   likes?: number;
+  commentsCount?: number;
   isLikedByCurrentUser?: boolean;
   username?: string;
   avatarSeed?: string;
   user?: { id: number; username: string; avatarSeed: string; };
+}
+
+export interface PostComment {
+  id: number;
+  content: string;
+  createdAt: string;
+  parentCommentId?: number;
+  user: {
+    id: number;
+    username: string;
+    avatarSeed?: string;
+  };
+  replies?: PostComment[];
 }
 
 export interface Oba {

@@ -13,6 +13,7 @@ namespace Karalevha.API.Data
         public DbSet<UserFollow> UserFollows { get; set; }
         public DbSet<Post> Posts { get; set; }
         public DbSet<PostLike> PostLikes { get; set; }
+        public DbSet<PostComment> PostComments { get; set; }
         public DbSet<Oba> Obalar { get; set; }
         public DbSet<PrintModel> PrintModels { get; set; }
         public DbSet<Project> Projects { get; set; }
@@ -56,6 +57,12 @@ namespace Karalevha.API.Data
 
             modelBuilder.Entity<PostLike>()
                 .HasKey(pl => new { pl.PostId, pl.UserId });
+
+            modelBuilder.Entity<PostComment>()
+                .HasOne(c => c.ParentComment)
+                .WithMany(c => c.Replies)
+                .HasForeignKey(c => c.ParentCommentId)
+                .OnDelete(DeleteBehavior.Cascade);
         }
 
 

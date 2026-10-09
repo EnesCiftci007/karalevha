@@ -4,6 +4,7 @@ import { MessageSquare, Heart, Share2, Send, Flame, Hash, Loader2 } from 'lucide
 import { useAuth } from '../context/AuthContext';
 import { Post } from '../types';
 import { Link } from 'react-router-dom';
+import PostComments from '../components/post/PostComments';
 
 const AVAILABLE_TAGS = ['Yazılım', 'Robotik', '3B Baskı', 'Elektronik', 'El İşi', 'Tasarım', 'Oyun Geliştirme', 'IoT', 'Duyuru'];
 
@@ -20,6 +21,7 @@ export default function Akis() {
   const scrollState = useRef({ loadingMore: false, hasMore: true });
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const likingPosts = useRef<Set<number>>(new Set());
+  const [expandedPostId, setExpandedPostId] = useState<number | null>(null);
 
   const fetchPosts = async (pageNum: number) => {
     try {
@@ -248,7 +250,15 @@ export default function Akis() {
                         </Link>
                         <span className="text-xs font-bold text-zinc-500 tracking-wider uppercase">{formatDate(post.createdAt)}</span>
                       </div>
-                    </div>
+                  {expandedPostId === post.id && (
+                    <PostComments 
+                      postId={post.id} 
+                      onUpdateCount={(newCount) => {
+                        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, commentsCount: newCount } : p));
+                      }} 
+                    />
+                  )}
+                </div>
                   </div>
 
                   <p className="text-zinc-300 font-medium text-[15px] leading-relaxed mb-4 whitespace-pre-wrap">
@@ -275,15 +285,19 @@ export default function Akis() {
                       <Heart className={`w-5 h-5 mr-2 group-hover:scale-110 transition-transform ${post.isLikedByCurrentUser ? 'fill-current' : ''}`} />
                       {post.likes || 0}
                     </button>
-                    <button className="flex items-center text-zinc-500 hover:text-white font-bold transition-colors group">
-                      <MessageSquare className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform" />
-                      0
-                    </button>
+                    <button onClick={() => setExpandedPostId(expandedPostId === post.id ? null : post.id)} className={`flex items-center font-bold transition-colors group ${expandedPostId === post.id ? 'text-white' : 'text-zinc-500 hover:text-white'}`}><MessageSquare className={`w-5 h-5 mr-2 group-hover:scale-110 transition-transform ${expandedPostId === post.id ? 'fill-white text-white' : ''}`} />{post.commentsCount || 0}</button>
                     <button className="flex items-center text-zinc-500 hover:text-white font-bold transition-colors group ml-auto">
                       <Share2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
                     </button>
                   </div>
-
+                  {expandedPostId === post.id && (
+                    <PostComments 
+                      postId={post.id} 
+                      onUpdateCount={(newCount) => {
+                        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, commentsCount: newCount } : p));
+                      }} 
+                    />
+                  )}
                 </div>
               ))
             )}
@@ -327,4 +341,5 @@ export default function Akis() {
     </div>
   );
 }
+
 
