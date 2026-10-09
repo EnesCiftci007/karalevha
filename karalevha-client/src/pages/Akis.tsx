@@ -250,15 +250,7 @@ export default function Akis() {
                         </Link>
                         <span className="text-xs font-bold text-zinc-500 tracking-wider uppercase">{formatDate(post.createdAt)}</span>
                       </div>
-                  {expandedPostId === post.id && (
-                    <PostComments 
-                      postId={post.id} 
-                      onUpdateCount={(newCount) => {
-                        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, commentsCount: newCount } : p));
-                      }} 
-                    />
-                  )}
-                </div>
+                    </div>
                   </div>
 
                   <p className="text-zinc-300 font-medium text-[15px] leading-relaxed mb-4 whitespace-pre-wrap">
@@ -341,5 +333,6 @@ export default function Akis() {
     </div>
   );
 }
+
 
 
