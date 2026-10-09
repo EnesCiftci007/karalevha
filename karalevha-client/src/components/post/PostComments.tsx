@@ -152,7 +152,7 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
             <button 
               onClick={() => { 
                 setReplyingTo({ id: c.id, username: c.user.username }); 
-                setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth' }), 0); 
+                setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 0); 
               }}
               className="text-xs font-semibold text-zinc-500 hover:text-[#ff5500] transition-colors flex items-center gap-1"
             >
