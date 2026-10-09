@@ -17,6 +17,7 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
   
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [hasCommented, setHasCommented] = useState(false);
   const [replyingTo, setReplyingTo] = useState<{ id: number; username: string } | null>(null);
 
   const formRef = useRef<HTMLFormElement>(null);
@@ -76,6 +77,7 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
 
       setContent('');
       setReplyingTo(null);
+      setHasCommented(true);
       
       // Toplamı güncelle
       setComments(currentComments => {
@@ -150,7 +152,11 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
         <div className="flex items-center gap-4 mt-2">
           {!isReply && user && (
             <button 
-              onClick={() => { setReplyingTo({ id: c.id, username: c.user.username }); formRef.current?.scrollIntoView({ behavior: 'smooth' }); }}
+              onClick={() => { 
+                setReplyingTo({ id: c.id, username: c.user.username }); 
+                setHasCommented(false);
+                setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth' }), 0); 
+              }}
               className="text-xs font-semibold text-zinc-500 hover:text-[#ff5500] transition-colors flex items-center gap-1"
             >
               <CornerDownRight className="w-3 h-3" /> Yanıtla
@@ -178,21 +184,21 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
   }
 
   return (
-    <div className="mt-4 bg-[#15161b] rounded-lg p-4">
+    <div className="mt-4">
       
-      <div className="max-h-96 overflow-y-auto mb-4 pr-2 custom-scrollbar">
-        {comments.length === 0 ? null : (
-          comments.map(c => (
+      {comments.length > 0 && (
+        <div className="max-h-96 overflow-y-auto mb-4 pr-2 custom-scrollbar bg-[#15161b] rounded-lg p-4">
+          {comments.map(c => (
             <div key={c.id}>
               {renderComment(c, false, null)}
               {c.replies?.map(r => renderComment(r, true, c.id))}
             </div>
-          ))
-        )}
-      </div>
+          ))}
+        </div>
+      )}
 
-      {user ? (
-        <form ref={formRef} onSubmit={handleSubmit} className="mt-4 border-t border-[#1f2129] pt-4">
+      {user && !hasCommented ? (
+        <form ref={formRef} onSubmit={handleSubmit} className="bg-[#15161b] rounded-lg p-4 mt-4">
           {replyingTo && (
             <div className="flex items-center justify-between mb-2 bg-[#ff5500]/10 text-[#ff5500] px-3 py-1.5 rounded-md text-xs font-semibold">
               <div className="flex items-center gap-1">
@@ -228,8 +234,12 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
             </button>
           </div>
         </form>
+      ) : user && hasCommented ? (
+        <div className="mt-4 text-center">
+          <p className="text-sm text-green-500/80 font-semibold">Yorum eklendi.</p>
+        </div>
       ) : (
-        <div className="mt-4 border-t border-[#1f2129] pt-4 text-center">
+        <div className="mt-4 bg-[#15161b] rounded-lg p-4 text-center">
           <p className="text-sm text-zinc-500">Yorum yapmak için giriş yapmalısın.</p>
         </div>
       )}
