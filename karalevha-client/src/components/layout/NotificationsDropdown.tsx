@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Bell, Check, Loader2 } from 'lucide-react';
 import { api } from '../../services/api';
@@ -13,6 +13,14 @@ export default function NotificationsDropdown() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (unreadCount > 0) {
+      document.title = `(${unreadCount}) KaraLevha`;
+    } else {
+      document.title = 'KaraLevha';
+    }
+  }, [unreadCount]);
 
   useEffect(() => {
     if (user) {
@@ -169,6 +177,9 @@ export default function NotificationsDropdown() {
     </div>
   );
 }
+
+
+
 
 
 
