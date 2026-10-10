@@ -61,3 +61,18 @@ export interface Project {
   createdAt: string;
   owner: string;
 }
+
+export interface Notification {
+  id: number;
+  type: string;
+  postId?: number;
+  commentId?: number;
+  isRead: boolean;
+  createdAt: string;
+  actor: {
+    id: number;
+    username: string;
+    avatarSeed?: string;
+  };
+}
+

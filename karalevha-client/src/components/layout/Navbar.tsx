@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
-import { Bell, Search, LogOut, User } from 'lucide-react';
+import { Search, LogOut, User } from 'lucide-react';
+import NotificationsDropdown from './NotificationsDropdown';
 import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 
@@ -156,10 +157,7 @@ export default function Navbar() {
 
         {user ? (
           <>
-            <button className="text-zinc-400 hover:text-white transition-colors relative">
-              <Bell className="w-6 h-6" />
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#ff0055] rounded-full border-2 border-[#0b0c10]"></span>
-            </button>
+            <NotificationsDropdown />
             
             <div className="flex items-center space-x-3 border-2 border-[#1f2129] p-1 transition-all">
               <img 
@@ -189,3 +187,4 @@ export default function Navbar() {
     </header>
   );
 }
+

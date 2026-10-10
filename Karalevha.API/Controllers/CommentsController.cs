@@ -77,9 +77,9 @@ namespace Karalevha.API.Controllers
             if (string.IsNullOrWhiteSpace(dto.Content))
                 return BadRequest("Yorum boş olamaz.");
 
-            // 1. Gönderi mevcut mu?
-            var postExists = await _context.Posts.AnyAsync(p => p.Id == postId);
-            if (!postExists) return NotFound("Gönderi bulunamadı.");
+            // 1. Gonderi mevcut mu?
+            var post = await _context.Posts.FirstOrDefaultAsync(p => p.Id == postId);
+            if (post == null) return NotFound("Gonderi bulunamadi.");
 
             // 2. Eğer parent id verilmişse, ana yorum kurallarını doğrula
             if (dto.ParentCommentId.HasValue)
@@ -105,6 +105,37 @@ namespace Karalevha.API.Controllers
             };
 
             _context.PostComments.Add(comment);
+
+            if (dto.ParentCommentId.HasValue)
+            {
+                var parentComment = await _context.PostComments.FindAsync(dto.ParentCommentId.Value);
+                if (parentComment != null && parentComment.UserId != userId)
+                {
+                    _context.Notifications.Add(new Notification
+                    {
+                        RecipientUserId = parentComment.UserId,
+                        ActorUserId = userId,
+                        Type = "Reply",
+                        PostId = postId,
+                        CommentId = comment.Id
+                    });
+                }
+            }
+            else
+            {
+                if (post.UserId != userId)
+                {
+                    _context.Notifications.Add(new Notification
+                    {
+                        RecipientUserId = post.UserId,
+                        ActorUserId = userId,
+                        Type = "Comment",
+                        PostId = postId,
+                        CommentId = comment.Id
+                    });
+                }
+            }
+
             await _context.SaveChangesAsync();
 
             // Yorumu dönmek için user bilgisini dahil et
@@ -149,3 +180,5 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+
+
