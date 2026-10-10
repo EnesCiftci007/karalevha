@@ -64,6 +64,20 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var accessToken = context.Request.Query["access_token"];
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(accessToken) &&
+                    (path.StartsWithSegments("/chathub") || path.StartsWithSegments("/notificationhub")))
+                {
+                    context.Token = accessToken;
+                }
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddRateLimiter(options =>
@@ -121,4 +135,7 @@ app.MapHealthChecks("/health");
 app.Map("/error", () => Results.Problem("Beklenmeyen bir hata oluÅŸtu.")).AllowAnonymous();
 
 app.Run();
+
+
+
 

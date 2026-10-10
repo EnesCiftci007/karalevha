@@ -72,6 +72,41 @@ namespace Karalevha.API.Controllers
             return Ok(mixed);
         }
 
+
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetPost(int id)
+        {
+            int? currentUserId = null;
+            var currentUserIdClaim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier);
+            if (currentUserIdClaim != null)
+            {
+                currentUserId = int.Parse(currentUserIdClaim.Value);
+            }
+
+            var post = await _context.Posts
+                .Include(p => p.User)
+                .Where(p => p.Id == id)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.Content,
+                    Likes = p.PostLikes.Count,
+                    CommentsCount = p.PostComments.Count,
+                    IsLikedByCurrentUser = currentUserId != null && p.PostLikes.Any(pl => pl.UserId == currentUserId),
+                    p.Tags, p.CreatedAt,
+                    User = new
+                    {
+                        p.User!.Id,
+                        p.User.Username,
+                        p.User.AvatarSeed
+                    }
+                })
+                .FirstOrDefaultAsync();
+
+            if (post == null) return NotFound();
+            return Ok(post);
+        }
+
         // POST: api/posts
         [HttpPost]
         [Authorize] // Sadece giriÃ…Å¸ yapmÃ„Â±Ã…Å¸ (Token'Ã„Â± olan) kullanÃ„Â±cÃ„Â±lar istek atabilir

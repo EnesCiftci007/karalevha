@@ -10,6 +10,8 @@ export default function NotificationsDropdown() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [show, setShow] = useState(false);
+  const showRef = useRef(show);
+  useEffect(() => { showRef.current = show; }, [show]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -195,6 +197,8 @@ export default function NotificationsDropdown() {
     </div>
   );
 }
+
+
 
 
 

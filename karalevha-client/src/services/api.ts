@@ -37,5 +37,9 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     throw new Error(errorMsg ?? `İstek başarısız (${res.status})`);
   }
   
-  return res.json() as Promise<T>;
+  if (res.status === 204) {
+    return {} as T;
+  }
+  
+  return res.json().catch(() => ({} as T)) as Promise<T>;
 }

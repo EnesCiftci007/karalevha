@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.SignalR;
@@ -26,10 +26,10 @@ namespace Karalevha.API.Controllers
         [HttpGet("{channelId}")]
         public async Task<IActionResult> GetMessages(int channelId, [FromQuery] int limit = 50) { limit = Math.Clamp(limit, 1, 100);
             var channel = await _context.ObaChannels.FindAsync(channelId);
-            if (channel == null) return NotFound("Kanal bulunamadı");
+            if (channel == null) return NotFound("Kanal bulunamadÃ„Â±");
             
             var oba = await _context.Obalar.FindAsync(channel.ObaId);
-            if (oba == null) return NotFound("Oba bulunamadı");
+            if (oba == null) return NotFound("Oba bulunamadÃ„Â±");
 
             if (oba.IsPrivate)
             {
@@ -38,7 +38,7 @@ namespace Karalevha.API.Controllers
                 
                 var userId = int.Parse(userIdClaim.Value);
                 var isMember = await _context.ObaMembers.AnyAsync(m => m.ObaId == oba.Id && m.UserId == userId);
-                if (!isMember) return StatusCode(403, "Bu private Oba'ya erişim yetkiniz yok.");
+                if (!isMember) return StatusCode(403, "Bu private Oba'ya eriÃ…Å¸im yetkiniz yok.");
             }
 
             var messages = await _context.ObaMessages
@@ -75,10 +75,10 @@ namespace Karalevha.API.Controllers
 
             var userId = int.Parse(userIdClaim.Value);
             var channel = await _context.ObaChannels.FindAsync(channelId);
-            if (channel == null) return NotFound("Kanal bulunamadı");
+            if (channel == null) return NotFound("Kanal bulunamadÃ„Â±");
 
             var isMember = await _context.ObaMembers.AnyAsync(m => m.ObaId == channel.ObaId && m.UserId == userId);
-            if (!isMember) return StatusCode(403, "Bu kanala mesaj göndermek için Oba'ya katılmalısınız.");
+            if (!isMember) return StatusCode(403, "Bu kanala mesaj gÃƒÂ¶ndermek iÃƒÂ§in Oba'ya katÃ„Â±lmalÃ„Â±sÃ„Â±nÃ„Â±z.");
             
             // Slowmode Check (3 seconds)
             var lastMessage = await _context.ObaMessages
@@ -88,7 +88,7 @@ namespace Karalevha.API.Controllers
                 
             if (lastMessage != null && (DateTime.UtcNow - lastMessage.CreatedAt).TotalSeconds < 3)
             {
-                return BadRequest(new { message = "Yavaş Mod Aktif: Lütfen ard arda mesaj göndermeden önce bekleyin." });
+                return BadRequest(new { message = "YavaÃ…Å¸ Mod Aktif: LÃƒÂ¼tfen ard arda mesaj gÃƒÂ¶ndermeden ÃƒÂ¶nce bekleyin." });
             }
 
             var username = User.FindFirst(ClaimTypes.Name)?.Value ?? "Bilinmeyen";
@@ -114,11 +114,20 @@ namespace Karalevha.API.Controllers
                 }
             };
 
-            // Fire and forget SignalR broadcast
-            _ = _hubContext.Clients.Group(channelId.ToString()).SendAsync("ReceiveMessage", returnMessage);
+            try
+            {
+                await _hubContext.Clients.Group(channelId.ToString()).SendAsync("ReceiveMessage", returnMessage);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine("Error broadcasting message via SignalR for Channel " + channelId + ": " + ex.Message);
+            }
 
             return Ok(returnMessage);
         }
     }
 }
+
+
+
 

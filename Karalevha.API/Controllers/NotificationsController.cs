@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
@@ -23,6 +23,8 @@ namespace Karalevha.API.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<NotificationDto>>> GetNotifications([FromQuery] int skip = 0, [FromQuery] int take = 50)
         {
+            skip = Math.Max(0, skip);
+            take = Math.Clamp(take, 1, 50);
             var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
                 return Unauthorized();
@@ -112,3 +114,4 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+
