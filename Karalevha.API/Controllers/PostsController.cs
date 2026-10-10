@@ -1,27 +1,28 @@
-﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
 using Karalevha.API.Models;
 using Karalevha.API.DTOs;
+using Microsoft.AspNetCore.Authorization;
 using System.Security.Claims;
+using Karalevha.API.Services;
 using Npgsql;
 
 namespace Karalevha.API.Controllers
 {
-    [Route("api/[controller]")]
     [ApiController]
+    [Route("api/[controller]")]
     public class PostsController : ControllerBase
     {
         private readonly AppDbContext _context;
         private readonly ILogger<PostsController> _logger;
-        private readonly Microsoft.AspNetCore.SignalR.IHubContext<Karalevha.API.Hubs.NotificationHub> _hubContext;
+        private readonly INotificationService _notificationService;
 
-        public PostsController(AppDbContext context, ILogger<PostsController> logger, Microsoft.AspNetCore.SignalR.IHubContext<Karalevha.API.Hubs.NotificationHub> hubContext)
+        public PostsController(AppDbContext context, ILogger<PostsController> logger, INotificationService notificationService)
         {
             _context = context;
             _logger = logger;
-            _hubContext = hubContext;
+            _notificationService = notificationService;
         }
 
         // GET: api/posts
@@ -109,7 +110,7 @@ namespace Karalevha.API.Controllers
 
         // POST: api/posts
         [HttpPost]
-        [Authorize] // Sadece giriÃ…Å¸ yapmÃ„Â±Ã…Å¸ (Token'Ã„Â± olan) kullanÃ„Â±cÃ„Â±lar istek atabilir
+        [Authorize] // Sadece giris yapmis (Tokeni olan) kullanicilar istek atabilir
         public async Task<IActionResult> CreatePost(CreatePostDto dto)
         {
             // Token'dan User ID'yi al
@@ -126,7 +127,7 @@ namespace Karalevha.API.Controllers
             _context.Posts.Add(post);
             await _context.SaveChangesAsync();
 
-            // OluÃ…Å¸turulan gÃƒÂ¶nderiyi yazar bilgisiyle geri dÃƒÂ¶n (ekrana hemen basmak iÃƒÂ§in)
+            // Olusturulan gonderiyi yazar bilgisiyle geri don (ekrana hemen basmak icin)
             var createdPost = await _context.Posts
                 .Include(p => p.User)
                 .Where(p => p.Id == post.Id)
@@ -159,7 +160,7 @@ namespace Karalevha.API.Controllers
             var userId = int.Parse(userIdClaim.Value);
             
             var post = await _context.Posts.FirstOrDefaultAsync(p => p.Id == id);
-            if (post == null) return NotFound("GÃƒÂ¶nderi bulunamadÃ„Â±.");
+            if (post == null) return NotFound("Gonderi bulunamadi.");
 
             var existingLike = await _context.PostLikes.FirstOrDefaultAsync(pl => pl.PostId == id && pl.UserId == userId);
             
@@ -176,11 +177,13 @@ namespace Karalevha.API.Controllers
                     _context.PostLikes.Add(newLike);
                     await _context.SaveChangesAsync();
                     isLiked = true;
+
+                    await _notificationService.SendNotificationAsync(post.UserId, userId, "Like", id, null);
                 }
                 catch (DbUpdateException ex) {
                     if (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505")
                     {
-                        // Sadece bu entity'nin takibini kaldÃ„Â±r
+                        // Sadece bu entity'nin takibini kaldir
                         _context.Entry(newLike).State = EntityState.Detached;
                         
                         bool exists = await _context.PostLikes.AnyAsync(pl => pl.PostId == id && pl.UserId == userId);
@@ -191,18 +194,18 @@ namespace Karalevha.API.Controllers
                         else
                         {
                             _logger.LogError(ex, "ToggleLike unique constraint caught but record not found for PostId {PostId}, UserId {UserId}", id, userId);
-                            return StatusCode(500, "Bir veritabanÃ„Â± hatasÃ„Â± oluÃ…Å¸tu.");
+                            return StatusCode(500, "Bir veritabani hatasi olustu.");
                         }
                     }
                     else
                     {
                         _logger.LogError(ex, "ToggleLike DbUpdateException for PostId {PostId}, UserId {UserId}", id, userId);
-                        return StatusCode(500, "Bir veritabanÃ„Â± hatasÃ„Â± oluÃ…Å¸tu.");
+                        return StatusCode(500, "Bir veritabani hatasi olustu.");
                     }
                 }
                 catch (Exception ex) {
                     _logger.LogError(ex, "ToggleLike Exception for PostId {PostId}, UserId {UserId}", id, userId);
-                    return StatusCode(500, "Beklenmeyen bir hata oluÃ…Å¸tu.");
+                    return StatusCode(500, "Beklenmeyen bir hata olustu.");
                 }
             }
             
@@ -215,7 +218,3 @@ namespace Karalevha.API.Controllers
         }
     }
 }
-
-
-
-

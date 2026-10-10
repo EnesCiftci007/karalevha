@@ -38,6 +38,7 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();
 builder.Services.AddTransient<Karalevha.API.Services.IEmailService, Karalevha.API.Services.EmailService>();
+builder.Services.AddScoped<Karalevha.API.Services.INotificationService, Karalevha.API.Services.NotificationService>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -135,6 +136,7 @@ app.MapHealthChecks("/health");
 app.Map("/error", () => Results.Problem("Beklenmeyen bir hata oluÅŸtu.")).AllowAnonymous();
 
 app.Run();
+
 
 
 

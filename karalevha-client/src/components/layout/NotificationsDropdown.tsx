@@ -16,6 +16,9 @@ export default function NotificationsDropdown() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  
+  const connectionRef = useRef<signalR.HubConnection | null>(null);
+  const retryTimeoutRef = useRef<number | null>(null);
 
   useEffect(() => {
     if (unreadCount > 0) {
@@ -26,17 +29,38 @@ export default function NotificationsDropdown() {
   }, [unreadCount]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      if (connectionRef.current) {
+        connectionRef.current.stop();
+        connectionRef.current = null;
+      }
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+      return;
+    }
     
     fetchUnreadCount();
 
     const token = localStorage.getItem('token');
+    
+    // Eger zaten varsa ve bagliysa temizle (Token degisimi veya unmount durumu)
+    if (connectionRef.current) {
+      connectionRef.current.stop();
+    }
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+    }
+
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(API_URL + '/notificationhub', {
-        accessTokenFactory: () => token || ''
+        accessTokenFactory: () => localStorage.getItem('token') || ''
       })
       .withAutomaticReconnect()
       .build();
+      
+    connectionRef.current = connection;
 
     connection.on('ReceiveNotification', () => {
       fetchUnreadCount();
@@ -45,10 +69,28 @@ export default function NotificationsDropdown() {
       }
     });
 
-    connection.start().catch(err => console.error('SignalR error:', err));
+    const startConnection = async () => {
+      try {
+        if (connection.state === signalR.HubConnectionState.Disconnected) {
+          await connection.start();
+        }
+      } catch (err) {
+        console.error('SignalR notification connection error:', err);
+        retryTimeoutRef.current = window.setTimeout(startConnection, 5000);
+      }
+    };
+
+    startConnection();
 
     return () => {
-      connection.stop();
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+      if (connectionRef.current) {
+        connectionRef.current.stop();
+        connectionRef.current = null;
+      }
     };
   }, [user]);
 
@@ -199,3 +241,4 @@ export default function NotificationsDropdown() {
     </div>
   );
 }
+
