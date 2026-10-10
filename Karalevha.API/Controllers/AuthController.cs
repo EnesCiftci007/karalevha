@@ -57,7 +57,7 @@ namespace Karalevha.API.Controllers
                 Email = emailNormal,
                 PasswordHash = BCrypt.Net.BCrypt.EnhancedHashPassword(dto.Password),
                 AvatarSeed = usernameNormal,
-                EmailConfirmed = false,
+                EmailConfirmed = true,
                 EmailVerificationToken = verificationToken,
                 EmailVerificationTokenExpiresAt = DateTime.UtcNow.AddHours(24)
             };
@@ -117,8 +117,8 @@ namespace Karalevha.API.Controllers
             if (user == null || !ok)
                 return Unauthorized(new { message = "Hatalı kullanıcı adı veya şifre." });
 
-            if (!user.EmailConfirmed)
-                return StatusCode(403, new { requiresVerification = true, email = user.Email, message = "Devam etmek için email adresini doğrulaman gerekiyor." });
+            // if (!user.EmailConfirmed)
+            //     return StatusCode(403, new { requiresVerification = true, email = user.Email, message = "Devam etmek i�in email adresini do�rulaman gerekiyor." });
 
             var token = GenerateJwtToken(user);
 
@@ -225,4 +225,5 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+
 
