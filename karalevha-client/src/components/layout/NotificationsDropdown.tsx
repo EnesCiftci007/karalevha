@@ -115,7 +115,7 @@ export default function NotificationsDropdown() {
       </button>
 
       {show && (
-        <div className="absolute top-full right-0 mt-2 w-80 sm:w-96 bg-[#0b0c10] border-2 border-[#1f2129] shadow-[4px_4px_0px_rgba(0,229,255,0.2)] z-50 flex flex-col max-h-96">
+        <div className="absolute top-full -right-2 sm:right-0 mt-2 w-[calc(100vw-2rem)] sm:w-96 max-w-[360px] bg-[#0b0c10] border-2 border-[#1f2129] shadow-[4px_4px_0px_rgba(0,229,255,0.2)] z-50 flex flex-col max-h-96">
           <div className="flex items-center justify-between p-3 border-b border-[#1f2129]">
             <span className="text-white font-black uppercase tracking-wider text-sm">Bildirimler</span>
             {unreadCount > 0 && (
@@ -169,4 +169,6 @@ export default function NotificationsDropdown() {
     </div>
   );
 }
+
+
 
