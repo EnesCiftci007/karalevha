@@ -160,13 +160,15 @@ export default function Navbar() {
             <NotificationsDropdown />
             
             <div className="flex items-center space-x-3 border-2 border-[#1f2129] p-1 transition-all">
-              <img 
-                src={`https://api.dicebear.com/7.x/bottts/svg?seed=${user.avatarSeed || user.username}&backgroundColor=transparent`} 
-                alt="Profile" 
-                className="w-8 h-8 bg-zinc-800"
-              />
-              <Link to={`/profil/${user.username}`} className="text-[14px] font-black text-white uppercase tracking-widest hidden sm:block hover:text-[#00e5ff] transition-colors cursor-pointer">
-                {user.username}
+              <Link to={`/profil/${user.username}`} className="flex items-center space-x-2 cursor-pointer">
+                <img 
+                  src={`https://api.dicebear.com/7.x/bottts/svg?seed=${user.avatarSeed || user.username}&backgroundColor=transparent`} 
+                  alt="Profile" 
+                  className="w-8 h-8 bg-zinc-800"
+                />
+                <span className="text-[14px] font-black text-white uppercase tracking-widest hidden sm:block hover:text-[#00e5ff] transition-colors">
+                  {user.username}
+                </span>
               </Link>
               <button onClick={handleLogout} className="text-zinc-500 hover:text-[#ff0055] p-1 ml-2 transition-colors" title="Çıkış Yap">
                 <LogOut className="w-5 h-5" strokeWidth={3} />
@@ -187,4 +189,7 @@ export default function Navbar() {
     </header>
   );
 }
+
+
+
 
