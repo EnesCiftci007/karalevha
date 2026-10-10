@@ -150,9 +150,17 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
         <div className="flex items-center gap-4 mt-2">
           {!isReply && user && (
             <button 
-              onClick={() => { 
-                setReplyingTo({ id: c.id, username: c.user.username }); 
-                setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 0); 
+              onPointerDown={(e) => {
+                e.preventDefault();
+                setReplyingTo({ id: c.id, username: c.user.username });
+                setTimeout(() => {
+                  formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                  const textarea = formRef.current?.querySelector('textarea');
+                  if (textarea) textarea.focus();
+                }, 50);
+              }}
+              onClick={() => {
+                setReplyingTo({ id: c.id, username: c.user.username });
               }}
               className="text-xs font-semibold text-zinc-500 hover:text-[#ff5500] transition-colors flex items-center gap-1"
             >
@@ -245,5 +253,7 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
     </div>
   );
 }
+
+
 
 
