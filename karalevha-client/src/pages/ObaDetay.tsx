@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import * as signalR from '@microsoft/signalr';
 import { api, API_URL } from '../services/api';
@@ -39,7 +39,8 @@ export default function ObaDetay() {
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Setup SignalR connection
+  const [isConnected, setIsConnected] = useState(false);
+  // Setup SignalR connection and join channels
   useEffect(() => {
     if (!token) return;
 
@@ -48,43 +49,60 @@ export default function ObaDetay() {
       .withAutomaticReconnect()
       .build();
 
+    newConnection.on('ReceiveMessage', (message: Message) => {
+      setMessages(prev => {
+        if (prev.some(m => m.id === message.id)) return prev;
+        return [...prev, message];
+      });
+    });
+
+    let currentChannelId: string | null = null;
+
+    newConnection.onreconnected(() => {
+      console.log('Reconnected to SignalR');
+      setIsConnected(true);
+      if (currentChannelId) {
+        newConnection.invoke('JoinChannel', currentChannelId)
+          .catch(err => console.error("RejoinChannel error: ", err));
+      }
+    });
+
+    newConnection.onreconnecting(() => {
+      setIsConnected(false);
+    });
+
+    newConnection.start()
+      .then(() => {
+        console.log('Connected to SignalR');
+        setIsConnected(true);
+        if (activeChannel) {
+          currentChannelId = activeChannel.id.toString();
+          newConnection.invoke('JoinChannel', currentChannelId)
+            .catch(err => console.error("JoinChannel error: ", err));
+        }
+      })
+      .catch(e => console.error('Connection failed: ', e));
+
     setConnection(newConnection);
+
+    return () => {
+      newConnection.stop();
+    };
   }, [token]);
 
-  const [isConnected, setIsConnected] = useState(false);
-
-  // Connect and subscribe to messages
+  // Handle active channel change
   useEffect(() => {
-    if (connection) {
-      connection.start()
-        .then(() => {
-          console.log('Connected to SignalR');
-          setIsConnected(true);
-          
-          connection.on('ReceiveMessage', (message: Message) => {
-            setMessages(prev => {
-              if (prev.some(m => m.id === message.id)) return prev;
-              return [...prev, message];
-            });
-          });
-        })
-        .catch(e => console.log('Connection failed: ', e));
-    }
-  }, [connection]);
-
-  // Join channel group when activeChannel changes OR when connection establishes
-  useEffect(() => {
-    if (isConnected && connection && activeChannel) {
-      connection.invoke('JoinChannel', activeChannel.id.toString())
-        .then(() => console.log("Joined channel: ", activeChannel.id))
+    if (connection && isConnected && activeChannel) {
+      const channelId = activeChannel.id.toString();
+      connection.invoke('JoinChannel', channelId)
         .catch(err => console.error("JoinChannel error: ", err));
         
       return () => {
-        connection.invoke('LeaveChannel', activeChannel.id.toString())
-          .catch(err => console.error(err));
+        connection.invoke('LeaveChannel', channelId)
+          .catch(err => console.error("LeaveChannel error:", err));
       };
     }
-  }, [isConnected, connection, activeChannel]);
+  }, [connection, isConnected, activeChannel]);
 
 
   useEffect(() => {
@@ -128,7 +146,7 @@ export default function ObaDetay() {
         }
       }
     } catch (error) {
-      console.error('Kanallar yüklenemedi:', error);
+      console.error('Kanallar yÃ¼klenemedi:', error);
     } finally {
       setLoading(false);
     }
@@ -140,7 +158,7 @@ export default function ObaDetay() {
       const data = await api<Message[]>(`/api/obamessages/${activeChannel.id}`);
       setMessages(data);
     } catch (error) {
-      console.error('Mesajlar yüklenemedi:', error);
+      console.error('Mesajlar yÃ¼klenemedi:', error);
     }
   };
 
@@ -212,11 +230,11 @@ export default function ObaDetay() {
         fetchChannels();
       } else {
         const txt = await res.text();
-        setJoinError(txt || "Şifre yanlış!");
+        setJoinError(txt || "Åifre yanlÄ±ÅŸ!");
         setLoading(false);
       }
     } catch(err) {
-      setJoinError("Bir hata oluştu.");
+      setJoinError("Bir hata oluÅŸtu.");
       setLoading(false);
     }
   };
@@ -237,15 +255,15 @@ export default function ObaDetay() {
           <div className="w-16 h-16 mx-auto mb-6 bg-red-500/10 text-red-500 border-2 border-red-500/50 flex items-center justify-center">
             <Lock className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-black text-white uppercase tracking-widest mb-2">GİZLİ OBA</h2>
-          <p className="text-zinc-400 font-medium mb-8">Bu obaya girmek için şifre gerekiyor.</p>
+          <h2 className="text-2xl font-black text-white uppercase tracking-widest mb-2">GÄ°ZLÄ° OBA</h2>
+          <p className="text-zinc-400 font-medium mb-8">Bu obaya girmek iÃ§in ÅŸifre gerekiyor.</p>
           
           <form onSubmit={handleJoin} className="space-y-4">
             <input 
               type="password" 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Şifreyi girin..."
+              placeholder="Åifreyi girin..."
               className="w-full bg-[#0b0c10] border-2 border-[#1f2129] px-4 py-3 text-white focus:border-[#39ff14] text-center font-bold tracking-widest outline-none"
             />
             {joinError && <p className="text-red-500 text-sm font-bold">{joinError}</p>}
@@ -253,11 +271,11 @@ export default function ObaDetay() {
               type="submit"
               className="w-full py-3 bg-[#39ff14] text-black font-black uppercase tracking-widest hover:bg-white hover:shadow-[4px_4px_0px_#39ff14] hover:-translate-y-1 transition-all border-2 border-black"
             >
-              GİRİŞ YAP
+              GÄ°RÄ°Å YAP
             </button>
           </form>
           
-          <Link to="/e-oba" className="block mt-6 text-zinc-500 hover:text-white font-bold uppercase text-sm">Geri Dön</Link>
+          <Link to="/e-oba" className="block mt-6 text-zinc-500 hover:text-white font-bold uppercase text-sm">Geri DÃ¶n</Link>
         </div>
       </div>
     );
@@ -335,7 +353,7 @@ export default function ObaDetay() {
              </div>
              <div className="flex flex-col">
                 <span className="text-white font-bold text-sm leading-tight">{user.username}</span>
-                <span className="text-[#39ff14] text-xs font-bold">Çevrimiçi</span>
+                <span className="text-[#39ff14] text-xs font-bold">Ã‡evrimiÃ§i</span>
              </div>
           </div>
         )}
@@ -368,7 +386,7 @@ export default function ObaDetay() {
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-zinc-500">
               <MessageSquare className="w-12 h-12 mb-4 opacity-50" />
-              <p className="font-bold uppercase tracking-widest text-sm">BURASI HENÜZ SESSİZ. İLK MESAJI GÖNDER!</p>
+              <p className="font-bold uppercase tracking-widest text-sm">BURASI HENÃœZ SESSÄ°Z. Ä°LK MESAJI GÃ–NDER!</p>
             </div>
           ) : (
             messages.map((msg, idx) => {
@@ -426,7 +444,7 @@ export default function ObaDetay() {
                 type="text"
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
-                placeholder={`${activeChannel?.name || 'kanal'} kanalına mesaj gönder...`}
+                placeholder={`${activeChannel?.name || 'kanal'} kanalÄ±na mesaj gÃ¶nder...`}
                 className="w-full bg-[#0b0c10] border-2 border-[#1f2129] text-white px-4 py-3 pr-12 focus:outline-none focus:border-[#39ff14] transition-colors font-medium placeholder-zinc-600"
               />
               <button
@@ -440,10 +458,12 @@ export default function ObaDetay() {
           </div>
         ) : (
           <div className="p-4 bg-[#111216] border-t-2 border-[#1f2129] text-center">
-            <span className="text-zinc-500 font-bold uppercase tracking-wider text-sm">Mesaj göndermek için giriş yapmalısınız</span>
+            <span className="text-zinc-500 font-bold uppercase tracking-wider text-sm">Mesaj gÃ¶ndermek iÃ§in giriÅŸ yapmalÄ±sÄ±nÄ±z</span>
           </div>
         )}
       </div>
     </div>
   );
 }
+
+

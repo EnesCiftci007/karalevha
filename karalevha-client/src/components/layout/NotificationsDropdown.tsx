@@ -19,35 +19,37 @@ export default function NotificationsDropdown() {
 
   useEffect(() => {
     if (unreadCount > 0) {
-      document.title = `(${unreadCount}) KaraLevha`;
+      document.title = '(' + unreadCount + ') KaraLevha';
     } else {
       document.title = 'KaraLevha';
     }
   }, [unreadCount]);
 
   useEffect(() => {
-    if (user) {
+    if (!user) return;
+    
+    fetchUnreadCount();
+
+    const token = localStorage.getItem('token');
+    const connection = new signalR.HubConnectionBuilder()
+      .withUrl(API_URL + '/notificationhub', {
+        accessTokenFactory: () => token || ''
+      })
+      .withAutomaticReconnect()
+      .build();
+
+    connection.on('ReceiveNotification', () => {
       fetchUnreadCount();
+      if (showRef.current) {
+        fetchNotifications();
+      }
+    });
 
-      const token = localStorage.getItem('token');
-      const connection = new signalR.HubConnectionBuilder()
-        .withUrl(API_URL + '/notificationhub', {
-          accessTokenFactory: () => token || ''
-        })
-        .withAutomaticReconnect()
-        .build();
+    connection.start().catch(err => console.error('SignalR error:', err));
 
-      connection.start().catch(err => console.error('SignalR error:', err));
-
-      connection.on('ReceiveNotification', () => {
-        fetchUnreadCount();
-
-      });
-
-      return () => {
-        connection.stop();
-      };
-    }
+    return () => {
+      connection.stop();
+    };
   }, [user]);
 
   useEffect(() => {
@@ -91,7 +93,7 @@ export default function NotificationsDropdown() {
 
   const handleMarkAsRead = async (id: number) => {
     try {
-      await api(`/api/notifications/${id}/read`, { method: 'PATCH' });
+      await api('/api/notifications/' + id + '/read', { method: 'PATCH' });
       setNotifications(prev => prev.map(n => n.id === id ? { ...n, isRead: true } : n));
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (err) {
@@ -101,7 +103,7 @@ export default function NotificationsDropdown() {
 
   const handleMarkAllAsRead = async () => {
     try {
-      await api(`/api/notifications/read-all`, { method: 'PATCH' });
+      await api('/api/notifications/read-all', { method: 'PATCH' });
       setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
       setUnreadCount(0);
     } catch (err) {
@@ -115,15 +117,15 @@ export default function NotificationsDropdown() {
     }
     setShow(false);
     if (notif.postId) {
-      navigate(`/akis`);
+      navigate('/akis#post-' + notif.postId);
     }
   };
 
   const getNotificationText = (notif: Notification) => {
-    if (notif.type === 'Like') return 'gÃ¶nderini beÄŸendi.';
-    if (notif.type === 'Comment') return 'gÃ¶nderine yorum yaptÄ±.';
+    if (notif.type === 'Like') return 'gönderini beğendi.';
+    if (notif.type === 'Comment') return 'gönderine yorum yaptı.';
     if (notif.type === 'Reply') return 'yorumuna cevap verdi.';
-    return 'bir etkileÅŸimde bulundu.';
+    return 'bir etkileşimde bulundu.';
   };
 
   if (!user) return null;
@@ -151,7 +153,7 @@ export default function NotificationsDropdown() {
                 onClick={handleMarkAllAsRead}
                 className="text-[#00e5ff] text-xs font-bold hover:text-white flex items-center gap-1 transition-colors"
               >
-                <Check className="w-3 h-3" /> TÃ¼mÃ¼nÃ¼ Okundu Ä°ÅŸaretle
+                <Check className="w-3 h-3" /> Tümünü Okundu İşaretle
               </button>
             )}
           </div>
@@ -167,10 +169,10 @@ export default function NotificationsDropdown() {
                   <div 
                     key={notif.id}
                     onClick={() => handleNotificationClick(notif)}
-                    className={`flex items-start p-3 border-b border-[#1f2129] last:border-b-0 cursor-pointer transition-colors group ${!notif.isRead ? 'bg-[#ff5500]/10 hover:bg-[#ff5500]/20' : 'hover:bg-[#13151a]'}`}
+                    className={"flex items-start p-3 border-b border-[#1f2129] last:border-b-0 cursor-pointer transition-colors group " + (!notif.isRead ? 'bg-[#ff5500]/10 hover:bg-[#ff5500]/20' : 'hover:bg-[#13151a]')}
                   >
                     <img 
-                      src={`https://api.dicebear.com/7.x/bottts/svg?seed=${notif.actor.avatarSeed || notif.actor.username}&backgroundColor=transparent`}
+                      src={"https://api.dicebear.com/7.x/bottts/svg?seed=" + (notif.actor.avatarSeed || notif.actor.username) + "&backgroundColor=transparent"}
                       alt={notif.actor.username}
                       className="w-10 h-10 bg-zinc-800 rounded-none border border-zinc-700 mr-3 flex-shrink-0"
                     />
@@ -189,7 +191,7 @@ export default function NotificationsDropdown() {
                 ))}
               </div>
             ) : (
-              <div className="p-6 text-center text-zinc-500 text-[13px] font-bold">BÄ°LDÄ°RÄ°M YOK</div>
+              <div className="p-6 text-center text-zinc-500 text-[13px] font-bold">BİLDİRİM YOK</div>
             )}
           </div>
         </div>
@@ -197,14 +199,3 @@ export default function NotificationsDropdown() {
     </div>
   );
 }
-
-
-
-
-
-
-
-
-
-
-

@@ -14,13 +14,13 @@ namespace Karalevha.API.Controllers
     {
         private readonly AppDbContext _context;
         private readonly ILogger<CommentsController> _logger;
-        private readonly Microsoft.AspNetCore.SignalR.IHubContext<Karalevha.API.Hubs.NotificationHub> _hubContext;
+        private readonly Karalevha.API.Services.INotificationService _notificationService;
 
-        public CommentsController(AppDbContext context, ILogger<CommentsController> logger, Microsoft.AspNetCore.SignalR.IHubContext<Karalevha.API.Hubs.NotificationHub> hubContext)
+        public CommentsController(AppDbContext context, ILogger<CommentsController> logger, Karalevha.API.Services.INotificationService notificationService)
         {
             _context = context;
             _logger = logger;
-            _hubContext = hubContext;
+            _notificationService = notificationService;
         }
 
         // GET: api/posts/{postId}/comments
@@ -112,34 +112,15 @@ namespace Karalevha.API.Controllers
             if (dto.ParentCommentId.HasValue)
             {
                 var parentComment = await _context.PostComments.FindAsync(dto.ParentCommentId.Value);
-                if (parentComment != null && parentComment.UserId != userId)
+                if (parentComment != null)
                 {
-                    _context.Notifications.Add(new Notification
-                    {
-                        RecipientUserId = parentComment.UserId,
-                        ActorUserId = userId,
-                        Type = "Reply",
-                        PostId = postId,
-                        CommentId = comment.Id
-                    });
+                    await _notificationService.SendNotificationAsync(parentComment.UserId, userId, "Reply", postId, comment.Id);
                 }
             }
             else
             {
-                if (post.UserId != userId)
-                {
-                    _context.Notifications.Add(new Notification
-                    {
-                        RecipientUserId = post.UserId,
-                        ActorUserId = userId,
-                        Type = "Comment",
-                        PostId = postId,
-                        CommentId = comment.Id
-                    });
-                }
+                await _notificationService.SendNotificationAsync(post.UserId, userId, "Comment", postId, comment.Id);
             }
-
-            await _context.SaveChangesAsync();
 
             // Yorumu dÃ¶nmek iÃ§in user bilgisini dahil et
             var user = await _context.Users.FindAsync(userId);
@@ -183,6 +164,7 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+
 
 
 
