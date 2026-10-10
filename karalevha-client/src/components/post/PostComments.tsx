@@ -43,7 +43,7 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.SyntheticEvent) => {
     e.preventDefault();
     if (!user) return;
     if (submitLock.current) return;
@@ -225,6 +225,12 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
             <button
               type="submit"
               disabled={submitting || !content.trim()}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                if (!submitting && content.trim()) {
+                  handleSubmit(e);
+                }
+              }}
               className="bg-[#ff5500] text-white h-12 w-12 rounded-lg flex items-center justify-center font-bold hover:bg-[#ff7733] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0"
             >
               {submitting ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
@@ -239,3 +245,5 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
     </div>
   );
 }
+
+
