@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Bell, Check, Loader2 } from 'lucide-react';
-import { api } from '../../services/api';
+import { api, API_URL } from '../../services/api';
 import { Notification } from '../../types';
+import * as signalR from '@microsoft/signalr';
 import { useAuth } from '../../context/AuthContext';
 
 export default function NotificationsDropdown() {
@@ -25,8 +26,25 @@ export default function NotificationsDropdown() {
   useEffect(() => {
     if (user) {
       fetchUnreadCount();
-      const interval = setInterval(fetchUnreadCount, 60000);
-      return () => clearInterval(interval);
+
+      const token = localStorage.getItem('token');
+      const connection = new signalR.HubConnectionBuilder()
+        .withUrl(API_URL + '/notificationhub', {
+          accessTokenFactory: () => token || ''
+        })
+        .withAutomaticReconnect()
+        .build();
+
+      connection.start().catch(err => console.error('SignalR error:', err));
+
+      connection.on('ReceiveNotification', () => {
+        fetchUnreadCount();
+
+      });
+
+      return () => {
+        connection.stop();
+      };
     }
   }, [user]);
 
@@ -100,10 +118,10 @@ export default function NotificationsDropdown() {
   };
 
   const getNotificationText = (notif: Notification) => {
-    if (notif.type === 'Like') return 'gönderini beğendi.';
-    if (notif.type === 'Comment') return 'gönderine yorum yaptı.';
+    if (notif.type === 'Like') return 'gÃ¶nderini beÄŸendi.';
+    if (notif.type === 'Comment') return 'gÃ¶nderine yorum yaptÄ±.';
     if (notif.type === 'Reply') return 'yorumuna cevap verdi.';
-    return 'bir etkileşimde bulundu.';
+    return 'bir etkileÅŸimde bulundu.';
   };
 
   if (!user) return null;
@@ -131,7 +149,7 @@ export default function NotificationsDropdown() {
                 onClick={handleMarkAllAsRead}
                 className="text-[#00e5ff] text-xs font-bold hover:text-white flex items-center gap-1 transition-colors"
               >
-                <Check className="w-3 h-3" /> Tümünü Okundu İşaretle
+                <Check className="w-3 h-3" /> TÃ¼mÃ¼nÃ¼ Okundu Ä°ÅŸaretle
               </button>
             )}
           </div>
@@ -169,7 +187,7 @@ export default function NotificationsDropdown() {
                 ))}
               </div>
             ) : (
-              <div className="p-6 text-center text-zinc-500 text-[13px] font-bold">BİLDİRİM YOK</div>
+              <div className="p-6 text-center text-zinc-500 text-[13px] font-bold">BÄ°LDÄ°RÄ°M YOK</div>
             )}
           </div>
         </div>
@@ -177,6 +195,9 @@ export default function NotificationsDropdown() {
     </div>
   );
 }
+
+
+
 
 
 

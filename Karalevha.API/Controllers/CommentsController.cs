@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
@@ -14,11 +14,13 @@ namespace Karalevha.API.Controllers
     {
         private readonly AppDbContext _context;
         private readonly ILogger<CommentsController> _logger;
+        private readonly Microsoft.AspNetCore.SignalR.IHubContext<Karalevha.API.Hubs.NotificationHub> _hubContext;
 
-        public CommentsController(AppDbContext context, ILogger<CommentsController> logger)
+        public CommentsController(AppDbContext context, ILogger<CommentsController> logger, Microsoft.AspNetCore.SignalR.IHubContext<Karalevha.API.Hubs.NotificationHub> hubContext)
         {
             _context = context;
             _logger = logger;
+            _hubContext = hubContext;
         }
 
         // GET: api/posts/{postId}/comments
@@ -26,14 +28,14 @@ namespace Karalevha.API.Controllers
         public async Task<IActionResult> GetComments(int postId)
         {
             var postExists = await _context.Posts.AnyAsync(p => p.Id == postId);
-            if (!postExists) return NotFound("Gönderi bulunamadı.");
+            if (!postExists) return NotFound("GÃ¶nderi bulunamadÄ±.");
 
             var comments = await _context.PostComments
                 .Where(c => c.PostId == postId && c.ParentCommentId == null) // Sadece ana yorumlar
                 .Include(c => c.User)
                 .Include(c => c.Replies)
-                    .ThenInclude(r => r.User) // Yanıtların sahipleri
-                .OrderBy(c => c.CreatedAt) // Eskiden yeniye sıralama
+                    .ThenInclude(r => r.User) // YanÄ±tlarÄ±n sahipleri
+                .OrderBy(c => c.CreatedAt) // Eskiden yeniye sÄ±ralama
                 .Select(c => new CommentDto
                 {
                     Id = c.Id,
@@ -75,24 +77,24 @@ namespace Karalevha.API.Controllers
             var userId = int.Parse(userIdClaim.Value);
 
             if (string.IsNullOrWhiteSpace(dto.Content))
-                return BadRequest("Yorum boş olamaz.");
+                return BadRequest("Yorum boÅŸ olamaz.");
 
             // 1. Gonderi mevcut mu?
             var post = await _context.Posts.FirstOrDefaultAsync(p => p.Id == postId);
             if (post == null) return NotFound("Gonderi bulunamadi.");
 
-            // 2. Eğer parent id verilmişse, ana yorum kurallarını doğrula
+            // 2. EÄŸer parent id verilmiÅŸse, ana yorum kurallarÄ±nÄ± doÄŸrula
             if (dto.ParentCommentId.HasValue)
             {
                 var parentComment = await _context.PostComments.FirstOrDefaultAsync(c => c.Id == dto.ParentCommentId.Value);
                 if (parentComment == null)
-                    return BadRequest("Yanıt vermek istediğiniz ana yorum bulunamadı.");
+                    return BadRequest("YanÄ±t vermek istediÄŸiniz ana yorum bulunamadÄ±.");
                 
                 if (parentComment.PostId != postId)
-                    return BadRequest("Ana yorum bu gönderiye ait değil.");
+                    return BadRequest("Ana yorum bu gÃ¶nderiye ait deÄŸil.");
                 
                 if (parentComment.ParentCommentId != null)
-                    return BadRequest("Yanıtın yanıtı oluşturulamaz (Tek seviyeli yanıt kısıtlaması).");
+                    return BadRequest("YanÄ±tÄ±n yanÄ±tÄ± oluÅŸturulamaz (Tek seviyeli yanÄ±t kÄ±sÄ±tlamasÄ±).");
             }
 
             var comment = new PostComment
@@ -139,7 +141,7 @@ namespace Karalevha.API.Controllers
 
             await _context.SaveChangesAsync();
 
-            // Yorumu dönmek için user bilgisini dahil et
+            // Yorumu dÃ¶nmek iÃ§in user bilgisini dahil et
             var user = await _context.Users.FindAsync(userId);
             var resultDto = new CommentDto
             {
@@ -168,12 +170,12 @@ namespace Karalevha.API.Controllers
             var userId = int.Parse(userIdClaim.Value);
 
             var comment = await _context.PostComments.FirstOrDefaultAsync(c => c.Id == id);
-            if (comment == null) return NotFound("Yorum bulunamadı.");
+            if (comment == null) return NotFound("Yorum bulunamadÄ±.");
 
             if (comment.UserId != userId)
                 return StatusCode(403, "Sadece kendi yorumunuzu silebilirsiniz."); // Forbidden
 
-            // Cascade delete yapılandırıldığı için parent silindiğinde replies da silinecek.
+            // Cascade delete yapÄ±landÄ±rÄ±ldÄ±ÄŸÄ± iÃ§in parent silindiÄŸinde replies da silinecek.
             _context.PostComments.Remove(comment);
             await _context.SaveChangesAsync();
 
@@ -181,6 +183,8 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+
+
 
 
 

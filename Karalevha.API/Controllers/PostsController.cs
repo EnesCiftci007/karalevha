@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Authorization;
+﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
@@ -15,11 +15,13 @@ namespace Karalevha.API.Controllers
     {
         private readonly AppDbContext _context;
         private readonly ILogger<PostsController> _logger;
+        private readonly Microsoft.AspNetCore.SignalR.IHubContext<Karalevha.API.Hubs.NotificationHub> _hubContext;
 
-        public PostsController(AppDbContext context, ILogger<PostsController> logger)
+        public PostsController(AppDbContext context, ILogger<PostsController> logger, Microsoft.AspNetCore.SignalR.IHubContext<Karalevha.API.Hubs.NotificationHub> hubContext)
         {
             _context = context;
             _logger = logger;
+            _hubContext = hubContext;
         }
 
         // GET: api/posts
@@ -72,7 +74,7 @@ namespace Karalevha.API.Controllers
 
         // POST: api/posts
         [HttpPost]
-        [Authorize] // Sadece giriş yapmış (Token'ı olan) kullanıcılar istek atabilir
+        [Authorize] // Sadece giriÃ…Å¸ yapmÃ„Â±Ã…Å¸ (Token'Ã„Â± olan) kullanÃ„Â±cÃ„Â±lar istek atabilir
         public async Task<IActionResult> CreatePost(CreatePostDto dto)
         {
             // Token'dan User ID'yi al
@@ -89,7 +91,7 @@ namespace Karalevha.API.Controllers
             _context.Posts.Add(post);
             await _context.SaveChangesAsync();
 
-            // Oluşturulan gönderiyi yazar bilgisiyle geri dön (ekrana hemen basmak için)
+            // OluÃ…Å¸turulan gÃƒÂ¶nderiyi yazar bilgisiyle geri dÃƒÂ¶n (ekrana hemen basmak iÃƒÂ§in)
             var createdPost = await _context.Posts
                 .Include(p => p.User)
                 .Where(p => p.Id == post.Id)
@@ -122,7 +124,7 @@ namespace Karalevha.API.Controllers
             var userId = int.Parse(userIdClaim.Value);
             
             var post = await _context.Posts.FirstOrDefaultAsync(p => p.Id == id);
-            if (post == null) return NotFound("Gönderi bulunamadı.");
+            if (post == null) return NotFound("GÃƒÂ¶nderi bulunamadÃ„Â±.");
 
             var existingLike = await _context.PostLikes.FirstOrDefaultAsync(pl => pl.PostId == id && pl.UserId == userId);
             
@@ -143,7 +145,7 @@ namespace Karalevha.API.Controllers
                 catch (DbUpdateException ex) {
                     if (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505")
                     {
-                        // Sadece bu entity'nin takibini kaldır
+                        // Sadece bu entity'nin takibini kaldÃ„Â±r
                         _context.Entry(newLike).State = EntityState.Detached;
                         
                         bool exists = await _context.PostLikes.AnyAsync(pl => pl.PostId == id && pl.UserId == userId);
@@ -154,18 +156,18 @@ namespace Karalevha.API.Controllers
                         else
                         {
                             _logger.LogError(ex, "ToggleLike unique constraint caught but record not found for PostId {PostId}, UserId {UserId}", id, userId);
-                            return StatusCode(500, "Bir veritabanı hatası oluştu.");
+                            return StatusCode(500, "Bir veritabanÃ„Â± hatasÃ„Â± oluÃ…Å¸tu.");
                         }
                     }
                     else
                     {
                         _logger.LogError(ex, "ToggleLike DbUpdateException for PostId {PostId}, UserId {UserId}", id, userId);
-                        return StatusCode(500, "Bir veritabanı hatası oluştu.");
+                        return StatusCode(500, "Bir veritabanÃ„Â± hatasÃ„Â± oluÃ…Å¸tu.");
                     }
                 }
                 catch (Exception ex) {
                     _logger.LogError(ex, "ToggleLike Exception for PostId {PostId}, UserId {UserId}", id, userId);
-                    return StatusCode(500, "Beklenmeyen bir hata oluştu.");
+                    return StatusCode(500, "Beklenmeyen bir hata oluÃ…Å¸tu.");
                 }
             }
             
@@ -178,4 +180,6 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+
+
 

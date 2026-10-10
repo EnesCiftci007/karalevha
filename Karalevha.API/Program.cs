@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using System.Threading.RateLimiting;
 using Karalevha.API.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -45,7 +45,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key is missing from configuration.");
 if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
 {
-    throw new InvalidOperationException("Jwt:Key en az 32 bayt olmalı. (HS256 için gerekli minimum uzunluk)");
+    throw new InvalidOperationException("Jwt:Key en az 32 bayt olmalÄ±. (HS256 iÃ§in gerekli minimum uzunluk)");
 }
 
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer missing");
@@ -91,7 +91,7 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-// YAYINDA (PRODUCTION) VERİTABANI MIGRATION'LARINI OTOMATİK UYGULA
+// YAYINDA (PRODUCTION) VERÄ°TABANI MIGRATION'LARINI OTOMATÄ°K UYGULA
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -116,7 +116,9 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<Karalevha.API.Hubs.ChatHub>("/chathub");
+app.MapHub<Karalevha.API.Hubs.NotificationHub>("/notificationhub");
 app.MapHealthChecks("/health");
-app.Map("/error", () => Results.Problem("Beklenmeyen bir hata oluştu.")).AllowAnonymous();
+app.Map("/error", () => Results.Problem("Beklenmeyen bir hata oluÅŸtu.")).AllowAnonymous();
 
 app.Run();
+
