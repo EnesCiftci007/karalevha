@@ -105,6 +105,7 @@ namespace Karalevha.API.Controllers
             };
 
             _context.PostComments.Add(comment);
+            await _context.SaveChangesAsync();
 
             if (dto.ParentCommentId.HasValue)
             {
@@ -180,5 +181,6 @@ namespace Karalevha.API.Controllers
         }
     }
 }
+
 
 
