@@ -146,7 +146,7 @@ export default function ObaDetay() {
         }
       }
     } catch (error) {
-      console.error('Kanallar yÃ¼klenemedi:', error);
+      console.error('Kanallar yüklenemedi:', error);
     } finally {
       setLoading(false);
     }
@@ -158,7 +158,7 @@ export default function ObaDetay() {
       const data = await api<Message[]>(`/api/obamessages/${activeChannel.id}`);
       setMessages(data);
     } catch (error) {
-      console.error('Mesajlar yÃ¼klenemedi:', error);
+      console.error('Mesajlar yüklenemedi:', error);
     }
   };
 
@@ -230,11 +230,11 @@ export default function ObaDetay() {
         fetchChannels();
       } else {
         const txt = await res.text();
-        setJoinError(txt || "Åifre yanlÄ±ÅŸ!");
+        setJoinError(txt || "Şifre yanlış!");
         setLoading(false);
       }
     } catch(err) {
-      setJoinError("Bir hata oluÅŸtu.");
+      setJoinError("Bir hata oluştu.");
       setLoading(false);
     }
   };
@@ -255,15 +255,15 @@ export default function ObaDetay() {
           <div className="w-16 h-16 mx-auto mb-6 bg-red-500/10 text-red-500 border-2 border-red-500/50 flex items-center justify-center">
             <Lock className="w-8 h-8" />
           </div>
-          <h2 className="text-2xl font-black text-white uppercase tracking-widest mb-2">GÄ°ZLÄ° OBA</h2>
-          <p className="text-zinc-400 font-medium mb-8">Bu obaya girmek iÃ§in ÅŸifre gerekiyor.</p>
+          <h2 className="text-2xl font-black text-white uppercase tracking-widest mb-2">GİZLİ OBA</h2>
+          <p className="text-zinc-400 font-medium mb-8">Bu obaya girmek için şifre gerekiyor.</p>
           
           <form onSubmit={handleJoin} className="space-y-4">
             <input 
               type="password" 
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              placeholder="Åifreyi girin..."
+              placeholder="Şifreyi girin..."
               className="w-full bg-[#0b0c10] border-2 border-[#1f2129] px-4 py-3 text-white focus:border-[#39ff14] text-center font-bold tracking-widest outline-none"
             />
             {joinError && <p className="text-red-500 text-sm font-bold">{joinError}</p>}
@@ -271,11 +271,11 @@ export default function ObaDetay() {
               type="submit"
               className="w-full py-3 bg-[#39ff14] text-black font-black uppercase tracking-widest hover:bg-white hover:shadow-[4px_4px_0px_#39ff14] hover:-translate-y-1 transition-all border-2 border-black"
             >
-              GÄ°RÄ°Å YAP
+              GİRİŞ YAP
             </button>
           </form>
           
-          <Link to="/e-oba" className="block mt-6 text-zinc-500 hover:text-white font-bold uppercase text-sm">Geri DÃ¶n</Link>
+          <Link to="/e-oba" className="block mt-6 text-zinc-500 hover:text-white font-bold uppercase text-sm">Geri Dön</Link>
         </div>
       </div>
     );
@@ -353,7 +353,7 @@ export default function ObaDetay() {
              </div>
              <div className="flex flex-col">
                 <span className="text-white font-bold text-sm leading-tight">{user.username}</span>
-                <span className="text-[#39ff14] text-xs font-bold">Ã‡evrimiÃ§i</span>
+                <span className="text-[#39ff14] text-xs font-bold">Çevrimiçi</span>
              </div>
           </div>
         )}
@@ -386,7 +386,7 @@ export default function ObaDetay() {
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-zinc-500">
               <MessageSquare className="w-12 h-12 mb-4 opacity-50" />
-              <p className="font-bold uppercase tracking-widest text-sm">BURASI HENÃœZ SESSÄ°Z. Ä°LK MESAJI GÃ–NDER!</p>
+              <p className="font-bold uppercase tracking-widest text-sm">BURASI HENÜZ SESSİZ. İLK MESAJI GÖNDER!</p>
             </div>
           ) : (
             messages.map((msg, idx) => {
@@ -444,7 +444,7 @@ export default function ObaDetay() {
                 type="text"
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
-                placeholder={`${activeChannel?.name || 'kanal'} kanalÄ±na mesaj gÃ¶nder...`}
+                placeholder={`${activeChannel?.name || 'kanal'} kanalına mesaj gönder...`}
                 className="w-full bg-[#0b0c10] border-2 border-[#1f2129] text-white px-4 py-3 pr-12 focus:outline-none focus:border-[#39ff14] transition-colors font-medium placeholder-zinc-600"
               />
               <button
@@ -458,7 +458,7 @@ export default function ObaDetay() {
           </div>
         ) : (
           <div className="p-4 bg-[#111216] border-t-2 border-[#1f2129] text-center">
-            <span className="text-zinc-500 font-bold uppercase tracking-wider text-sm">Mesaj gÃ¶ndermek iÃ§in giriÅŸ yapmalÄ±sÄ±nÄ±z</span>
+            <span className="text-zinc-500 font-bold uppercase tracking-wider text-sm">Mesaj göndermek için giriş yapmalısınız</span>
           </div>
         )}
       </div>
