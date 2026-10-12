@@ -104,6 +104,15 @@ namespace Karalevha.API.Controllers
             if (user == null || !ok)
                 return Unauthorized(new { message = "Hatalı kullanıcı adı veya şifre." });
 
+            if (user.BannedUntil.HasValue && user.BannedUntil.Value > DateTime.UtcNow)
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new
+                {
+                    message = $"Hesabınız {user.BannedUntil.Value:dd.MM.yyyy HH:mm} tarihine kadar askıya alınmıştır.",
+                    bannedUntil = user.BannedUntil.Value
+                });
+            }
+
             // if (!user.EmailConfirmed)
             //     return StatusCode(403, new { requiresVerification = true, email = user.Email, message = "Devam etmek i�in email adresini do�rulaman gerekiyor." });
 
@@ -112,7 +121,7 @@ namespace Karalevha.API.Controllers
             return Ok(new 
             { 
                 token, 
-                user = new { user.Id, user.Username, user.Email, user.AvatarSeed } 
+                user = new { user.Id, user.Username, user.Email, user.AvatarSeed, user.Role }
             });
         }
 
@@ -197,7 +206,8 @@ namespace Karalevha.API.Controllers
             var claims = new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Name, user.Username)
+                new Claim(ClaimTypes.Name, user.Username),
+                new Claim(ClaimTypes.Role, user.Role)
             };
 
             var token = new JwtSecurityToken(

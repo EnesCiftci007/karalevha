@@ -35,6 +35,10 @@ namespace Karalevha.API.Data
                 .HasIndex(u => u.NormalizedUsername)
                 .IsUnique();
 
+            modelBuilder.Entity<User>()
+                .Property(u => u.Role)
+                .HasDefaultValue("User");
+
             modelBuilder.Entity<UserFollow>()
                 .HasOne(f => f.Follower)
                 .WithMany(u => u.Following)

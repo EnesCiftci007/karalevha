@@ -1,3 +1,4 @@
+using Karalevha.API.Filters;
 using BCrypt.Net;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -93,6 +94,7 @@ namespace Karalevha.API.Controllers
         // POST: api/obalar
         [HttpPost]
         [Authorize]
+        [CheckBanned]
         public async Task<IActionResult> CreateOba(CreateObaDto dto)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
@@ -166,7 +168,7 @@ namespace Karalevha.API.Controllers
         }
 
         // POST: api/obalar/{id}/join
-        [HttpPost("{id}/join")] [Authorize] [EnableRateLimiting("AuthLimiter")]
+        [HttpPost("{id}/join")] [Authorize] [CheckBanned] [EnableRateLimiting("AuthLimiter")]
         public async Task<IActionResult> JoinOba(int id, [FromBody] JoinObaDto dto)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
@@ -229,7 +231,9 @@ namespace Karalevha.API.Controllers
                 
             if (oba == null) return NotFound("Oba bulunamadı");
 
-            if (oba.OwnerId != userId) {
+            var currentUser = await _context.Users.FindAsync(userId);
+            bool isPlatformOwner = currentUser != null && currentUser.Role == "Owner";
+            if (oba.OwnerId != userId && !isPlatformOwner) {
                 var member = await _context.ObaMembers.FirstOrDefaultAsync(m => m.ObaId == id && m.UserId == userId);
                 if (member == null || member.Role != "admin") {
                     return StatusCode(403, "Bu obayı silme yetkiniz yok.");

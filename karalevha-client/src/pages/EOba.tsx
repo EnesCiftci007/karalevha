@@ -172,7 +172,7 @@ export default function EOba() {
             <Link to={`/e-oba/${oba.id}`} key={oba.id} className="bg-[#0b0c10] border-2 border-[#1f2129] flex flex-col group hover:border-[#39ff14]/50 transition-colors relative overflow-hidden">
               
               
-              {user?.username === oba.owner && (
+              {user && (user.username === oba.owner || user.role === 'Owner') && (
                 <button 
                   onClick={(e) => handleDeleteOba(e, oba.id)}
                   className="absolute top-3 left-3 z-20 text-zinc-500 hover:text-red-500 transition-colors p-2 bg-[#111216] border-2 border-[#1f2129] hover:border-red-500"

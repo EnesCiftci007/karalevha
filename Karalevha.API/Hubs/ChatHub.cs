@@ -30,6 +30,15 @@ namespace Karalevha.API.Hubs
                         var userIdClaim = Context.UserIdentifier ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
                         if (userIdClaim != null && int.TryParse(userIdClaim, out int userId))
                         {
+                            var bannedUntil = await _context.Users
+                                .Where(u => u.Id == userId)
+                                .Select(u => u.BannedUntil)
+                                .FirstOrDefaultAsync();
+
+                            if (bannedUntil.HasValue && bannedUntil.Value > DateTime.UtcNow)
+                            {
+                                throw new HubException($"Hesabınız {bannedUntil.Value:dd.MM.yyyy HH:mm} tarihine kadar askıya alınmıştır.");
+                            }
                             if (oba.IsPrivate)
                             {
                                 var isMember = await _context.ObaMembers.AnyAsync(m => m.ObaId == oba.Id && m.UserId == userId);

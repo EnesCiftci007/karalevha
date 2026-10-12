@@ -1,3 +1,4 @@
+using Karalevha.API.Filters;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -90,6 +91,7 @@ namespace Karalevha.API.Controllers
         // POST: api/users/{username}/follow
         [HttpPost("{username}/follow")]
         [Authorize]
+        [CheckBanned]
         public async Task<IActionResult> Follow(string username)
         {
             var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
@@ -136,6 +138,7 @@ namespace Karalevha.API.Controllers
         // PUT: api/users/me
         [HttpPut("me")]
         [Authorize]
+        [CheckBanned]
         public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDto dto)
         {
             var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);

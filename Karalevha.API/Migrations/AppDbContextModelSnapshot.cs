@@ -386,6 +386,9 @@ namespace Karalevha.API.Migrations
                     b.Property<string>("AvatarSeed")
                         .HasColumnType("text");
 
+                    b.Property<DateTime?>("BannedUntil")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Bio")
                         .HasColumnType("text");
 
@@ -418,6 +421,13 @@ namespace Karalevha.API.Migrations
                     b.Property<string>("PasswordHash")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("User");
 
                     b.Property<string>("Username")
                         .IsRequired()

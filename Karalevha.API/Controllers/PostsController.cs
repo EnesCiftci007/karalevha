@@ -1,3 +1,4 @@
+using Karalevha.API.Filters;
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
@@ -110,7 +111,8 @@ namespace Karalevha.API.Controllers
 
         // POST: api/posts
         [HttpPost]
-        [Authorize] // Sadece giris yapmis (Tokeni olan) kullanicilar istek atabilir
+        [Authorize]
+        [CheckBanned] // Sadece giris yapmis (Tokeni olan) kullanicilar istek atabilir
         public async Task<IActionResult> CreatePost(CreatePostDto dto)
         {
             // Token'dan User ID'yi al
@@ -153,6 +155,7 @@ namespace Karalevha.API.Controllers
         // POST: api/posts/{id}/like
         [HttpPost("{id}/like")]
         [Authorize]
+        [CheckBanned]
         public async Task<IActionResult> ToggleLike(int id)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
@@ -215,6 +218,30 @@ namespace Karalevha.API.Controllers
 
             var newLikeCount = await _context.PostLikes.CountAsync(pl => pl.PostId == id);
             return Ok(new { likes = newLikeCount, isLiked });
+        }
+        // DELETE: api/posts/{id}
+        [HttpDelete("{id}")]
+        [Authorize]
+        public async Task<IActionResult> DeletePost(int id)
+        {
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
+            if (userIdClaim == null) return Unauthorized();
+            var userId = int.Parse(userIdClaim.Value);
+
+            var post = await _context.Posts.FirstOrDefaultAsync(p => p.Id == id);
+            if (post == null) return NotFound("Gönderi bulunamadı.");
+
+            var currentUser = await _context.Users.FindAsync(userId);
+            bool isOwnerOrAdmin = currentUser != null && (currentUser.Role == "Owner" || currentUser.Role == "Admin");
+            if (post.UserId != userId && !isOwnerOrAdmin)
+            {
+                return StatusCode(403, "Bu gönderiyi silme yetkiniz yok.");
+            }
+
+            _context.Posts.Remove(post);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Gönderi başarıyla silindi." });
         }
     }
 }

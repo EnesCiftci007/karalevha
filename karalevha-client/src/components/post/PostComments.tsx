@@ -167,7 +167,7 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
               <CornerDownRight className="w-3 h-3" /> Yanıtla
             </button>
           )}
-          {user?.id === c.user.id && (
+          {user && (user.id === c.user.id || user.role === 'Owner' || user.role === 'Admin') && (
             <button 
               onClick={() => handleDelete(c.id, isReply ? parentId : null)}
               className="text-xs font-semibold text-red-500/70 hover:text-red-500 transition-colors flex items-center gap-1"

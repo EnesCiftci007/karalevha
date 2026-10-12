@@ -1,3 +1,4 @@
+using Karalevha.API.Filters;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -58,6 +59,7 @@ namespace Karalevha.API.Controllers
         // POST: api/obachannels/{obaId}
         [HttpPost("{obaId}")]
         [Authorize]
+        [CheckBanned]
         public async Task<IActionResult> CreateChannel(int obaId, [FromBody] CreateChannelDto dto)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);

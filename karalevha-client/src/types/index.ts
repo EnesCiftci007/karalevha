@@ -3,6 +3,7 @@ export interface User {
   username: string;
   email: string;
   avatarSeed: string;
+  role?: 'Owner' | 'Admin' | 'User';
 }
 
 export interface Post {

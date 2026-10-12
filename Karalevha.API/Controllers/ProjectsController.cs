@@ -1,3 +1,4 @@
+using Karalevha.API.Filters;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -68,6 +69,7 @@ namespace Karalevha.API.Controllers
         // POST: api/projects
         [HttpPost]
         [Authorize]
+        [CheckBanned]
         public async Task<IActionResult> CreateProject(CreateProjectDto dto)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);

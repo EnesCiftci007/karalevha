@@ -1,3 +1,4 @@
+using Karalevha.API.Filters;
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -70,6 +71,7 @@ namespace Karalevha.API.Controllers
         // POST: api/posts/{postId}/comments
         [HttpPost("/api/posts/{postId}/comments")]
         [Authorize]
+        [CheckBanned]
         public async Task<IActionResult> CreateComment(int postId, [FromBody] CreateCommentDto dto)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
@@ -153,7 +155,9 @@ namespace Karalevha.API.Controllers
             var comment = await _context.PostComments.FirstOrDefaultAsync(c => c.Id == id);
             if (comment == null) return NotFound("Yorum bulunamadÄ±.");
 
-            if (comment.UserId != userId)
+            var currentUser = await _context.Users.FindAsync(userId);
+            bool isOwnerOrAdmin = currentUser != null && (currentUser.Role == "Owner" || currentUser.Role == "Admin");
+            if (comment.UserId != userId && !isOwnerOrAdmin)
                 return StatusCode(403, "Sadece kendi yorumunuzu silebilirsiniz."); // Forbidden
 
             // Cascade delete yapÄ±landÄ±rÄ±ldÄ±ÄŸÄ± iÃ§in parent silindiÄŸinde replies da silinecek.

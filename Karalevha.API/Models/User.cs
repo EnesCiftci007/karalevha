@@ -39,5 +39,11 @@ namespace Karalevha.API.Models
         public bool EmailConfirmed { get; set; } = false;
         public string? EmailVerificationToken { get; set; }
         public DateTime? EmailVerificationTokenExpiresAt { get; set; }
+
+        [Required]
+        [MaxLength(20)]
+        public string Role { get; set; } = "User";
+
+        public DateTime? BannedUntil { get; set; }
     }
 }

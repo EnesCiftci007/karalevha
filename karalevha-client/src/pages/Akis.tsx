@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
-import { MessageSquare, Heart, Share2, Send, Flame, Hash, Loader2 } from 'lucide-react';
+import { MessageSquare, Heart, Share2, Send, Flame, Hash, Loader2, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Post } from '../types';
 import { Link } from 'react-router-dom';
@@ -130,6 +130,17 @@ export default function Akis() {
     }
   };
 
+  const handleDeletePost = async (postId: number) => {
+    if (!window.confirm('Bu gönderiyi silmek istediğinize emin misiniz?')) return;
+    try {
+      await api(`/api/posts/${postId}`, { method: 'DELETE' });
+      setPosts(prev => prev.filter(p => p.id !== postId));
+    } catch (err: any) {
+      console.error('Gönderi silinemedi:', err);
+      alert(err?.message || 'Gönderi silinemedi.');
+    }
+  };
+
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('tr-TR', { 
@@ -251,6 +262,15 @@ export default function Akis() {
                         <span className="text-xs font-bold text-zinc-500 tracking-wider uppercase">{formatDate(post.createdAt)}</span>
                       </div>
                     </div>
+                    {user && (user.id === (post.user?.id || (post as any).userId) || user.role === 'Owner' || user.role === 'Admin') && (
+                      <button
+                        onClick={() => handleDeletePost(post.id)}
+                        className="text-zinc-600 hover:text-red-500 transition-colors p-1"
+                        title="Gönderiyi Sil"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                   </div>
 
                   <p className="text-zinc-300 font-medium text-[15px] leading-relaxed mb-4 whitespace-pre-wrap">

@@ -1,3 +1,4 @@
+using Karalevha.API.Filters;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -50,6 +51,7 @@ namespace Karalevha.API.Controllers
         // POST: api/printmodels
         [HttpPost]
         [Authorize]
+        [CheckBanned]
         [EnableRateLimiting("UploadLimiter")]
         [RequestSizeLimit(50_000_000)] // 50 MB sınır
         public async Task<IActionResult> UploadModel([FromForm] string title, [FromForm] string? description, IFormFile file)
