@@ -1,12 +1,13 @@
-import { useState, useEffect } from 'react';
-import { api, API_URL } from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { api } from '../services/api';
 import { Terminal, FolderGit2, Star, GitFork, ExternalLink, Plus, Code2 } from 'lucide-react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Project } from '../types';
 
 export default function Projeler() {
-  const { user, token } = useAuth();
+  const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
   const [initialLoad, setInitialLoad] = useState(true);
@@ -17,14 +18,21 @@ export default function Projeler() {
   const [description, setDescription] = useState('');
   const [repoUrl, setRepoUrl] = useState('');
 
-  
   useEffect(() => {
     fetchProjects();
   }, []);
 
+  useEffect(() => {
+    if (searchParams.get('new') === 'true' && user) {
+      setShowModal(true);
+      searchParams.delete('new');
+      setSearchParams(searchParams, { replace: true });
+    }
+  }, [searchParams, user, setSearchParams]);
+
   const fetchProjects = async () => {
     try {
-      const data = await api<any>('/api/projects');
+      const data = await api<Project[]>('/api/projects');
       setProjects(data);
     } catch (error) {
       console.error('Projeler yüklenemedi:', error);
@@ -39,28 +47,17 @@ export default function Projeler() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/projects`, {
+      const newProject = await api<Project>('/api/projects', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
         body: JSON.stringify({ title, description, repoUrl })
       });
-
-      if (res.ok) {
-        const newProject = await res.json();
-        setProjects([newProject, ...projects]);
-        setShowModal(false);
-        setTitle('');
-        setDescription('');
-        setRepoUrl('');
-      } else {
-        const err = await res.json();
-        alert(err.title || "Bir hata oluştu.");
-      }
-    } catch (error) {
-      console.error('Proje oluşturulamadı:', error);
+      setProjects(prev => [newProject, ...prev]);
+      setShowModal(false);
+      setTitle('');
+      setDescription('');
+      setRepoUrl('');
+    } catch (error: any) {
+      alert(error?.message || "Bir hata oluştu.");
     } finally {
       setLoading(false);
     }
@@ -223,5 +220,3 @@ export default function Projeler() {
     </div>
   );
 }
-
-

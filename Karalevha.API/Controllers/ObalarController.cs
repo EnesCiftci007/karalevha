@@ -8,6 +8,7 @@ using Karalevha.API.Models;
 using Karalevha.API.DTOs;
 using System.Security.Claims;
 using Microsoft.AspNetCore.RateLimiting;
+using Karalevha.API.Extensions;
 
 namespace Karalevha.API.Controllers
 {
@@ -24,24 +25,19 @@ namespace Karalevha.API.Controllers
 
         // GET: api/obalar
         [HttpGet]
-        public async Task<IActionResult> GetObalar()
+        public async Task<IActionResult> GetObalar([FromQuery] int skip = 0, [FromQuery] int take = 50)
         {
-            var currentUserId = -1;
-            var authHeader = Request.Headers["Authorization"].FirstOrDefault();
-            if (authHeader != null && authHeader.StartsWith("Bearer "))
-            {
-                try {
-                    var tokenStr = authHeader.Substring("Bearer ".Length).Trim();
-                    var handler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
-                    if (handler.CanReadToken(tokenStr)) {
-                        var jwtToken = handler.ReadJwtToken(tokenStr);
-                        var idClaim = jwtToken.Claims.FirstOrDefault(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier || c.Type == "nameid");
-                        if (idClaim != null) int.TryParse(idClaim.Value, out currentUserId);
-                    }
-                } catch { }
-            }
+            skip = Math.Max(0, skip);
+            take = Math.Clamp(take, 1, 100);
+
+            // Token, kimlik doğrulama middleware'i tarafından imzasıyla birlikte doğrulanır;
+            // geçersiz/eksik token durumunda kullanıcı anonim kabul edilir.
+            var currentUserId = User.GetUserId() ?? -1;
 
             var obalar = await _context.Obalar
+                .OrderByDescending(o => o.Id)
+                .Skip(skip)
+                .Take(take)
                 .Select(o => new
                 {
                     o.Id,
@@ -56,39 +52,36 @@ namespace Karalevha.API.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(obalar.OrderByDescending(x => x.Id).ToList());
+            return Ok(obalar);
         }
 
-        // GET: api/obalar/{id}/channels
-        [HttpGet("{id}/channels")]
-        [Authorize]
-        public async Task<IActionResult> GetObaChannels(int id)
+        // GET: api/obalar/{id}
+        [HttpGet("{id}")]
+        public async Task<IActionResult> GetOba(int id)
         {
-            var oba = await _context.Obalar.FindAsync(id);
-            if (oba == null) return NotFound("Oba bulunamadı");
+            var userId = User.GetUserId();
 
-            if (oba.IsPrivate)
-            {
-                var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-                if (userIdClaim == null) return Unauthorized();
-                
-                var userId = int.Parse(userIdClaim.Value);
-                var isMember = await _context.ObaMembers.AnyAsync(m => m.ObaId == id && m.UserId == userId);
-                if (!isMember) return StatusCode(403, "Bu private Oba'ya erişim yetkiniz yok.");
-            }
-
-            var channels = await _context.ObaChannels
-                .Where(c => c.ObaId == id)
-                .OrderBy(c => c.Id)
-                .Select(c => new {
-                    c.Id,
-                    c.Name,
-                    c.Type,
-                    c.Category
+            var oba = await _context.Obalar
+                .Where(o => o.Id == id)
+                .Select(o => new
+                {
+                    o.Id,
+                    o.Name,
+                    o.Description,
+                    o.AvatarSeed,
+                    o.Color,
+                    o.MemberCount,
+                    o.IsPrivate,
+                    o.OwnerId,
+                    Owner = o.Owner != null ? o.Owner.Username : "Bilinmeyen",
+                    IsMember = userId != null && _context.ObaMembers.Any(m => m.ObaId == o.Id && m.UserId == userId.Value),
+                    CanManage = userId != null && o.OwnerId == userId.Value
                 })
-                .ToListAsync();
+                .FirstOrDefaultAsync();
 
-            return Ok(channels);
+            if (oba == null) return NotFound(new { message = "Oba bulunamadı." });
+
+            return Ok(oba);
         }
 
         // POST: api/obalar
@@ -97,10 +90,11 @@ namespace Karalevha.API.Controllers
         [CheckBanned]
         public async Task<IActionResult> CreateOba(CreateObaDto dto)
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null) return Unauthorized();
+            var userId = User.GetRequiredUserId();
 
-            var userId = int.Parse(userIdClaim.Value);
+            if (dto.IsPrivate && string.IsNullOrWhiteSpace(dto.JoinPassword))
+                return BadRequest(new { message = "Gizli bir oba için katılım şifresi belirlemelisiniz." });
+
             string seed = dto.Name.Replace(" ", "").ToLower();
 
             using var transaction = await _context.Database.BeginTransactionAsync();
@@ -115,7 +109,7 @@ namespace Karalevha.API.Controllers
                     AvatarSeed = seed,
                     OwnerId = userId, 
                     IsPrivate = dto.IsPrivate,
-                    JoinPassword = string.IsNullOrEmpty(dto.JoinPassword) ? null : BCrypt.Net.BCrypt.EnhancedHashPassword(dto.JoinPassword),
+                    JoinPassword = dto.IsPrivate ? BCrypt.Net.BCrypt.EnhancedHashPassword(dto.JoinPassword) : null,
                     CreatedAt = DateTime.UtcNow
                 };
 
@@ -163,17 +157,11 @@ namespace Karalevha.API.Controllers
             }
         }
 
-        public class JoinObaDto {
-            public string? Password { get; set; }
-        }
-
         // POST: api/obalar/{id}/join
         [HttpPost("{id}/join")] [Authorize] [CheckBanned] [EnableRateLimiting("AuthLimiter")]
         public async Task<IActionResult> JoinOba(int id, [FromBody] JoinObaDto dto)
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null) return Unauthorized();
-            var userId = int.Parse(userIdClaim.Value);
+            var userId = User.GetRequiredUserId();
 
             var oba = await _context.Obalar.FindAsync(id);
             if (oba == null) return NotFound("Oba bulunamadı");
@@ -182,18 +170,18 @@ namespace Karalevha.API.Controllers
             if (existingMember != null) return Ok(new { success = true });
 
             if (oba.IsPrivate) {
-                if (string.IsNullOrEmpty(oba.JoinPassword)) return BadRequest("Yanlış şifre");
+                if (string.IsNullOrEmpty(oba.JoinPassword) || string.IsNullOrEmpty(dto.Password))
+                    return BadRequest(new { message = "Yanlış şifre." });
                 
                 bool isValid = false;
                 try {
                     isValid = BCrypt.Net.BCrypt.EnhancedVerify(dto.Password, oba.JoinPassword);
                 } catch {
-                    // Fallback for old plaintext passwords
-                    isValid = (oba.JoinPassword == dto.Password);
+                    isValid = false;
                 }
                 
                 if (!isValid) {
-                    return BadRequest("Yanlış şifre");
+                    return BadRequest(new { message = "Yanlış şifre." });
                 }
             }
 
@@ -205,29 +193,31 @@ namespace Karalevha.API.Controllers
                     Role = "member"
                 };
                 _context.ObaMembers.Add(member);
-                oba.MemberCount += 1;
                 await _context.SaveChangesAsync();
+
+                // Eşzamanlı katılımlarda sayaç kaybolmasın diye artış veritabanında atomik yapılır
+                await _context.Obalar
+                    .Where(o => o.Id == id)
+                    .ExecuteUpdateAsync(s => s.SetProperty(o => o.MemberCount, o => o.MemberCount + 1));
+
                 return Ok(new { success = true });
             }
-            catch (DbUpdateException)
+            catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505" })
             {
                 // Unique constraint hatası gelirse (aynı anda çift istek), zaten üye demektir.
-                return StatusCode(409, "Zaten bu obanın üyesisiniz.");
+                return Ok(new { success = true }); // eşzamanlı çift istek: kullanıcı zaten üye
             }
         }
 
         // DELETE: api/obalar/{id}
         [HttpDelete("{id}")]
         [Authorize]
+        [CheckBanned]
         public async Task<IActionResult> DeleteOba(int id)
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null) return Unauthorized();
-            var userId = int.Parse(userIdClaim.Value);
+            var userId = User.GetRequiredUserId();
 
-            var oba = await _context.Obalar
-                .Include(o => o.Owner)
-                .FirstOrDefaultAsync(o => o.Id == id);
+            var oba = await _context.Obalar.FirstOrDefaultAsync(o => o.Id == id);
                 
             if (oba == null) return NotFound("Oba bulunamadı");
 
@@ -247,8 +237,10 @@ namespace Karalevha.API.Controllers
                 _context.ObaMembers.RemoveRange(members);
                 
                 var channels = await _context.ObaChannels.Where(c => c.ObaId == id).ToListAsync();
-                foreach(var channel in channels) {
-                    var messages = await _context.ObaMessages.Where(m => m.ChannelId == channel.Id).ToListAsync();
+                var channelIds = channels.Select(c => c.Id).ToList();
+                if (channelIds.Count > 0)
+                {
+                    var messages = await _context.ObaMessages.Where(m => channelIds.Contains(m.ChannelId)).ToListAsync();
                     _context.ObaMessages.RemoveRange(messages);
                 }
                 _context.ObaChannels.RemoveRange(channels);

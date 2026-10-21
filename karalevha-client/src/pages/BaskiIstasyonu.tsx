@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api, API_URL } from '../services/api';
 import { Box, UploadCloud, Download, FileBox, CheckCircle2, Eye, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -6,7 +6,7 @@ import { PrintModel } from '../types';
 import StlPreview from '../components/StlPreview';
 
 export default function BaskiIstasyonu() {
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [models, setModels] = useState<PrintModel[]>([]);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -22,7 +22,7 @@ export default function BaskiIstasyonu() {
 
   const fetchModels = async () => {
     try {
-      const data = await api<any>('/api/printmodels');
+      const data = await api<PrintModel[]>('/api/printmodels');
       setModels(data);
     } catch (error) {
       console.error('Modeller yüklenemedi:', error);
@@ -53,26 +53,17 @@ export default function BaskiIstasyonu() {
     formData.append('file', file);
 
     try {
-      const res = await fetch(`${API_URL}/api/printmodels`, {
+      await api('/api/printmodels', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
         body: formData
       });
-
-      if (res.ok) {
-        fetchModels();
-        setTitle('');
-        setDescription('');
-        setFile(null);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      } else {
-        const error = await res.json();
-        alert(error.message || 'Yükleme başarısız.');
-      }
-    } catch (error) {
-      console.error('Yükleme hatası:', error);
+      await fetchModels();
+      setTitle('');
+      setDescription('');
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    } catch (error: any) {
+      alert(error?.message || 'Yükleme başarısız.');
     } finally {
       setLoading(false);
     }
@@ -206,14 +197,14 @@ export default function BaskiIstasyonu() {
 
                 <div className="relative z-10 shrink-0 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
                   <button
-                    onClick={() => setPreviewUrl(`${import.meta.env.VITE_API_URL || `${API_URL}`}${model.fileUrl}`)}
+                    onClick={() => setPreviewUrl(`${API_URL}${model.fileUrl}`)}
                     className="flex items-center justify-center bg-zinc-800 text-white hover:bg-zinc-700 border-2 border-zinc-600 px-4 py-3 text-sm font-black uppercase tracking-widest transition-all"
                   >
                     <Eye className="w-4 h-4 mr-2" strokeWidth={3} />
                     3B İNCELE
                   </button>
-                  <a 
-                    href={`${import.meta.env.VITE_API_URL || `${API_URL}`}${model.fileUrl}`} 
+                  <a
+                    href={`${API_URL}${model.fileUrl}`}
                     download
                     target="_blank"
                     rel="noreferrer"

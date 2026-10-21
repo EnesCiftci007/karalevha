@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams, Link } from 'react-router-dom';
 import { api } from '../services/api';
-import { Zap, CheckCircle, XCircle, Loader2 } from 'lucide-react';
+import { CheckCircle, XCircle, Loader2 } from 'lucide-react';
 
 export default function VerifyEmail() {
   const [searchParams] = useSearchParams();

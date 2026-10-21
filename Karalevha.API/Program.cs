@@ -37,7 +37,7 @@ builder.Services.AddCors(options =>
 builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();
-builder.Services.AddTransient<Karalevha.API.Services.IEmailService, Karalevha.API.Services.EmailService>();
+builder.Services.AddHttpClient<Karalevha.API.Services.IEmailService, Karalevha.API.Services.EmailService>();
 builder.Services.AddScoped<Karalevha.API.Services.INotificationService, Karalevha.API.Services.NotificationService>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
@@ -46,7 +46,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key is missing from configuration.");
 if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
 {
-    throw new InvalidOperationException("Jwt:Key en az 32 bayt olmalÄ±. (HS256 iÃ§in gerekli minimum uzunluk)");
+    throw new InvalidOperationException("Jwt:Key en az 32 bayt olmalıdır. (HS256 için gerekli minimum uzunluk)");
 }
 
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer missing");
@@ -106,7 +106,7 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
-// YAYINDA (PRODUCTION) VERÄ°TABANI MIGRATION'LARINI OTOMATÄ°K UYGULA
+// YAYINDA (PRODUCTION) VERİTABANI MIGRATION'LARINI OTOMATİK UYGULA
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
@@ -133,7 +133,7 @@ app.MapControllers();
 app.MapHub<Karalevha.API.Hubs.ChatHub>("/chathub");
 app.MapHub<Karalevha.API.Hubs.NotificationHub>("/notificationhub");
 app.MapHealthChecks("/health");
-app.Map("/error", () => Results.Problem("Beklenmeyen bir hata oluÅŸtu.")).AllowAnonymous();
+app.Map("/error", () => Results.Problem("Beklenmeyen bir hata oluştu.")).AllowAnonymous();
 
 app.Run();
 

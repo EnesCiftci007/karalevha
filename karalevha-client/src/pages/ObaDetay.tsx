@@ -10,13 +10,21 @@ interface Channel {
   name: string;
   type: string;
   category: string;
-  oba?: any;
+}
+
+interface ObaInfo {
+  id: number;
+  name: string;
+  isPrivate: boolean;
+  isMember: boolean;
+  canManage: boolean;
 }
 
 interface Message {
   id: number;
   content: string;
   createdAt: string;
+  channelId?: number;
   user: {
     id: number;
     username: string;
@@ -36,8 +44,13 @@ export default function ObaDetay() {
   const [joinError, setJoinError] = useState('');
   const [connection, setConnection] = useState<signalR.HubConnection | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  
+  const [oba, setOba] = useState<ObaInfo | null>(null);
+  const [sendError, setSendError] = useState('');
+  const [joining, setJoining] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Kanal değiştiğinde geç gelen yanıtların/SignalR mesajlarının yanlış kanala yazılmasını önler
+  const activeChannelIdRef = useRef<number | null>(null);
 
   const [isConnected, setIsConnected] = useState(false);
   // Setup SignalR connection and join channels
@@ -50,6 +63,7 @@ export default function ObaDetay() {
       .build();
 
     newConnection.on('ReceiveMessage', (message: Message) => {
+      if (message.channelId !== undefined && message.channelId !== activeChannelIdRef.current) return;
       setMessages(prev => {
         if (prev.some(m => m.id === message.id)) return prev;
         return [...prev, message];
@@ -106,15 +120,15 @@ export default function ObaDetay() {
 
 
   useEffect(() => {
-    fetchChannels();
+    loadOba();
   }, [id]);
 
   useEffect(() => {
+    activeChannelIdRef.current = activeChannel?.id ?? null;
+    setSendError('');
     if (activeChannel) {
-      fetchMessages();
-      // Simple polling for new messages every 3 seconds
-
-
+      setMessages([]);
+      fetchMessages(activeChannel.id);
     }
   }, [activeChannel]);
 
@@ -124,39 +138,48 @@ export default function ObaDetay() {
   }, [messages]);
 
 
-  const fetchChannels = async () => {
+  const loadOba = async () => {
+    setLoading(true);
+    setNeedsPassword(false);
+    setChannels([]);
+    setActiveChannel(null);
     try {
-      const res = await fetch(`${API_URL}/api/obachannels/${id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      
-      if (res.status === 403) {
+      const info = await api<ObaInfo>(`/api/obalar/${id}`);
+      setOba(info);
+      if (info.isPrivate && !info.isMember) {
         setNeedsPassword(true);
-        setLoading(false);
         return;
       }
-      
-      if (res.ok) {
-        const data = await res.json();
-        setChannels(data);
-        if (data.length > 0) {
-          setActiveChannel(data[0]);
-        }
-      }
+      await fetchChannels();
     } catch (error) {
-      console.error('Kanallar yüklenemedi:', error);
+      console.error('Oba yüklenemedi:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchMessages = async () => {
-    if (!activeChannel) return;
+  const fetchChannels = async () => {
     try {
-      const data = await api<Message[]>(`/api/obamessages/${activeChannel.id}`);
-      setMessages(data);
+      const data = await api<Channel[]>(`/api/obachannels/${id}`);
+      setChannels(data);
+      if (data.length > 0) {
+        setActiveChannel(data[0]);
+      }
+    } catch (error) {
+      console.error('Kanallar yüklenemedi:', error);
+    }
+  };
+
+  const fetchMessages = async (channelId: number) => {
+    try {
+      const data = await api<Message[]>(`/api/obamessages/${channelId}`);
+      // Bu arada başka bir kanala geçildiyse eski yanıtı yok say
+      if (activeChannelIdRef.current !== channelId) return;
+      setMessages(prev => {
+        // Yükleme sırasında SignalR ile gelmiş mesajları kaybetme
+        const ids = new Set(data.map(m => m.id));
+        return [...data, ...prev.filter(m => m.id > 0 && !ids.has(m.id))];
+      });
     } catch (error) {
       console.error('Mesajlar yüklenemedi:', error);
     }
@@ -166,8 +189,10 @@ export default function ObaDetay() {
     e.preventDefault();
     if (!newMessage.trim() || !activeChannel || !user) return;
 
+    const channelId = activeChannel.id;
     const currentText = newMessage;
     setNewMessage('');
+    setSendError('');
 
     // Ekrana aninda yansit
     const tempId = -Math.floor(Math.random() * 1000000);
@@ -175,6 +200,7 @@ export default function ObaDetay() {
       id: tempId,
       content: currentText,
       createdAt: new Date().toISOString(),
+      channelId,
       user: {
         id: user.id,
         username: user.username
@@ -184,58 +210,73 @@ export default function ObaDetay() {
     setMessages(prev => [...prev, optimisticMessage]);
 
     try {
-      const res = await fetch(`${API_URL}/api/obamessages/${activeChannel.id}`, {
+      const msg = await api<Message>(`/api/obamessages/${channelId}`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
         body: JSON.stringify({ content: currentText })
       });
-
-      if (res.ok) {
-        const msg = await res.json();
-        // Gercegiyle degistir (SignalR bizden hizli davranip eklediyse sahtesini sil)
-        setMessages(prev => {
-          if (prev.some(m => m.id === msg.id)) {
-            return prev.filter(m => m.id !== tempId);
-          }
-          return prev.map(m => m.id === tempId ? msg : m);
-        });
-      } else {
-        setMessages(prev => prev.filter(m => m.id !== tempId));
-      }
-    } catch (error) {
-      console.error('Hata:', error);
+      // Gercegiyle degistir (SignalR bizden hizli davranip eklediyse sahtesini sil)
+      setMessages(prev => {
+        if (prev.some(m => m.id === msg.id)) {
+          return prev.filter(m => m.id !== tempId);
+        }
+        return prev.map(m => m.id === tempId ? msg : m);
+      });
+    } catch (error: any) {
       setMessages(prev => prev.filter(m => m.id !== tempId));
+      setNewMessage(currentText);
+      setSendError(error?.message || 'Mesaj gönderilemedi.');
     }
   };
 
+  const joinOba = async (joinPassword?: string) => {
+    await api(`/api/obalar/${id}/join`, {
+      method: 'POST',
+      body: JSON.stringify({ password: joinPassword ?? null })
+    });
+    setOba(prev => prev ? { ...prev, isMember: true } : prev);
+  };
 
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password.trim()) return;
+    setJoinError('');
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/obalar/${id}/join`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ password })
-      });
-      if (res.ok) {
-        setNeedsPassword(false);
-        fetchChannels();
-      } else {
-        const txt = await res.text();
-        setJoinError(txt || "Şifre yanlış!");
-        setLoading(false);
-      }
-    } catch(err) {
-      setJoinError("Bir hata oluştu.");
+      await joinOba(password);
+      setNeedsPassword(false);
+      setPassword('');
+      await fetchChannels();
+    } catch (err: any) {
+      setJoinError(err?.message || 'Şifre yanlış!');
+    } finally {
       setLoading(false);
+    }
+  };
+
+  const handleJoinPublic = async () => {
+    setJoining(true);
+    setSendError('');
+    try {
+      await joinOba();
+    } catch (err: any) {
+      setSendError(err?.message || 'Obaya katılınamadı.');
+    } finally {
+      setJoining(false);
+    }
+  };
+
+  const handleCreateChannel = async (category: string, catChannels: Channel[]) => {
+    const type = catChannels.length > 0 && catChannels.every(c => c.type === 'voice') ? 'voice' : 'text';
+    const name = window.prompt(`"${category}" kategorisine eklenecek kanalın adı:`);
+    if (!name || !name.trim()) return;
+    try {
+      const channel = await api<Channel>(`/api/obachannels/${id}`, {
+        method: 'POST',
+        body: JSON.stringify({ name: name.trim(), type, category })
+      });
+      setChannels(prev => [...prev, channel]);
+    } catch (err: any) {
+      alert(err?.message || 'Kanal oluşturulamadı.');
     }
   };
 
@@ -303,7 +344,7 @@ export default function ObaDetay() {
           <Link to="/e-oba" className="text-zinc-400 hover:text-white transition-colors mr-3">
             <ChevronLeft className="w-6 h-6" />
           </Link>
-          <h2 className="text-white font-black uppercase tracking-wider truncate">OBA SUNUCUSU</h2>
+          <h2 className="text-white font-black uppercase tracking-wider truncate">{oba?.name || 'OBA SUNUCUSU'}</h2>
         </div>
 
         <div className="flex-1 overflow-y-auto p-3">
@@ -316,8 +357,15 @@ export default function ObaDetay() {
               <div key={categoryName}>
                 <div className="flex items-center justify-between text-xs font-bold text-zinc-500 uppercase tracking-widest mb-1 px-1">
                   <span>{categoryName}</span>
-                  {user?.id === activeChannel?.oba?.ownerId && ( // Simplified auth check
-                    <Plus className="w-3 h-3 hover:text-white cursor-pointer transition-colors" />
+                  {oba?.canManage && (
+                    <button
+                      type="button"
+                      onClick={() => handleCreateChannel(categoryName, catChannels)}
+                      title="Kanal oluştur"
+                      className="hover:text-white transition-colors"
+                    >
+                      <Plus className="w-3 h-3" />
+                    </button>
                   )}
                 </div>
                 <div className="space-y-0.5">
@@ -437,8 +485,21 @@ export default function ObaDetay() {
         </div>
 
         {/* Input Area */}
-        {user ? (
+        {user && oba && !oba.isMember ? (
+          <div className="p-4 bg-[#111216] border-t-2 border-[#1f2129] flex flex-col items-center gap-2">
+            {sendError && <p className="text-red-500 text-sm font-bold">{sendError}</p>}
+            <button
+              type="button"
+              onClick={handleJoinPublic}
+              disabled={joining}
+              className="px-6 py-3 bg-[#39ff14] text-black font-black uppercase tracking-widest border-2 border-black hover:bg-white transition-colors disabled:opacity-50"
+            >
+              {joining ? 'KATILINIYOR...' : 'MESAJ GÖNDERMEK İÇİN OBAYA KATIL'}
+            </button>
+          </div>
+        ) : user ? (
           <div className="p-4 bg-[#111216] border-t-2 border-[#1f2129]">
+            {sendError && <p className="text-red-500 text-sm font-bold mb-2">{sendError}</p>}
             <form onSubmit={handleSendMessage} className="relative flex items-center">
               <input
                 type="text"

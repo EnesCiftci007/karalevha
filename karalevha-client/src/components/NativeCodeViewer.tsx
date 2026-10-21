@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Folder, FileText, ChevronRight, ChevronDown, FileCode2, Loader2, AlertTriangle, FileJson, FileType2, FileImage } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -127,9 +127,18 @@ export default function NativeCodeViewer({ repoUrl }: NativeCodeViewerProps) {
     }
   };
 
-  const toggleFolder = (node: TreeNode) => {
-    node.isOpen = !node.isOpen;
-    setTree({ ...tree! }); // Force re-render
+  const toggleFolder = (targetNode: TreeNode) => {
+    const updateNode = (current: TreeNode): TreeNode => {
+      if (current.path === targetNode.path) {
+        return { ...current, isOpen: !current.isOpen };
+      }
+      const nextChildren: Record<string, TreeNode> = {};
+      for (const [key, child] of Object.entries(current.children)) {
+        nextChildren[key] = updateNode(child);
+      }
+      return { ...current, children: nextChildren };
+    };
+    setTree(prev => (prev ? updateNode(prev) : null));
   };
 
   const renderTree = (nodes: Record<string, TreeNode>, depth: number = 0) => {

@@ -4,7 +4,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
 using Karalevha.API.Models;
-using System.Security.Claims;
+using Karalevha.API.DTOs;
+using Karalevha.API.Extensions;
 
 namespace Karalevha.API.Controllers
 {
@@ -47,41 +48,63 @@ namespace Karalevha.API.Controllers
         [HttpGet("{username}")]
         public async Task<IActionResult> GetProfile(string username)
         {
-            var currentUserId = -1;
-            if (User.Identity?.IsAuthenticated == true)
-            {
-                var idClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-                if (idClaim != null) currentUserId = int.Parse(idClaim.Value);
-            }
+            var currentUserId = User.GetUserId() ?? -1;
 
             var user = await _context.Users
-                .Include(u => u.Followers)
-                .Include(u => u.Following)
+                .AsNoTracking()
                 .FirstOrDefaultAsync(u => u.NormalizedUsername == username.ToLowerInvariant());
 
-            if (user == null) return NotFound("KullanÄ±cÄ± bulunamadÄ±");
+            if (user == null) return NotFound("Kullanıcı bulunamadı.");
+
+            var followerCount = await _context.UserFollows.CountAsync(f => f.FollowingId == user.Id);
+            var followingCount = await _context.UserFollows.CountAsync(f => f.FollowerId == user.Id);
+            var isFollowing = currentUserId != -1 && await _context.UserFollows.AnyAsync(f => f.FollowerId == currentUserId && f.FollowingId == user.Id);
 
             var projects = await _context.Projects
                 .Where(p => p.UserId == user.Id)
                 .OrderByDescending(p => p.CreatedAt)
+                .Take(50)
+                .Select(p => new
+                {
+                    p.Id,
+                    p.Title,
+                    p.Description,
+                    p.RepoUrl,
+                    p.Stars,
+                    p.Forks,
+                    p.CreatedAt,
+                    Owner = user.Username
+                })
                 .ToListAsync();
 
             var printModels = await _context.PrintModels
                 .Where(p => p.UserId == user.Id)
                 .OrderByDescending(p => p.UploadedAt)
+                .Take(50)
+                .Select(m => new PrintModelDto
+                {
+                    Id = m.Id,
+                    Title = m.Title,
+                    Description = m.Description,
+                    FileName = m.FileName,
+                    FileUrl = $"/uploads/stl/{m.FileName}",
+                    UploadedAt = m.UploadedAt,
+                    Uploader = user.Username
+                })
                 .ToListAsync();
 
-            var isFollowing = user.Followers.Any(f => f.FollowerId == currentUserId);
-
-            return Ok(new {
+            return Ok(new
+            {
                 user.Id,
                 user.Username,
                 user.Bio,
                 user.Interests,
                 user.AvatarSeed,
                 user.CreatedAt,
-                FollowerCount = user.Followers.Count,
-                FollowingCount = user.Following.Count,
+                user.Role,
+                BannedUntil = (user.BannedUntil.HasValue && user.BannedUntil.Value > DateTime.UtcNow) ? user.BannedUntil : null,
+                FollowerCount = followerCount,
+                FollowingCount = followingCount,
                 IsFollowing = isFollowing,
                 Projects = projects,
                 PrintModels = printModels
@@ -94,16 +117,27 @@ namespace Karalevha.API.Controllers
         [CheckBanned]
         public async Task<IActionResult> Follow(string username)
         {
-            var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            var currentUserId = User.GetRequiredUserId();
             var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == username.ToLowerInvariant());
             
-            if (targetUser == null) return NotFound("KullanÄ±cÄ± bulunamadÄ±");
+            if (targetUser == null) return NotFound("Kullanıcı bulunamadı.");
             if (targetUser.Id == currentUserId) return BadRequest("Kendinizi takip edemezsiniz");
 
             var existingFollow = await _context.UserFollows
                 .FirstOrDefaultAsync(f => f.FollowerId == currentUserId && f.FollowingId == targetUser.Id);
 
-            if (existingFollow == null) { try { _context.UserFollows.Add(new UserFollow { FollowerId = currentUserId, FollowingId = targetUser.Id }); await _context.SaveChangesAsync(); } catch (Microsoft.EntityFrameworkCore.DbUpdateException) { return StatusCode(409, "Kullanıcı zaten takip ediliyor."); } }
+            if (existingFollow == null)
+            {
+                try
+                {
+                    _context.UserFollows.Add(new UserFollow { FollowerId = currentUserId, FollowingId = targetUser.Id });
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateException)
+                {
+                    return StatusCode(409, "Kullanıcı zaten takip ediliyor.");
+                }
+            }
 
             return Ok(new { message = "Takip edildi" });
         }
@@ -111,12 +145,13 @@ namespace Karalevha.API.Controllers
         // POST: api/users/{username}/unfollow
         [HttpPost("{username}/unfollow")]
         [Authorize]
+        [CheckBanned]
         public async Task<IActionResult> Unfollow(string username)
         {
-            var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            var currentUserId = User.GetRequiredUserId();
             var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == username.ToLowerInvariant());
             
-            if (targetUser == null) return NotFound("KullanÄ±cÄ± bulunamadÄ±");
+            if (targetUser == null) return NotFound("Kullanıcı bulunamadı.");
 
             var existingFollow = await _context.UserFollows
                 .FirstOrDefaultAsync(f => f.FollowerId == currentUserId && f.FollowingId == targetUser.Id);
@@ -127,12 +162,7 @@ namespace Karalevha.API.Controllers
                 await _context.SaveChangesAsync();
             }
 
-            return Ok(new { message = "Takipten Ã§Ä±kÄ±ldÄ±" });
-        }
-
-        public class UpdateProfileDto {
-            public string? Bio { get; set; }
-            public List<string>? Interests { get; set; }
+            return Ok(new { message = "Takipten çıkıldı" });
         }
 
         // PUT: api/users/me
@@ -141,15 +171,18 @@ namespace Karalevha.API.Controllers
         [CheckBanned]
         public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDto dto)
         {
-            var currentUserId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            var currentUserId = User.GetRequiredUserId();
             var user = await _context.Users.FindAsync(currentUserId);
             
             if (user == null) return NotFound();
 
-            user.Bio = dto.Bio;
+            if (dto.Interests != null && dto.Interests.Any(i => string.IsNullOrWhiteSpace(i) || i.Length > 30))
+                return BadRequest(new { message = "İlgi alanları boş olamaz ve en fazla 30 karakter olabilir." });
+
+            user.Bio = string.IsNullOrWhiteSpace(dto.Bio) ? null : dto.Bio.Trim();
             if (dto.Interests != null)
             {
-                user.Interests = dto.Interests;
+                user.Interests = dto.Interests.Select(i => i.Trim()).Distinct().ToList();
             }
 
             await _context.SaveChangesAsync();

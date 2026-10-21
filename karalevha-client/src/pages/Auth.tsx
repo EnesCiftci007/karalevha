@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Hexagon, ArrowRight, UserPlus, LogIn } from 'lucide-react';
+import { Hexagon, UserPlus, LogIn } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';

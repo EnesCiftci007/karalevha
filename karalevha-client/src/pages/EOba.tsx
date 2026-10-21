@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { api, API_URL } from '../services/api';
+import { api } from '../services/api';
 import { Plus, Zap, Hash, Users, Lock, Trash2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Oba } from '../types';
 
 export default function EOba() {
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [obalar, setObalar] = useState<Oba[]>([]);
   const [activeTab, setActiveTab] = useState<'discover' | 'joined'>('discover');
   const [showModal, setShowModal] = useState(false);
@@ -24,7 +24,7 @@ export default function EOba() {
 
   const fetchObalar = async () => {
     try {
-      const data = await api<any>('/api/obalar');
+      const data = await api<Oba[]>('/api/obalar');
       setObalar(data);
     } catch (error) {
       console.error('Obalar yüklenemedi:', error);
@@ -33,41 +33,15 @@ export default function EOba() {
     }
   };
 
-  
-
-  const handleJoinPublicOba = async (e: React.MouseEvent, id: number) => {
-    e.preventDefault(); // Prevent Link navigation
-    try {
-      const res = await fetch(`${API_URL}/api/obalar/${id}/join`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({})
-      });
-      if (res.ok) {
-        setObalar(obalar.map(o => o.id === id ? { ...o, isMember: true } as any : o));
-      }
-    } catch(err) {
-      console.error(err);
-    }
-  };
-
   const handleDeleteOba = async (e: React.MouseEvent, id: number) => {
     e.preventDefault(); // Prevent Link navigation
     if (!window.confirm("Bu obayı tamamen silmek istediğine emin misin? Tüm kanallar ve mesajlar kalıcı olarak yok olacak!")) return;
     
     try {
-      const res = await fetch(`${API_URL}/api/obalar/${id}`, {
-        method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
+      await api(`/api/obalar/${id}`, {
+        method: 'DELETE'
       });
-      if (res.ok) {
-        setObalar(obalar.filter(o => o.id !== id));
-      }
+      setObalar(prev => prev.filter(o => o.id !== id));
     } catch(err) {
       console.error(err);
     }
@@ -79,27 +53,23 @@ export default function EOba() {
 
     setLoading(true);
     try {
-      const res = await fetch(`${API_URL}/api/obalar`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ name, description, color, isPrivate, joinPassword })
-      });
-
-      if (res.ok) {
-        const newOba = await res.json();
-        setObalar([newOba, ...obalar]); 
-        setShowModal(false); 
-        setName('');
-        setDescription('');
-        setColor('#39ff14');
-        setIsPrivate(false);
-        setJoinPassword('');
+      if (isPrivate && !joinPassword.trim()) {
+        alert('Gizli bir oba için katılım şifresi belirlemelisin.');
+        return;
       }
-    } catch (error) {
-      console.error('Oba oluşturulamadı:', error);
+      const newOba = await api<Oba>('/api/obalar', {
+        method: 'POST',
+        body: JSON.stringify({ name, description, color, isPrivate, joinPassword: isPrivate ? joinPassword : null })
+      });
+      setObalar(prev => [{ ...newOba, isMember: true, memberCount: newOba.memberCount ?? 1 }, ...prev]);
+      setShowModal(false);
+      setName('');
+      setDescription('');
+      setColor('#39ff14');
+      setIsPrivate(false);
+      setJoinPassword('');
+    } catch (error: any) {
+      alert(error?.message || 'Oba oluşturulamadı.');
     } finally {
       setLoading(false);
     }
@@ -168,7 +138,7 @@ export default function EOba() {
             Hiç Oba Yok. İlk kuran sen ol!
           </div>
         ) : (
-          obalar.filter(oba => activeTab === 'discover' ? true : (oba as any).isMember || oba.owner === user?.username).map((oba) => (
+          obalar.filter(oba => activeTab === 'discover' ? true : oba.isMember || oba.owner === user?.username).map((oba) => (
             <Link to={`/e-oba/${oba.id}`} key={oba.id} className="bg-[#0b0c10] border-2 border-[#1f2129] flex flex-col group hover:border-[#39ff14]/50 transition-colors relative overflow-hidden">
               
               
@@ -212,7 +182,7 @@ export default function EOba() {
                 <div className="flex items-center justify-between mt-auto border-t-2 border-[#1f2129] pt-4">
                   <div className="flex items-center text-zinc-500 font-bold text-xs uppercase tracking-wider">
                     <Users className="w-4 h-4 mr-2" />
-                    0 ÜYE
+                    {oba.memberCount ?? 1} ÜYE
                   </div>
                   <span className="text-xs font-bold text-zinc-600 uppercase tracking-wider">
                     Kurucu: {oba.owner}

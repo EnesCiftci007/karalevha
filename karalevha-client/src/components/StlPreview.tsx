@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { STLLoader } from 'three/examples/jsm/loaders/STLLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
@@ -98,7 +98,7 @@ export default function StlPreview({ url, color = '#a855f7' }: StlPreviewProps) 
         controls.update();
         setLoading(false);
       },
-      (xhr: ProgressEvent) => {
+      (_xhr: ProgressEvent) => {
         // Yükleme progress
       },
       (err: unknown) => {

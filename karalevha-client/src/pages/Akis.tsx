@@ -1,9 +1,9 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../services/api';
 import { MessageSquare, Heart, Share2, Send, Flame, Hash, Loader2, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { Post } from '../types';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import PostComments from '../components/post/PostComments';
 
 const AVAILABLE_TAGS = ['Yazılım', 'Robotik', '3B Baskı', 'Elektronik', 'El İşi', 'Tasarım', 'Oyun Geliştirme', 'IoT', 'Duyuru'];
@@ -17,16 +17,16 @@ export default function Akis() {
   const [initialLoad, setInitialLoad] = useState(true);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
   const scrollState = useRef({ loadingMore: false, hasMore: true });
   const [activeFilter, setActiveFilter] = useState<string | null>(null);
   const likingPosts = useRef<Set<number>>(new Set());
   const [expandedPostId, setExpandedPostId] = useState<number | null>(null);
+  const [highlightedPostId, setHighlightedPostId] = useState<number | null>(null);
+  const location = useLocation();
 
   const fetchPosts = async (pageNum: number) => {
     try {
       if (pageNum > 1) {
-        setLoadingMore(true);
         scrollState.current.loadingMore = true;
       }
       const data = await api<any>(`/api/posts?page=${pageNum}&pageSize=10`);
@@ -49,7 +49,6 @@ export default function Akis() {
       console.error('Gönderiler yüklenemedi:', error);
     } finally {
       setInitialLoad(false);
-      setLoadingMore(false);
       scrollState.current.loadingMore = false;
     }
   };
@@ -69,6 +68,37 @@ export default function Akis() {
   useEffect(() => {
     fetchPosts(page);
   }, [page]);
+
+  // Bildirimden gelinen gönderiye (#post-123) git: listede yoksa tek başına yükleyip en üste ekle
+  useEffect(() => {
+    const match = location.hash.match(/^#post-(\d+)$/);
+    if (!match || initialLoad) return;
+    const postId = Number(match[1]);
+    let cancelled = false;
+
+    const focusPost = async () => {
+      if (!posts.some(p => p.id === postId)) {
+        try {
+          const post = await api<Post>(`/api/posts/${postId}`);
+          if (cancelled) return;
+          setPosts(prev => prev.some(p => p.id === postId) ? prev : [post, ...prev]);
+        } catch {
+          return; // gönderi silinmiş olabilir
+        }
+      }
+      if (cancelled) return;
+      setActiveFilter(null);
+      setExpandedPostId(postId);
+      setHighlightedPostId(postId);
+      requestAnimationFrame(() => {
+        document.getElementById(`post-${postId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    };
+
+    focusPost();
+    return () => { cancelled = true; };
+    // posts bilinçli olarak bağımlılık değil: sadece hash değişince/ilk yüklemede çalışmalı
+  }, [location.hash, initialLoad]);
 
   const toggleTag = (tag: string) => {
     if (selectedTags.includes(tag)) {
@@ -244,7 +274,7 @@ export default function Akis() {
               </div>
             ) : (
               filteredPosts.map((post) => (
-                <div id={"post-" + post.id} key={post.id} className="bg-[#0b0c10] border-2 border-[#1f2129] p-5 hover:border-[#ff5500]/50 transition-colors">
+                <div id={"post-" + post.id} key={post.id} className={`bg-[#0b0c10] border-2 p-5 hover:border-[#ff5500]/50 transition-colors ${highlightedPostId === post.id ? 'border-[#ff5500]' : 'border-[#1f2129]'}`}>
                   
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center space-x-3">

@@ -16,6 +16,26 @@ namespace Karalevha.API.DTOs
         
         public bool IsPrivate { get; set; } = false;
         
+        [MaxLength(72, ErrorMessage = "Oba şifresi en fazla 72 karakter olabilir.")]
         public string? JoinPassword { get; set; }
+    }
+
+    public class JoinObaDto
+    {
+        [MaxLength(72)]
+        public string? Password { get; set; }
+    }
+
+    public class CreateChannelDto
+    {
+        [Required]
+        [MaxLength(50)]
+        public string Name { get; set; } = string.Empty;
+
+        [RegularExpression("^(text|voice)$", ErrorMessage = "Kanal türü 'text' veya 'voice' olmalıdır.")]
+        public string Type { get; set; } = "text";
+
+        [MaxLength(50)]
+        public string? Category { get; set; }
     }
 }

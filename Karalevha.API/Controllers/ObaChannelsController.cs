@@ -3,8 +3,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
+using Karalevha.API.DTOs;
+using Karalevha.API.Extensions;
 using Karalevha.API.Models;
-using System.Security.Claims;
 
 namespace Karalevha.API.Controllers
 {
@@ -20,40 +21,31 @@ namespace Karalevha.API.Controllers
         }
 
         // GET: api/obachannels/{obaId}
+        // Salt okunur: herkese açık obaların kanalları görüntülenebilir, üyelik POST api/obalar/{id}/join ile alınır.
         [HttpGet("{obaId}")]
-        [Authorize]
         public async Task<IActionResult> GetChannels(int obaId)
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null) return Unauthorized();
-            var userId = int.Parse(userIdClaim.Value);
-            
             var oba = await _context.Obalar.FindAsync(obaId);
-            if (oba == null) return NotFound("Oba bulunamadı");
-            
-            var isMember = await _context.ObaMembers.AnyAsync(m => m.ObaId == obaId && m.UserId == userId);
-            
-            if (!isMember) {
-                if (oba.IsPrivate) {
-                    return StatusCode(403, "Bu gizli bir oba, katılmak için şifre girmelisiniz.");
-                } else {
-                    _context.ObaMembers.Add(new ObaMember { ObaId = obaId, UserId = userId, Role = "member" });
-                    oba.MemberCount += 1;
-                    await _context.SaveChangesAsync();
-                }
+            if (oba == null) return NotFound(new { message = "Oba bulunamadı." });
+
+            if (oba.IsPrivate)
+            {
+                var userId = User.GetUserId();
+                if (userId == null)
+                    return Unauthorized();
+
+                var isMember = await _context.ObaMembers.AnyAsync(m => m.ObaId == obaId && m.UserId == userId.Value);
+                if (!isMember)
+                    return StatusCode(StatusCodes.Status403Forbidden, new { message = "Bu gizli bir oba, katılmak için şifre girmelisiniz." });
             }
 
             var channels = await _context.ObaChannels
                 .Where(c => c.ObaId == obaId)
                 .OrderBy(c => c.CreatedAt)
+                .Select(c => new { c.Id, c.Name, c.Type, c.Category, c.ObaId, c.CreatedAt })
                 .ToListAsync();
 
             return Ok(channels);
-        }
-
-        public class CreateChannelDto {
-            public string Name { get; set; } = string.Empty;
-            public string Type { get; set; } = "text";
         }
 
         // POST: api/obachannels/{obaId}
@@ -62,19 +54,28 @@ namespace Karalevha.API.Controllers
         [CheckBanned]
         public async Task<IActionResult> CreateChannel(int obaId, [FromBody] CreateChannelDto dto)
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null) return Unauthorized();
+            var userId = User.GetRequiredUserId();
 
-            var userId = int.Parse(userIdClaim.Value);
             var oba = await _context.Obalar.FindAsync(obaId);
-            
-            if (oba == null) return NotFound("Oba bulunamadı");
-            if (oba.OwnerId != userId) return Forbid("Sadece kurucu kanal oluşturabilir.");
+            if (oba == null) return NotFound(new { message = "Oba bulunamadı." });
+            if (oba.OwnerId != userId)
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Sadece kurucu kanal oluşturabilir." });
+
+            var name = dto.Name.Trim();
+            if (dto.Type == "text")
+                name = name.Replace(" ", "-").ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(name))
+                return BadRequest(new { message = "Kanal adı boş olamaz." });
+
+            var category = string.IsNullOrWhiteSpace(dto.Category)
+                ? (dto.Type == "voice" ? "SES KANALLARI" : "METİN KANALLARI")
+                : dto.Category.Trim();
 
             var channel = new ObaChannel
             {
-                Name = dto.Name.Replace(" ", "-").ToLower(),
+                Name = name,
                 Type = dto.Type,
+                Category = category,
                 ObaId = obaId,
                 CreatedAt = DateTime.UtcNow
             };
@@ -82,7 +83,7 @@ namespace Karalevha.API.Controllers
             _context.ObaChannels.Add(channel);
             await _context.SaveChangesAsync();
 
-            return Ok(channel);
+            return Ok(new { channel.Id, channel.Name, channel.Type, channel.Category, channel.ObaId, channel.CreatedAt });
         }
     }
 }

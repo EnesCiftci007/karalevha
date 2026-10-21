@@ -61,29 +61,16 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
         })
       });
 
-      if (replyingTo) {
-        // Alt yanıt eklendi, sadece arayüzü güncelle
-        setComments(prev => prev.map(c => {
-          if (c.id === replyingTo.id) {
-            return { ...c, replies: [...(c.replies || []), response] };
-          }
-          return c;
-        }));
-      } else {
-        // Ana yorum eklendi
-        setComments(prev => [...prev, response]);
-      }
+      const nextComments = replyingTo
+        ? comments.map(c => c.id === replyingTo.id ? { ...c, replies: [...(c.replies || []), response] } : c)
+        : [...comments, response];
 
+      setComments(nextComments);
       setContent('');
       setReplyingTo(null);
-      
-      // Toplamı güncelle
-      setComments(currentComments => {
-        const total = currentComments.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0);
-        // Timeout kullanarak component life-cycle dışına çıkartıyoruz ki React State uyarı vermesin
-        setTimeout(() => onUpdateCount(total), 0);
-        return currentComments;
-      });
+
+      const total = nextComments.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0);
+      onUpdateCount(total);
 
     } catch (err) {
       console.error('Yorum eklenirken hata:', err);
@@ -100,25 +87,13 @@ export default function PostComments({ postId, onUpdateCount }: PostCommentsProp
     try {
       await api(`/api/comments/${commentId}`, { method: 'DELETE' });
       
-      setComments(prev => {
-        let newComments;
-        if (parentId) {
-          // Alt yanıt silindi
-          newComments = prev.map(c => {
-            if (c.id === parentId) {
-              return { ...c, replies: c.replies?.filter(r => r.id !== commentId) };
-            }
-            return c;
-          });
-        } else {
-          // Ana yorum silindi (tüm yanıtlarıyla gider)
-          newComments = prev.filter(c => c.id !== commentId);
-        }
-        
-        const total = newComments.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0);
-        setTimeout(() => onUpdateCount(total), 0);
-        return newComments;
-      });
+      const newComments = parentId
+        ? comments.map(c => c.id === parentId ? { ...c, replies: c.replies?.filter(r => r.id !== commentId) } : c)
+        : comments.filter(c => c.id !== commentId);
+
+      setComments(newComments);
+      const total = newComments.reduce((acc, c) => acc + 1 + (c.replies?.length || 0), 0);
+      onUpdateCount(total);
       
       if (replyingTo?.id === commentId) {
         setReplyingTo(null);

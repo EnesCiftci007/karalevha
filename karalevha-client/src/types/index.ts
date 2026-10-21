@@ -38,9 +38,11 @@ export interface Oba {
   description: string;
   color: string;
   avatarSeed: string;
-  createdAt: string;
+  createdAt?: string;
   owner: string;
   isPrivate?: boolean;
+  memberCount?: number;
+  isMember?: boolean;
 }
 
 export interface PrintModel {
@@ -48,6 +50,7 @@ export interface PrintModel {
   title: string;
   description: string;
   fileUrl: string;
+  fileName?: string;
   uploadedAt: string;
   uploader: string;
 }

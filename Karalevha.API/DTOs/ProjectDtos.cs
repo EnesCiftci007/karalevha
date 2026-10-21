@@ -13,7 +13,9 @@ namespace Karalevha.API.DTOs
         public string Description { get; set; } = string.Empty;
 
         [Required]
+        [MaxLength(500)]
         [Url]
+        [RegularExpression(@"^https?://.+", ErrorMessage = "Repo URL 'http://' veya 'https://' ile başlamalıdır.")]
         public string RepoUrl { get; set; } = string.Empty;
     }
 }

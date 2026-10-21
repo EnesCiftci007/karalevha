@@ -7,12 +7,14 @@ namespace Karalevha.API.Services
 {
     public class EmailService : IEmailService
     {
+        private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
         private readonly ILogger<EmailService> _logger;
         private readonly IWebHostEnvironment _env;
 
-        public EmailService(IConfiguration configuration, ILogger<EmailService> logger, IWebHostEnvironment env)
+        public EmailService(HttpClient httpClient, IConfiguration configuration, ILogger<EmailService> logger, IWebHostEnvironment env)
         {
+            _httpClient = httpClient;
             _configuration = configuration;
             _logger = logger;
             _env = env;
@@ -38,9 +40,6 @@ namespace Karalevha.API.Services
                 }
             }
 
-            using var client = new HttpClient();
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
-
             var payload = new
             {
                 from = $"Karalevha E-Oba <{fromEmail}>",
@@ -54,7 +53,13 @@ namespace Karalevha.API.Services
 
             try
             {
-                var response = await client.PostAsync("https://api.resend.com/emails", content);
+                var request = new HttpRequestMessage(HttpMethod.Post, "https://api.resend.com/emails")
+                {
+                    Content = content
+                };
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+                var response = await _httpClient.SendAsync(request);
                 if (!response.IsSuccessStatusCode)
                 {
                     var responseBody = await response.Content.ReadAsStringAsync();

@@ -1,9 +1,11 @@
+using Karalevha.API.Filters;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
 using Karalevha.API.Models;
-using System.Security.Claims;
+using Karalevha.API.DTOs;
+using Karalevha.API.Extensions;
 
 namespace Karalevha.API.Controllers
 {
@@ -18,18 +20,13 @@ namespace Karalevha.API.Controllers
             _context = context;
         }
 
-        public class SetRoleDto
-        {
-            public int UserId { get; set; }
-            public string Role { get; set; } = string.Empty;
-        }
-
         // POST: api/admin/set-role (Yalnızca Owner çağırabilir)
         [HttpPost("set-role")]
         [Authorize(Roles = "Owner")]
+        [CheckBanned]
         public async Task<IActionResult> SetRole([FromBody] SetRoleDto dto)
         {
-            var callerId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            var callerId = User.GetRequiredUserId();
             var caller = await _context.Users.FindAsync(callerId);
             if (caller == null || caller.Role != "Owner")
             {
@@ -69,18 +66,13 @@ namespace Karalevha.API.Controllers
             });
         }
 
-        public class BanUserDto
-        {
-            public int UserId { get; set; }
-            public int DurationMinutes { get; set; }
-        }
-
         // POST: api/admin/ban-user (Owner veya Admin çağırabilir)
         [HttpPost("ban-user")]
         [Authorize(Roles = "Owner,Admin")]
+        [CheckBanned]
         public async Task<IActionResult> BanUser([FromBody] BanUserDto dto)
         {
-            var callerId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            var callerId = User.GetRequiredUserId();
             var caller = await _context.Users.FindAsync(callerId);
             if (caller == null || (caller.Role != "Owner" && caller.Role != "Admin"))
             {
@@ -128,9 +120,10 @@ namespace Karalevha.API.Controllers
         // POST: api/admin/unban-user (Owner veya Admin çağırabilir)
         [HttpPost("unban-user/{userId}")]
         [Authorize(Roles = "Owner,Admin")]
+        [CheckBanned]
         public async Task<IActionResult> UnbanUser(int userId)
         {
-            var callerId = int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            var callerId = User.GetRequiredUserId();
             var caller = await _context.Users.FindAsync(callerId);
             if (caller == null || (caller.Role != "Owner" && caller.Role != "Admin"))
             {

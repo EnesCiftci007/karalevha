@@ -1,10 +1,9 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 using Karalevha.API.Data;
 using Karalevha.API.DTOs;
-using Karalevha.API.Models;
+using Karalevha.API.Extensions;
 
 namespace Karalevha.API.Controllers
 {
@@ -25,13 +24,12 @@ namespace Karalevha.API.Controllers
         {
             skip = Math.Max(0, skip);
             take = Math.Clamp(take, 1, 50);
-            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
-                return Unauthorized();
+            var currentUserId = User.GetUserId();
+            if (currentUserId == null) return Unauthorized();
+            var userId = currentUserId.Value;
 
             var notifications = await _context.Notifications
                 .Where(n => n.RecipientUserId == userId)
-                .Include(n => n.ActorUser)
                 .OrderByDescending(n => n.CreatedAt)
                 .Skip(skip)
                 .Take(take)
@@ -58,9 +56,9 @@ namespace Karalevha.API.Controllers
         [HttpGet("unread-count")]
         public async Task<ActionResult<int>> GetUnreadCount()
         {
-            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
-                return Unauthorized();
+            var currentUserId = User.GetUserId();
+            if (currentUserId == null) return Unauthorized();
+            var userId = currentUserId.Value;
 
             var count = await _context.Notifications
                 .Where(n => n.RecipientUserId == userId && !n.IsRead)
@@ -72,9 +70,9 @@ namespace Karalevha.API.Controllers
         [HttpPatch("{id}/read")]
         public async Task<IActionResult> MarkAsRead(int id)
         {
-            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
-                return Unauthorized();
+            var currentUserId = User.GetUserId();
+            if (currentUserId == null) return Unauthorized();
+            var userId = currentUserId.Value;
 
             var notification = await _context.Notifications.FindAsync(id);
             if (notification == null) return NotFound();
@@ -93,22 +91,13 @@ namespace Karalevha.API.Controllers
         [HttpPatch("read-all")]
         public async Task<IActionResult> MarkAllAsRead()
         {
-            var userIdStr = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userIdStr) || !int.TryParse(userIdStr, out var userId))
-                return Unauthorized();
+            var currentUserId = User.GetUserId();
+            if (currentUserId == null) return Unauthorized();
+            var userId = currentUserId.Value;
 
-            var unreadNotifications = await _context.Notifications
+            await _context.Notifications
                 .Where(n => n.RecipientUserId == userId && !n.IsRead)
-                .ToListAsync();
-
-            if (unreadNotifications.Any())
-            {
-                foreach (var notif in unreadNotifications)
-                {
-                    notif.IsRead = true;
-                }
-                await _context.SaveChangesAsync();
-            }
+                .ExecuteUpdateAsync(s => s.SetProperty(n => n.IsRead, true));
 
             return NoContent();
         }

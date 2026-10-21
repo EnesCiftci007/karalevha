@@ -3,6 +3,7 @@ using Karalevha.API.Models;
 using Microsoft.AspNetCore.SignalR;
 using Karalevha.API.Hubs;
 using Microsoft.Extensions.Logging;
+using Microsoft.EntityFrameworkCore;
 
 namespace Karalevha.API.Services
 {
@@ -28,8 +29,20 @@ namespace Karalevha.API.Services
         {
             if (recipientUserId == actorUserId) return;
 
-            try 
+            try
             {
+                // Beğen/geri al/tekrar beğen döngüsü bildirim spam'ine dönüşmesin:
+                // aynı kişinin aynı gönderi için önceden oluşmuş beğeni bildirimi varsa yenisini ekleme
+                if (type == "Like" && postId.HasValue)
+                {
+                    var alreadyNotified = await _context.Notifications.AnyAsync(n =>
+                        n.Type == "Like" &&
+                        n.RecipientUserId == recipientUserId &&
+                        n.ActorUserId == actorUserId &&
+                        n.PostId == postId);
+                    if (alreadyNotified) return;
+                }
+
                 var notification = new Notification
                 {
                     RecipientUserId = recipientUserId,

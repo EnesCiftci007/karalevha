@@ -1,5 +1,5 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Bell, Check, Loader2 } from 'lucide-react';
 import { api, API_URL } from '../../services/api';
 import { Notification } from '../../types';
@@ -42,8 +42,6 @@ export default function NotificationsDropdown() {
     }
     
     fetchUnreadCount();
-
-    const token = localStorage.getItem('token');
     
     // Eger zaten varsa ve bagliysa temizle (Token degisimi veya unmount durumu)
     if (connectionRef.current) {

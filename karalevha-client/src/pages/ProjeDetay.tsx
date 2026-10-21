@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { api } from '../services/api';
 import { ChevronLeft, Code2, AlertTriangle, ExternalLink, GitBranch } from 'lucide-react';
@@ -43,14 +43,7 @@ export default function ProjeDetay() {
     );
   }
 
-  // Parse GitHub URL to Github1s URL
-  let isGithub = false;
-  let viewerUrl = '';
-  
-  if (project.repoUrl && project.repoUrl.includes('github.com')) {
-    isGithub = true;
-    viewerUrl = project.repoUrl.replace('github.com', 'github1s.com');
-  }
+  const isGithub = Boolean(project.repoUrl && project.repoUrl.includes('github.com'));
 
   return (
     <div className="max-w-7xl mx-auto animate-in fade-in duration-300 pb-20">

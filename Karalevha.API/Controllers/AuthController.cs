@@ -33,6 +33,10 @@ namespace Karalevha.API.Controllers
 
         private static readonly string DummyHash = BCrypt.Net.BCrypt.EnhancedHashPassword("dummy-password");
 
+        // E-posta doğrulaması, mail altyapısı (Resend) hazır olana kadar kapalı tutulabilir.
+        // Açmak için: Auth__RequireEmailVerification=true
+        private bool RequireEmailVerification => _configuration.GetValue("Auth:RequireEmailVerification", false);
+
         [HttpPost("register")]
         [EnableRateLimiting("AuthLimiter")]
         public async Task<IActionResult> Register(RegisterDto dto)
@@ -42,6 +46,31 @@ namespace Karalevha.API.Controllers
 
             if (await _context.Users.AnyAsync(u => u.Email == emailNormal || u.NormalizedUsername == usernameNormal))
                 return BadRequest(new { message = "Bu kullanıcı adı veya e-posta zaten kullanılıyor." });
+
+            if (!RequireEmailVerification)
+            {
+                var confirmedUser = new User
+                {
+                    Username = dto.Username.Trim(),
+                    NormalizedUsername = usernameNormal,
+                    Email = emailNormal,
+                    PasswordHash = BCrypt.Net.BCrypt.EnhancedHashPassword(dto.Password),
+                    AvatarSeed = usernameNormal,
+                    EmailConfirmed = true
+                };
+
+                try
+                {
+                    _context.Users.Add(confirmedUser);
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505" })
+                {
+                    return BadRequest(new { message = "Bu kullanıcı adı veya e-posta zaten kullanılıyor." });
+                }
+
+                return Ok(new { message = "Kayıt başarılı! Giriş yapabilirsin." });
+            }
 
             var tokenBytes = new byte[32];
             using (var rng = RandomNumberGenerator.Create())
@@ -57,7 +86,7 @@ namespace Karalevha.API.Controllers
                 Email = emailNormal,
                 PasswordHash = BCrypt.Net.BCrypt.EnhancedHashPassword(dto.Password),
                 AvatarSeed = usernameNormal,
-                EmailConfirmed = true,
+                EmailConfirmed = false,
                 EmailVerificationToken = verificationToken,
                 EmailVerificationTokenExpiresAt = DateTime.UtcNow.AddHours(24)
             };
@@ -67,12 +96,7 @@ namespace Karalevha.API.Controllers
                 _context.Users.Add(user);
                 await _context.SaveChangesAsync();
                 
-                var corsOriginsArray = _configuration.GetSection("Cors:Origins").Get<string[]>(); var corsOrigins = corsOriginsArray?.FirstOrDefault() ?? _configuration["Cors:Origins"]?.Split(',').FirstOrDefault();
-                if (string.IsNullOrEmpty(corsOrigins) && !_env.IsDevelopment())
-                {
-                    throw new InvalidOperationException("Cors:Origins configuration is missing in production. Verification URL cannot be generated.");
-                }
-                var frontendUrl = corsOrigins ?? "http://localhost:5173";
+                var frontendUrl = GetFrontendBaseUrl();
                 var verificationLink = $"{frontendUrl}/verify-email?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(verificationToken)}";
                 
                 await _emailService.SendVerificationEmailAsync(user.Email, verificationLink);
@@ -113,8 +137,8 @@ namespace Karalevha.API.Controllers
                 });
             }
 
-            // if (!user.EmailConfirmed)
-            //     return StatusCode(403, new { requiresVerification = true, email = user.Email, message = "Devam etmek i�in email adresini do�rulaman gerekiyor." });
+            if (RequireEmailVerification && !user.EmailConfirmed)
+                return StatusCode(StatusCodes.Status403Forbidden, new { requiresVerification = true, email = user.Email, message = "Devam etmek için email adresini doğrulaman gerekiyor." });
 
             var token = GenerateJwtToken(user);
 
@@ -176,12 +200,7 @@ namespace Karalevha.API.Controllers
 
             try
             {
-                var corsOriginsArray = _configuration.GetSection("Cors:Origins").Get<string[]>(); var corsOrigins = corsOriginsArray?.FirstOrDefault() ?? _configuration["Cors:Origins"]?.Split(',').FirstOrDefault();
-                if (string.IsNullOrEmpty(corsOrigins) && !_env.IsDevelopment())
-                {
-                    throw new InvalidOperationException("Cors:Origins configuration is missing in production. Verification URL cannot be generated.");
-                }
-                var frontendUrl = corsOrigins ?? "http://localhost:5173";
+                var frontendUrl = GetFrontendBaseUrl();
                 var verificationLink = $"{frontendUrl}/verify-email?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(verificationToken)}";
                 
                 await _emailService.SendVerificationEmailAsync(user.Email, verificationLink);
@@ -192,6 +211,23 @@ namespace Karalevha.API.Controllers
             }
 
             return Ok(new { message = "Eğer kayıtlı bir email ise doğrulama bağlantısı gönderildi." });
+        }
+
+        private string GetFrontendBaseUrl()
+        {
+            var corsOriginsArray = _configuration.GetSection("Cors:Origins").Get<string[]>();
+            var corsOrigin = corsOriginsArray?.FirstOrDefault() ?? _configuration["Cors:Origins"]?.Split(',').FirstOrDefault();
+
+            if (string.IsNullOrEmpty(corsOrigin))
+            {
+                if (_env.IsDevelopment())
+                {
+                    return "http://localhost:5173";
+                }
+                throw new InvalidOperationException("Cors:Origins configuration is missing in production. Verification URL cannot be generated.");
+            }
+
+            return corsOrigin.TrimEnd('/');
         }
 
         private string GenerateJwtToken(User user)
