@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import { User } from '../types';
+import { api } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
@@ -52,6 +53,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (savedUser && savedToken && !isTokenExpired(savedToken)) {
         setUser(JSON.parse(savedUser) as User);
         setToken(savedToken);
+
+        // Kayıtlı kullanıcı bilgisi eskimiş olabilir (rol değişikliği, ban vb.); sunucudan tazele.
+        // 401 dönerse api() zaten 'auth:unauthorized' olayıyla çıkış yaptırır.
+        api<User>('/api/auth/me')
+          .then(fresh => {
+            if (!fresh?.id || localStorage.getItem('token') !== savedToken) return;
+            setUser(fresh);
+            localStorage.setItem('user', JSON.stringify(fresh));
+          })
+          .catch(() => { /* ağ hatası: kayıtlı bilgiyle devam et */ });
       } else {
         logout();
       }

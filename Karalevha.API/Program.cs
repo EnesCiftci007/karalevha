@@ -112,16 +112,23 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
 
-    var ownerUsername = (app.Configuration["OwnerUsername"] ?? app.Configuration["Admin:OwnerUsername"] ?? "SERO")
+    // Platform sahibi yalnızca yapılandırmayla belirlenir (örn. Render'da OwnerUsername=SERO).
+    // Kodda varsayılan bir kullanıcı adı OLMAMALI: aksi halde o adı ilk kaydeden kişi Owner olurdu.
+    var ownerUsername = (app.Configuration["OwnerUsername"] ?? app.Configuration["Admin:OwnerUsername"])?
         .Trim()
         .ToLowerInvariant();
     if (!string.IsNullOrEmpty(ownerUsername))
     {
         var ownerUser = db.Users.FirstOrDefault(u => u.NormalizedUsername == ownerUsername);
-        if (ownerUser != null && ownerUser.Role != "Owner")
+        if (ownerUser == null)
+        {
+            app.Logger.LogWarning("OwnerUsername '{Owner}' olarak ayarlı ama bu kullanıcı bulunamadı.", ownerUsername);
+        }
+        else if (ownerUser.Role != "Owner")
         {
             ownerUser.Role = "Owner";
             db.SaveChanges();
+            app.Logger.LogInformation("{Owner} kullanıcısına Owner rolü atandı.", ownerUser.Username);
         }
     }
 }

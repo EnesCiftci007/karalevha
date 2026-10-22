@@ -22,7 +22,7 @@ namespace Karalevha.API.Controllers
 
         // POST: api/admin/set-role (Yalnızca Owner çağırabilir)
         [HttpPost("set-role")]
-        [Authorize(Roles = "Owner")]
+        [Authorize] // Rol, JWT yerine veritabanından kontrol edilir (rol değişiklikleri anında geçerli olsun)
         [CheckBanned]
         public async Task<IActionResult> SetRole([FromBody] SetRoleDto dto)
         {
@@ -68,7 +68,7 @@ namespace Karalevha.API.Controllers
 
         // POST: api/admin/ban-user (Owner veya Admin çağırabilir)
         [HttpPost("ban-user")]
-        [Authorize(Roles = "Owner,Admin")]
+        [Authorize]
         [CheckBanned]
         public async Task<IActionResult> BanUser([FromBody] BanUserDto dto)
         {
@@ -123,13 +123,13 @@ namespace Karalevha.API.Controllers
 
         // POST: api/admin/unban-user/{userId} (Owner veya Admin çağırabilir)
         [HttpPost("unban-user/{userId}")]
-        [Authorize(Roles = "Owner,Admin")]
+        [Authorize]
         [CheckBanned]
         public Task<IActionResult> UnbanUser(int userId) => UnbanUserInternal(userId);
 
         // POST: api/admin/unban-user (Body ile çağrım desteği)
         [HttpPost("unban-user")]
-        [Authorize(Roles = "Owner,Admin")]
+        [Authorize]
         [CheckBanned]
         public Task<IActionResult> UnbanUserByBody([FromBody] UnbanUserDto dto) => UnbanUserInternal(dto.UserId);
 
