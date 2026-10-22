@@ -209,6 +209,33 @@ namespace Karalevha.API.Controllers
             }
         }
 
+        // POST: api/obalar/{id}/leave
+        [HttpPost("{id}/leave")]
+        [Authorize]
+        public async Task<IActionResult> LeaveOba(int id)
+        {
+            var userId = User.GetRequiredUserId();
+
+            var oba = await _context.Obalar.FindAsync(id);
+            if (oba == null) return NotFound(new { message = "Oba bulunamadı." });
+
+            if (oba.OwnerId == userId)
+                return BadRequest(new { message = "Kurucu obadan ayrılamaz. Obayı kapatmak için silmelisin." });
+
+            var removed = await _context.ObaMembers
+                .Where(m => m.ObaId == id && m.UserId == userId)
+                .ExecuteDeleteAsync();
+
+            if (removed > 0)
+            {
+                await _context.Obalar
+                    .Where(o => o.Id == id && o.MemberCount > 0)
+                    .ExecuteUpdateAsync(s => s.SetProperty(o => o.MemberCount, o => o.MemberCount - 1));
+            }
+
+            return Ok(new { success = true });
+        }
+
         // DELETE: api/obalar/{id}
         [HttpDelete("{id}")]
         [Authorize]

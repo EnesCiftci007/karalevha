@@ -14,3 +14,5 @@ services:
         sync: false
       - key: Cors__Origins__0
         sync: false
+      - key: OwnerUsername
+        sync: false

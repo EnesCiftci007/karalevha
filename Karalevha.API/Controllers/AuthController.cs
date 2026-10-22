@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
 using Karalevha.API.Models;
 using Karalevha.API.DTOs;
 using Karalevha.API.Services;
+using Karalevha.API.Extensions;
 using BCrypt.Net;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
@@ -140,21 +142,38 @@ namespace Karalevha.API.Controllers
             if (RequireEmailVerification && !user.EmailConfirmed)
                 return StatusCode(StatusCodes.Status403Forbidden, new { requiresVerification = true, email = user.Email, message = "Devam etmek için email adresini doğrulaman gerekiyor." });
 
-            var ownerUsername = (_configuration["OwnerUsername"] ?? _configuration["Admin:OwnerUsername"] ?? "SERO")
-                .Trim()
-                .ToLowerInvariant();
-            if (!string.IsNullOrEmpty(ownerUsername) && user.NormalizedUsername == ownerUsername && user.Role != "Owner")
-            {
-                user.Role = "Owner";
-                await _context.SaveChangesAsync();
-            }
-
             var token = GenerateJwtToken(user);
 
             return Ok(new 
             { 
                 token, 
                 user = new { user.Id, user.Username, user.Email, user.AvatarSeed, user.Role }
+            });
+        }
+
+        // GET: api/auth/me
+        // İstemci, localStorage'daki kullanıcı bilgisini (rol, ban durumu) güncel tutmak için açılışta çağırır.
+        [HttpGet("me")]
+        [Authorize]
+        public async Task<IActionResult> Me()
+        {
+            var userId = User.GetRequiredUserId();
+            var user = await _context.Users
+                .AsNoTracking()
+                .Where(u => u.Id == userId)
+                .Select(u => new { u.Id, u.Username, u.Email, u.AvatarSeed, u.Role, u.BannedUntil })
+                .FirstOrDefaultAsync();
+
+            if (user == null) return Unauthorized();
+
+            return Ok(new
+            {
+                user.Id,
+                user.Username,
+                user.Email,
+                user.AvatarSeed,
+                user.Role,
+                BannedUntil = user.BannedUntil.HasValue && user.BannedUntil.Value > DateTime.UtcNow ? user.BannedUntil : null
             });
         }
 

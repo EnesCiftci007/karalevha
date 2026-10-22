@@ -4,6 +4,7 @@ export interface User {
   email: string;
   avatarSeed: string;
   role?: 'Owner' | 'Admin' | 'User';
+  bannedUntil?: string | null;
 }
 
 export interface Post {

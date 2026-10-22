@@ -1,5 +1,7 @@
+import { Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
 import Navbar from './Navbar';
+import { PageLoader } from './PageLoader';
 
 export default function MainLayout() {
   return (
@@ -10,7 +12,9 @@ export default function MainLayout() {
       {/* Değişen Sayfa İçeriği */}
       <main className="flex-1 overflow-y-auto p-6 md:p-8 relative">
         <div className="max-w-7xl mx-auto">
-          <Outlet />
+          <Suspense fallback={<PageLoader />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
     </div>

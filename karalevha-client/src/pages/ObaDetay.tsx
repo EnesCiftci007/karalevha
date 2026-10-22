@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import * as signalR from '@microsoft/signalr';
 import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Hash, Volume2, Send, Users, ChevronLeft, Zap, MessageSquare, Lock, Menu, X, Plus } from 'lucide-react';
+import { Hash, Volume2, Send, Users, ChevronLeft, Zap, MessageSquare, Lock, Menu, X, Plus, LogOut } from 'lucide-react';
 
 interface Channel {
   id: number;
@@ -18,6 +18,7 @@ interface ObaInfo {
   isPrivate: boolean;
   isMember: boolean;
   canManage: boolean;
+  memberCount?: number;
 }
 
 interface Message {
@@ -34,6 +35,7 @@ interface Message {
 export default function ObaDetay() {
   const { id } = useParams();
   const { user, token } = useAuth();
+  const navigate = useNavigate();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -229,7 +231,7 @@ export default function ObaDetay() {
       method: 'POST',
       body: JSON.stringify({ password: joinPassword ?? null })
     });
-    setOba(prev => prev ? { ...prev, isMember: true } : prev);
+    setOba(prev => prev ? { ...prev, isMember: true, memberCount: (prev.memberCount ?? 0) + 1 } : prev);
   };
 
   const handleJoin = async (e: React.FormEvent) => {
@@ -246,6 +248,16 @@ export default function ObaDetay() {
       setJoinError(err?.message || 'Şifre yanlış!');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleLeave = async () => {
+    if (!window.confirm('Bu obadan ayrılmak istediğine emin misin?')) return;
+    try {
+      await api(`/api/obalar/${id}/leave`, { method: 'POST' });
+      navigate('/e-oba');
+    } catch (err: any) {
+      alert(err?.message || 'Obadan ayrılınamadı.');
     }
   };
 
@@ -420,8 +432,22 @@ export default function ObaDetay() {
             <Hash className="w-5 h-5 text-zinc-400 mr-2" />
             <h3 className="font-black text-lg tracking-wider">{activeChannel?.name || 'Kanal'}</h3>
           </div>
-          <div className="flex items-center text-zinc-400">
-            <Users className="w-5 h-5 hover:text-white cursor-pointer transition-colors" />
+          <div className="flex items-center gap-4 text-zinc-400">
+            <span className="flex items-center text-xs font-bold" title="Üye sayısı">
+              <Users className="w-5 h-5 mr-1" />
+              {oba?.memberCount ?? ''}
+            </span>
+            {oba?.isMember && !oba.canManage && (
+              <button
+                type="button"
+                onClick={handleLeave}
+                title="Obadan ayrıl"
+                className="flex items-center text-xs font-bold uppercase tracking-widest hover:text-red-500 transition-colors"
+              >
+                <LogOut className="w-5 h-5 sm:mr-1" />
+                <span className="hidden sm:inline">Ayrıl</span>
+              </button>
+            )}
           </div>
         </div>
 

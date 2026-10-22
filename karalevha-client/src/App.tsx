@@ -1,18 +1,22 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import MainLayout from './components/layout/MainLayout';
 import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import Home from './pages/Home';
-import EOba from './pages/EOba';
-import ObaDetay from './pages/ObaDetay';
-import Akis from './pages/Akis';
-import BaskiIstasyonu from './pages/BaskiIstasyonu';
 import Auth from './pages/Auth';
-import Projeler from './pages/Projeler';
-import ProjeDetay from './pages/ProjeDetay';
-import Profil from './pages/Profil';
-import VerifyEmail from './pages/VerifyEmail';
 import { NotFound } from './pages/NotFound';
+import { PageLoader } from './components/layout/PageLoader';
+
+// Ağır sayfalar (Three.js, SignalR, kod görüntüleyici) yalnızca açıldıklarında indirilir.
+const EOba = lazy(() => import('./pages/EOba'));
+const ObaDetay = lazy(() => import('./pages/ObaDetay'));
+const Akis = lazy(() => import('./pages/Akis'));
+const BaskiIstasyonu = lazy(() => import('./pages/BaskiIstasyonu'));
+const Projeler = lazy(() => import('./pages/Projeler'));
+const ProjeDetay = lazy(() => import('./pages/ProjeDetay'));
+const Profil = lazy(() => import('./pages/Profil'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 
 function App() {
   return (
@@ -21,7 +25,7 @@ function App() {
         <Routes>
           {/* Herkese Açık Yollar */}
           <Route path="/auth" element={<Auth />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/verify-email" element={<Suspense fallback={<PageLoader />}><VerifyEmail /></Suspense>} />
 
           {/* Korumalı Yollar */}
           <Route element={<ProtectedRoute />}>
