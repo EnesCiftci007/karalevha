@@ -111,6 +111,19 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
+
+    var ownerUsername = (app.Configuration["OwnerUsername"] ?? app.Configuration["Admin:OwnerUsername"] ?? "SERO")
+        .Trim()
+        .ToLowerInvariant();
+    if (!string.IsNullOrEmpty(ownerUsername))
+    {
+        var ownerUser = db.Users.FirstOrDefault(u => u.NormalizedUsername == ownerUsername);
+        if (ownerUser != null && ownerUser.Role != "Owner")
+        {
+            ownerUser.Role = "Owner";
+            db.SaveChanges();
+        }
+    }
 }
 
 app.UseForwardedHeaders();

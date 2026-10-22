@@ -140,6 +140,15 @@ namespace Karalevha.API.Controllers
             if (RequireEmailVerification && !user.EmailConfirmed)
                 return StatusCode(StatusCodes.Status403Forbidden, new { requiresVerification = true, email = user.Email, message = "Devam etmek için email adresini doğrulaman gerekiyor." });
 
+            var ownerUsername = (_configuration["OwnerUsername"] ?? _configuration["Admin:OwnerUsername"] ?? "SERO")
+                .Trim()
+                .ToLowerInvariant();
+            if (!string.IsNullOrEmpty(ownerUsername) && user.NormalizedUsername == ownerUsername && user.Role != "Owner")
+            {
+                user.Role = "Owner";
+                await _context.SaveChangesAsync();
+            }
+
             var token = GenerateJwtToken(user);
 
             return Ok(new 
