@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Threading.RateLimiting;
 using Karalevha.API.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -114,9 +114,12 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseForwardedHeaders();
-app.UseExceptionHandler("/error");
-app.UseHttpsRedirection();
 app.UseCors("AllowReact");
+app.UseExceptionHandler("/error");
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 
 var provider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
 provider.Mappings[".stl"] = "application/octet-stream";

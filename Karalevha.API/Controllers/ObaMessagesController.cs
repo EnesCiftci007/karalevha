@@ -94,14 +94,14 @@ namespace Karalevha.API.Controllers
             if (!isMember)
                 return StatusCode(StatusCodes.Status403Forbidden, new { message = "Bu kanala mesaj göndermek için Oba'ya katılmalısınız." });
 
-            // Yavaş mod (3 saniye)
+            // Yavaş mod (1 saniye - spam bot koruması)
             var lastMessageAt = await _context.ObaMessages
                 .Where(m => m.UserId == userId && m.ChannelId == channelId)
                 .OrderByDescending(m => m.CreatedAt)
                 .Select(m => (DateTime?)m.CreatedAt)
                 .FirstOrDefaultAsync();
 
-            if (lastMessageAt != null && (DateTime.UtcNow - lastMessageAt.Value).TotalSeconds < 3)
+            if (lastMessageAt != null && (DateTime.UtcNow - lastMessageAt.Value).TotalSeconds < 1)
             {
                 return BadRequest(new { message = "Yavaş Mod Aktif: Lütfen ard arda mesaj göndermeden önce bekleyin." });
             }

@@ -24,12 +24,12 @@ namespace Karalevha.API.Controllers
         [HttpGet("search")]
         public async Task<IActionResult> Search([FromQuery] string q)
         {
-            if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
+            if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2)
             {
                 return Ok(new List<object>());
             }
 
-            var normalizedQuery = q.ToLowerInvariant();
+            var normalizedQuery = q.Trim().ToLowerInvariant();
 
             var users = await _context.Users
                 .Where(u => u.NormalizedUsername.Contains(normalizedQuery) || u.Username.ToLower().Contains(normalizedQuery))
@@ -49,12 +49,13 @@ namespace Karalevha.API.Controllers
         public async Task<IActionResult> GetProfile(string username)
         {
             var currentUserId = User.GetUserId() ?? -1;
+            var normalizedUsername = username.Trim().ToLowerInvariant();
 
             var user = await _context.Users
                 .AsNoTracking()
-                .FirstOrDefaultAsync(u => u.NormalizedUsername == username.ToLowerInvariant());
+                .FirstOrDefaultAsync(u => u.NormalizedUsername == normalizedUsername);
 
-            if (user == null) return NotFound("Kullanıcı bulunamadı.");
+            if (user == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
 
             var followerCount = await _context.UserFollows.CountAsync(f => f.FollowingId == user.Id);
             var followingCount = await _context.UserFollows.CountAsync(f => f.FollowerId == user.Id);
@@ -118,10 +119,11 @@ namespace Karalevha.API.Controllers
         public async Task<IActionResult> Follow(string username)
         {
             var currentUserId = User.GetRequiredUserId();
-            var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == username.ToLowerInvariant());
+            var normalizedUsername = username.Trim().ToLowerInvariant();
+            var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == normalizedUsername);
             
-            if (targetUser == null) return NotFound("Kullanıcı bulunamadı.");
-            if (targetUser.Id == currentUserId) return BadRequest("Kendinizi takip edemezsiniz");
+            if (targetUser == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
+            if (targetUser.Id == currentUserId) return BadRequest(new { message = "Kendinizi takip edemezsiniz." });
 
             var existingFollow = await _context.UserFollows
                 .FirstOrDefaultAsync(f => f.FollowerId == currentUserId && f.FollowingId == targetUser.Id);
@@ -135,7 +137,7 @@ namespace Karalevha.API.Controllers
                 }
                 catch (DbUpdateException)
                 {
-                    return StatusCode(409, "Kullanıcı zaten takip ediliyor.");
+                    return StatusCode(409, new { message = "Kullanıcı zaten takip ediliyor." });
                 }
             }
 
@@ -149,9 +151,10 @@ namespace Karalevha.API.Controllers
         public async Task<IActionResult> Unfollow(string username)
         {
             var currentUserId = User.GetRequiredUserId();
-            var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == username.ToLowerInvariant());
+            var normalizedUsername = username.Trim().ToLowerInvariant();
+            var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == normalizedUsername);
             
-            if (targetUser == null) return NotFound("Kullanıcı bulunamadı.");
+            if (targetUser == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
 
             var existingFollow = await _context.UserFollows
                 .FirstOrDefaultAsync(f => f.FollowerId == currentUserId && f.FollowingId == targetUser.Id);

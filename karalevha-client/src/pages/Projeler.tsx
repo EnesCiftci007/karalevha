@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { api } from '../services/api';
-import { Terminal, FolderGit2, Star, GitFork, ExternalLink, Plus, Code2 } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Terminal, FolderGit2, Star, GitFork, ExternalLink, Plus, Code2, Trash2 } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Project } from '../types';
 
 export default function Projeler() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(false);
@@ -63,6 +64,17 @@ export default function Projeler() {
     }
   };
 
+  const handleDeleteProject = async (e: React.MouseEvent, id: number) => {
+    e.stopPropagation();
+    if (!window.confirm('Bu projeyi silmek istediğinize emin misiniz?')) return;
+    try {
+      await api(`/api/projects/${id}`, { method: 'DELETE' });
+      setProjects(prev => prev.filter(p => p.id !== id));
+    } catch (err: any) {
+      alert(err?.message || 'Proje silinemedi.');
+    }
+  };
+
   return (
     <div className="max-w-7xl mx-auto animate-in fade-in duration-300 pb-20">
       
@@ -103,7 +115,11 @@ export default function Projeler() {
           </div>
         ) : (
           projects.map((project) => (
-            <Link to={`/projeler/${project.id}`} key={project.id} className="bg-[#0b0c10] block border-2 border-[#1f2129] p-6 hover:border-[#00e5ff]/50 transition-colors flex flex-col group relative overflow-hidden">
+            <div
+              key={project.id}
+              onClick={() => navigate(`/projeler/${project.id}`)}
+              className="bg-[#0b0c10] cursor-pointer border-2 border-[#1f2129] p-6 hover:border-[#00e5ff]/50 transition-colors flex flex-col group relative overflow-hidden"
+            >
               <div className="absolute right-0 top-0 w-32 h-32 bg-[url('/baskikorsanlari.png')] bg-cover bg-center opacity-10 group-hover:opacity-20 transition-opacity filter grayscale pointer-events-none transform translate-x-10 -translate-y-10"></div>
               
               <div className="flex justify-between items-start mb-4 relative z-10">
@@ -115,9 +131,26 @@ export default function Projeler() {
                     GELİŞTİRİCİ: {project.owner}
                   </span>
                 </div>
-                <a href={project.repoUrl} target="_blank" rel="noreferrer" className="text-zinc-400 hover:text-white transition-colors">
-                  <FolderGit2 className="w-6 h-6" />
-                </a>
+                <div className="flex items-center space-x-3">
+                  {user && (user.username === project.owner || user.role === 'Owner' || user.role === 'Admin') && (
+                    <button
+                      onClick={(e) => handleDeleteProject(e, project.id)}
+                      title="Projeyi Sil"
+                      className="text-zinc-500 hover:text-red-500 transition-colors"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  )}
+                  <a
+                    href={project.repoUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="text-zinc-400 hover:text-white transition-colors"
+                  >
+                    <FolderGit2 className="w-6 h-6" />
+                  </a>
+                </div>
               </div>
 
               <p className="text-zinc-400 text-sm font-medium leading-relaxed mb-8 flex-grow relative z-10">
@@ -133,17 +166,18 @@ export default function Projeler() {
                     <GitFork className="w-4 h-4 mr-1" /> {project.forks}
                   </span>
                 </div>
-                <a 
-                  href={project.repoUrl} 
-                  target="_blank" 
+                <a
+                  href={project.repoUrl}
+                  target="_blank"
                   rel="noreferrer"
+                  onClick={(e) => e.stopPropagation()}
                   className="flex items-center text-xs font-black uppercase tracking-widest text-[#00e5ff] hover:text-white transition-colors"
                 >
                   REPO'YA GİT <ExternalLink className="w-3 h-3 ml-1" />
-                  </a>
-                </div>
-              </Link>
-            ))
+                </a>
+              </div>
+            </div>
+          ))
         )}
       </div>
 

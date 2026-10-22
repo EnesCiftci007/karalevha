@@ -32,7 +32,7 @@ namespace Karalevha.API.Controllers
             take = Math.Clamp(take, 1, 100);
 
             var postExists = await _context.Posts.AnyAsync(p => p.Id == postId);
-            if (!postExists) return NotFound("Gönderi bulunamadı.");
+            if (!postExists) return NotFound(new { message = "Gönderi bulunamadı." });
 
             var comments = await _context.PostComments
                 .Where(c => c.PostId == postId && c.ParentCommentId == null) // Sadece ana yorumlar
@@ -81,11 +81,11 @@ namespace Karalevha.API.Controllers
             var userId = currentUserId.Value;
 
             if (string.IsNullOrWhiteSpace(dto.Content))
-                return BadRequest("Yorum boş olamaz.");
+                return BadRequest(new { message = "Yorum boş olamaz." });
 
             // 1. Gönderi mevcut mu?
             var post = await _context.Posts.FirstOrDefaultAsync(p => p.Id == postId);
-            if (post == null) return NotFound("Gönderi bulunamadı.");
+            if (post == null) return NotFound(new { message = "Gönderi bulunamadı." });
 
             // 2. Eğer parent id verilmişse, ana yorum kurallarını doğrula
             PostComment? parentComment = null;
@@ -93,13 +93,13 @@ namespace Karalevha.API.Controllers
             {
                 parentComment = await _context.PostComments.FirstOrDefaultAsync(c => c.Id == dto.ParentCommentId.Value);
                 if (parentComment == null)
-                    return BadRequest("Yanıt vermek istediğiniz ana yorum bulunamadı.");
+                    return BadRequest(new { message = "Yanıt vermek istediğiniz ana yorum bulunamadı." });
                 
                 if (parentComment.PostId != postId)
-                    return BadRequest("Ana yorum bu gönderiye ait değil.");
+                    return BadRequest(new { message = "Ana yorum bu gönderiye ait değil." });
                 
                 if (parentComment.ParentCommentId != null)
-                    return BadRequest("Yanıtın yanıtı oluşturulamaz (Tek seviyeli yanıt kısıtlaması).");
+                    return BadRequest(new { message = "Yanıtın yanıtı oluşturulamaz (Tek seviyeli yanıt kısıtlaması)." });
             }
 
             var comment = new PostComment
@@ -153,18 +153,18 @@ namespace Karalevha.API.Controllers
             var userId = currentUserId.Value;
 
             var comment = await _context.PostComments.FirstOrDefaultAsync(c => c.Id == id);
-            if (comment == null) return NotFound("Yorum bulunamadı.");
+            if (comment == null) return NotFound(new { message = "Yorum bulunamadı." });
 
             var currentUser = await _context.Users.FindAsync(userId);
             bool isOwnerOrAdmin = currentUser != null && (currentUser.Role == "Owner" || currentUser.Role == "Admin");
             if (comment.UserId != userId && !isOwnerOrAdmin)
-                return StatusCode(403, "Sadece kendi yorumunuzu silebilirsiniz."); // Forbidden
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Sadece kendi yorumunuzu silebilirsiniz." });
 
             // Cascade delete yapılandırıldığı için parent silindiğinde replies da silinecek.
             _context.PostComments.Remove(comment);
             await _context.SaveChangesAsync();
 
-            return Ok();
+            return Ok(new { message = "Yorum silindi." });
         }
     }
 }

@@ -10,5 +10,11 @@ namespace Karalevha.API.DTOs
     {
         public int UserId { get; set; }
         public int DurationMinutes { get; set; }
+        public int DurationHours { get; set; }
+    }
+
+    public class UnbanUserDto
+    {
+        public int UserId { get; set; }
     }
 }

@@ -67,7 +67,7 @@ namespace Karalevha.API.Controllers
                 })
                 .FirstOrDefaultAsync();
             
-            if (p == null) return NotFound("Proje bulunamadı");
+            if (p == null) return NotFound(new { message = "Proje bulunamadı." });
             
             return Ok(p);
         }
@@ -111,6 +111,29 @@ namespace Karalevha.API.Controllers
                 project.CreatedAt,
                 Owner = username
             });
+        }
+
+        // DELETE: api/projects/{id}
+        [HttpDelete("{id}")]
+        [Authorize]
+        [CheckBanned]
+        public async Task<IActionResult> DeleteProject(int id)
+        {
+            var userId = User.GetRequiredUserId();
+
+            var project = await _context.Projects.FirstOrDefaultAsync(p => p.Id == id);
+            if (project == null)
+                return NotFound(new { message = "Proje bulunamadı." });
+
+            var currentUser = await _context.Users.FindAsync(userId);
+            bool isOwnerOrAdmin = currentUser != null && (currentUser.Role == "Owner" || currentUser.Role == "Admin");
+            if (project.UserId != userId && !isOwnerOrAdmin)
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Bu projeyi silme yetkiniz yok." });
+
+            _context.Projects.Remove(project);
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Proje başarıyla silindi." });
         }
     }
 }

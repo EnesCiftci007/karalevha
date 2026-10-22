@@ -156,7 +156,7 @@ namespace Karalevha.API.Controllers
             var userId = User.GetRequiredUserId();
 
             var post = await _context.Posts.FirstOrDefaultAsync(p => p.Id == id);
-            if (post == null) return NotFound("Gönderi bulunamadı.");
+            if (post == null) return NotFound(new { message = "Gönderi bulunamadı." });
 
             var existingLike = await _context.PostLikes.FirstOrDefaultAsync(pl => pl.PostId == id && pl.UserId == userId);
 
@@ -191,19 +191,19 @@ namespace Karalevha.API.Controllers
                         else
                         {
                             _logger.LogError(ex, "ToggleLike unique constraint caught but record not found for PostId {PostId}, UserId {UserId}", id, userId);
-                            return StatusCode(500, "Bir veritabanı hatası oluştu.");
+                            return StatusCode(500, new { message = "Bir veritabanı hatası oluştu." });
                         }
                     }
                     else
                     {
                         _logger.LogError(ex, "ToggleLike DbUpdateException for PostId {PostId}, UserId {UserId}", id, userId);
-                        return StatusCode(500, "Bir veritabanı hatası oluştu.");
+                        return StatusCode(500, new { message = "Bir veritabanı hatası oluştu." });
                     }
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "ToggleLike Exception for PostId {PostId}, UserId {UserId}", id, userId);
-                    return StatusCode(500, "Beklenmeyen bir hata oluştu.");
+                    return StatusCode(500, new { message = "Beklenmeyen bir hata oluştu." });
                 }
             }
 
@@ -225,13 +225,13 @@ namespace Karalevha.API.Controllers
             var userId = User.GetRequiredUserId();
 
             var post = await _context.Posts.FirstOrDefaultAsync(p => p.Id == id);
-            if (post == null) return NotFound("Gönderi bulunamadı.");
+            if (post == null) return NotFound(new { message = "Gönderi bulunamadı." });
 
             var currentUser = await _context.Users.FindAsync(userId);
             bool isOwnerOrAdmin = currentUser != null && (currentUser.Role == "Owner" || currentUser.Role == "Admin");
             if (post.UserId != userId && !isOwnerOrAdmin)
             {
-                return StatusCode(403, "Bu gönderiyi silme yetkiniz yok.");
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Bu gönderiyi silme yetkiniz yok." });
             }
 
             _context.Posts.Remove(post);

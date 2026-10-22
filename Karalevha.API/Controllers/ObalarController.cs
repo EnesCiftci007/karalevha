@@ -95,7 +95,7 @@ namespace Karalevha.API.Controllers
             if (dto.IsPrivate && string.IsNullOrWhiteSpace(dto.JoinPassword))
                 return BadRequest(new { message = "Gizli bir oba için katılım şifresi belirlemelisiniz." });
 
-            string seed = dto.Name.Replace(" ", "").ToLower();
+            string seed = dto.Name.Replace(" ", "").ToLowerInvariant();
 
             using var transaction = await _context.Database.BeginTransactionAsync();
 
@@ -103,8 +103,8 @@ namespace Karalevha.API.Controllers
             {
                 var oba = new Oba
                 {
-                    Name = dto.Name,
-                    Description = dto.Description,
+                    Name = dto.Name.Trim(),
+                    Description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim(),
                     Color = dto.Color,
                     AvatarSeed = seed,
                     OwnerId = userId, 
@@ -153,7 +153,7 @@ namespace Karalevha.API.Controllers
             catch
             {
                 await transaction.RollbackAsync();
-                return StatusCode(500, "Oba oluşturulurken bir hata oluştu.");
+                return StatusCode(500, new { message = "Oba oluşturulurken bir hata oluştu." });
             }
         }
 
@@ -164,7 +164,7 @@ namespace Karalevha.API.Controllers
             var userId = User.GetRequiredUserId();
 
             var oba = await _context.Obalar.FindAsync(id);
-            if (oba == null) return NotFound("Oba bulunamadı");
+            if (oba == null) return NotFound(new { message = "Oba bulunamadı." });
 
             var existingMember = await _context.ObaMembers.FirstOrDefaultAsync(m => m.ObaId == id && m.UserId == userId);
             if (existingMember != null) return Ok(new { success = true });
@@ -219,31 +219,34 @@ namespace Karalevha.API.Controllers
 
             var oba = await _context.Obalar.FirstOrDefaultAsync(o => o.Id == id);
                 
-            if (oba == null) return NotFound("Oba bulunamadı");
+            if (oba == null) return NotFound(new { message = "Oba bulunamadı." });
 
             var currentUser = await _context.Users.FindAsync(userId);
             bool isPlatformOwner = currentUser != null && currentUser.Role == "Owner";
             if (oba.OwnerId != userId && !isPlatformOwner) {
                 var member = await _context.ObaMembers.FirstOrDefaultAsync(m => m.ObaId == id && m.UserId == userId);
                 if (member == null || member.Role != "admin") {
-                    return StatusCode(403, "Bu obayı silme yetkiniz yok.");
+                    return StatusCode(StatusCodes.Status403Forbidden, new { message = "Bu obayı silme yetkiniz yok." });
                 }
             }
 
             using var transaction = await _context.Database.BeginTransactionAsync();
             try
             {
-                var members = await _context.ObaMembers.Where(m => m.ObaId == id).ToListAsync();
-                _context.ObaMembers.RemoveRange(members);
-                
-                var channels = await _context.ObaChannels.Where(c => c.ObaId == id).ToListAsync();
-                var channelIds = channels.Select(c => c.Id).ToList();
+                var channelIds = await _context.ObaChannels
+                    .Where(c => c.ObaId == id)
+                    .Select(c => c.Id)
+                    .ToListAsync();
+
                 if (channelIds.Count > 0)
                 {
-                    var messages = await _context.ObaMessages.Where(m => channelIds.Contains(m.ChannelId)).ToListAsync();
-                    _context.ObaMessages.RemoveRange(messages);
+                    await _context.ObaMessages
+                        .Where(m => channelIds.Contains(m.ChannelId))
+                        .ExecuteDeleteAsync();
                 }
-                _context.ObaChannels.RemoveRange(channels);
+
+                await _context.ObaChannels.Where(c => c.ObaId == id).ExecuteDeleteAsync();
+                await _context.ObaMembers.Where(m => m.ObaId == id).ExecuteDeleteAsync();
 
                 _context.Obalar.Remove(oba);
                 await _context.SaveChangesAsync();
@@ -254,7 +257,7 @@ namespace Karalevha.API.Controllers
             catch
             {
                 await transaction.RollbackAsync();
-                return StatusCode(500, "Oba silinirken bir hata oluştu.");
+                return StatusCode(500, new { message = "Oba silinirken bir hata oluştu." });
             }
         }
     }

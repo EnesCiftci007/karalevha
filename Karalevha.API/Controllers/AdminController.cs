@@ -85,7 +85,11 @@ namespace Karalevha.API.Controllers
                 return BadRequest(new { message = "Kendinizi engelleyemezsiniz." });
             }
 
-            if (dto.DurationMinutes < 1 || dto.DurationMinutes > 43200) // Maksimum 30 gün (43200 dk)
+            var durationMinutes = dto.DurationMinutes > 0
+                ? dto.DurationMinutes
+                : dto.DurationHours * 60;
+
+            if (durationMinutes < 1 || durationMinutes > 43200) // Maksimum 30 gün (43200 dk)
             {
                 return BadRequest(new { message = "Engelleme süresi 1 dakika ile 43200 dakika (30 gün) arasında olmalıdır." });
             }
@@ -106,7 +110,7 @@ namespace Karalevha.API.Controllers
                 return StatusCode(StatusCodes.Status403Forbidden, new { message = "Bir admin başka bir admini engelleyemez." });
             }
 
-            targetUser.BannedUntil = DateTime.UtcNow.AddMinutes(dto.DurationMinutes);
+            targetUser.BannedUntil = DateTime.UtcNow.AddMinutes(durationMinutes);
             await _context.SaveChangesAsync();
 
             return Ok(new
@@ -117,11 +121,19 @@ namespace Karalevha.API.Controllers
             });
         }
 
-        // POST: api/admin/unban-user (Owner veya Admin çağırabilir)
+        // POST: api/admin/unban-user/{userId} (Owner veya Admin çağırabilir)
         [HttpPost("unban-user/{userId}")]
         [Authorize(Roles = "Owner,Admin")]
         [CheckBanned]
-        public async Task<IActionResult> UnbanUser(int userId)
+        public Task<IActionResult> UnbanUser(int userId) => UnbanUserInternal(userId);
+
+        // POST: api/admin/unban-user (Body ile çağrım desteği)
+        [HttpPost("unban-user")]
+        [Authorize(Roles = "Owner,Admin")]
+        [CheckBanned]
+        public Task<IActionResult> UnbanUserByBody([FromBody] UnbanUserDto dto) => UnbanUserInternal(dto.UserId);
+
+        private async Task<IActionResult> UnbanUserInternal(int userId)
         {
             var callerId = User.GetRequiredUserId();
             var caller = await _context.Users.FindAsync(callerId);
@@ -135,6 +147,11 @@ namespace Karalevha.API.Controllers
             if (targetUser == null)
             {
                 return NotFound(new { message = "Kullanıcı bulunamadı." });
+            }
+
+            if (targetUser.Role == "Owner")
+            {
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Owner hesabının engel durumu değiştirilemez." });
             }
 
             if (callerRole == "Admin" && targetUser.Role == "Admin")

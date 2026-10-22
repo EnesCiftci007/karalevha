@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { api, API_URL } from '../services/api';
-import { Box, UploadCloud, Download, FileBox, CheckCircle2, Eye, X } from 'lucide-react';
+import { Box, UploadCloud, Download, FileBox, CheckCircle2, Eye, X, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { PrintModel } from '../types';
 import StlPreview from '../components/StlPreview';
@@ -12,6 +12,7 @@ export default function BaskiIstasyonu() {
   const [description, setDescription] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [initialLoad, setInitialLoad] = useState(true);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null); // Önizleme için dosya url'i tutar
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -32,8 +33,15 @@ export default function BaskiIstasyonu() {
   };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files![0];
-    if (selectedFile && selectedFile.name.toLowerCase().endsWith('.stl')) {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+    if (selectedFile.size > 50_000_000) {
+      alert("Dosya boyutu en fazla 50 MB olabilir!");
+      setFile(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+    if (selectedFile.name.toLowerCase().endsWith('.stl')) {
       setFile(selectedFile);
     } else {
       alert("Lütfen sadece .stl uzantılı dosya seçin!");
@@ -47,17 +55,50 @@ export default function BaskiIstasyonu() {
     if (!file || !title.trim()) return;
 
     setLoading(true);
+    setUploadProgress(0);
     const formData = new FormData();
-    formData.append('title', title);
-    if (description) formData.append('description', description);
+    formData.append('title', title.trim());
+    if (description.trim()) formData.append('description', description.trim());
     formData.append('file', file);
 
     try {
-      await api('/api/printmodels', {
-        method: 'POST',
-        body: formData
+      const created = await new Promise<PrintModel>((resolve, reject) => {
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', `${API_URL}/api/printmodels`);
+        const token = localStorage.getItem('token');
+        if (token) {
+          xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+        }
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            setUploadProgress(Math.round((event.loaded / event.total) * 100));
+          }
+        };
+        xhr.onload = () => {
+          if (xhr.status === 401 && token) {
+            window.dispatchEvent(new Event('auth:unauthorized'));
+          }
+          if (xhr.status === 429) {
+            reject(new Error('Çok fazla deneme yaptınız, biraz bekleyin.'));
+            return;
+          }
+          let body: any = null;
+          try { body = xhr.responseText ? JSON.parse(xhr.responseText) : null; } catch { body = null; }
+          if (xhr.status >= 200 && xhr.status < 300) {
+            resolve(body as PrintModel);
+          } else {
+            reject(new Error(body?.message || body?.title || `Yükleme başarısız (${xhr.status})`));
+          }
+        };
+        xhr.onerror = () => reject(new Error('Ağ hatası oluştu. Lütfen bağlantınızı kontrol edin.'));
+        xhr.send(formData);
       });
-      await fetchModels();
+
+      if (created && created.id) {
+        setModels(prev => [created, ...prev]);
+      } else {
+        await fetchModels();
+      }
       setTitle('');
       setDescription('');
       setFile(null);
@@ -66,6 +107,17 @@ export default function BaskiIstasyonu() {
       alert(error?.message || 'Yükleme başarısız.');
     } finally {
       setLoading(false);
+      setUploadProgress(0);
+    }
+  };
+
+  const handleDeleteModel = async (id: number) => {
+    if (!window.confirm('Bu 3B modeli silmek istediğinize emin misiniz?')) return;
+    try {
+      await api(`/api/printmodels/${id}`, { method: 'DELETE' });
+      setModels(prev => prev.filter(m => m.id !== id));
+    } catch (err: any) {
+      alert(err?.message || 'Model silinemedi.');
     }
   };
 
@@ -120,6 +172,7 @@ export default function BaskiIstasyonu() {
                   <label className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest block mb-2">Açıklama</label>
                   <textarea 
                     value={description}
+                    maxLength={500}
                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
                     placeholder="Kısa bir açıklama..."
                     className="w-full bg-[#111216] border-2 border-[#1f2129] px-4 py-3 text-white focus:border-[#a855f7] outline-none transition-colors min-h-[80px] resize-none font-medium text-sm"
@@ -141,9 +194,18 @@ export default function BaskiIstasyonu() {
                     <span className="text-sm font-bold text-zinc-400 uppercase tracking-wider block">
                       {file ? file.name : "Dosya Seç veya Sürükle"}
                     </span>
-                    {file && <span className="text-xs text-[#a855f7] mt-2 block font-medium">Seçildi</span>}
+                    {file && <span className="text-xs text-[#a855f7] mt-2 block font-medium">Seçildi ({(file.size / (1024 * 1024)).toFixed(1)} MB)</span>}
                   </div>
                 </div>
+
+                {loading && (
+                  <div className="w-full bg-[#111216] border border-[#1f2129] h-2 overflow-hidden">
+                    <div
+                      className="bg-[#a855f7] h-full transition-all duration-200"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                )}
 
                 <button 
                   type="submit"
@@ -151,7 +213,7 @@ export default function BaskiIstasyonu() {
                   className={`w-full py-4 text-[15px] font-black uppercase tracking-widest border-2 border-black transition-all mt-4
                     ${loading || !file ? 'bg-zinc-600 text-zinc-400' : 'bg-[#a855f7] text-black hover:bg-white hover:shadow-[4px_4px_0px_#a855f7] hover:-translate-y-1'}`}
                 >
-                  {loading ? 'YÜKLENİYOR...' : 'SİSTEME YÜKLE'}
+                  {loading ? `YÜKLENİYOR... %${uploadProgress}` : 'SİSTEME YÜKLE'}
                 </button>
               </form>
             ) : (
@@ -195,7 +257,7 @@ export default function BaskiIstasyonu() {
                   </div>
                 </div>
 
-                <div className="relative z-10 shrink-0 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
+                <div className="relative z-10 shrink-0 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3 items-stretch sm:items-center">
                   <button
                     onClick={() => setPreviewUrl(`${API_URL}${model.fileUrl}`)}
                     className="flex items-center justify-center bg-zinc-800 text-white hover:bg-zinc-700 border-2 border-zinc-600 px-4 py-3 text-sm font-black uppercase tracking-widest transition-all"
@@ -213,6 +275,15 @@ export default function BaskiIstasyonu() {
                     <Download className="w-4 h-4 mr-2" strokeWidth={3} />
                     İNDİR
                   </a>
+                  {user && (user.username === model.uploader || user.role === 'Owner' || user.role === 'Admin') && (
+                    <button
+                      onClick={() => handleDeleteModel(model.id)}
+                      title="Modeli Sil"
+                      className="flex items-center justify-center bg-[#0b0c10] text-zinc-500 hover:text-red-500 border-2 border-[#1f2129] hover:border-red-500 px-3 py-3 transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))

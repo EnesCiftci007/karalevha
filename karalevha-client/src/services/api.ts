@@ -23,7 +23,13 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     throw new Error('Çok fazla deneme yaptınız, biraz bekleyin.');
   }
   if (!res.ok) {
-    const body = await res.json().catch(() => null);
+    const rawText = await res.text().catch(() => '');
+    let body: any = null;
+    try {
+      body = rawText ? JSON.parse(rawText) : null;
+    } catch {
+      body = null;
+    }
     let errorMsg = body?.message;
     if (!errorMsg && body?.errors && typeof body.errors === 'object') {
       const firstKey = Object.keys(body.errors)[0];
@@ -33,6 +39,9 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     }
     if (!errorMsg && body?.title) {
       errorMsg = body.title;
+    }
+    if (!errorMsg && rawText && !rawText.trimStart().startsWith('<') && rawText.length < 300) {
+      errorMsg = rawText.trim();
     }
     throw new Error(errorMsg ?? `İstek başarısız (${res.status})`);
   }

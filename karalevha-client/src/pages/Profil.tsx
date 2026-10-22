@@ -110,19 +110,21 @@ export default function Profil() {
     if (!profile) return;
     try {
       if (profile.bannedUntil) {
-        await api('/api/admin/unban-user', {
-          method: 'POST',
-          body: JSON.stringify({ userId: profile.id })
+        await api(`/api/admin/unban-user/${profile.id}`, {
+          method: 'POST'
         });
         setProfile(prev => prev ? { ...prev, bannedUntil: null } : null);
       } else {
-        const input = window.prompt('Kaç saat banlamak istiyorsunuz? (1 - 8760)', '24');
+        const input = window.prompt('Kaç saat banlamak istiyorsunuz? (1 - 720 saat / maks. 30 gün)', '24');
         if (!input) return;
         const durationHours = parseInt(input, 10);
-        if (isNaN(durationHours) || durationHours < 1) return;
+        if (isNaN(durationHours) || durationHours < 1 || durationHours > 720) {
+          alert('Lütfen 1 ile 720 saat (30 gün) arasında bir süre girin.');
+          return;
+        }
         const res = await api<{ bannedUntil: string }>('/api/admin/ban-user', {
           method: 'POST',
-          body: JSON.stringify({ userId: profile.id, durationHours })
+          body: JSON.stringify({ userId: profile.id, durationMinutes: durationHours * 60 })
         });
         setProfile(prev => prev ? { ...prev, bannedUntil: res.bannedUntil } : null);
       }
@@ -267,7 +269,7 @@ export default function Profil() {
                   onChange={(e) => setEditBio(e.target.value)}
                   placeholder="Biyografi ekle..."
                   className="w-full bg-[#0b0c10] border-2 border-zinc-800 p-3 text-zinc-300 focus:border-[#00e5ff] focus:outline-none min-h-[100px] resize-none"
-                  maxLength={255}
+                  maxLength={500}
                 />
                 <div>
                   <span className="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">İlgi Alanları</span>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Folder, FileText, ChevronRight, ChevronDown, FileCode2, Loader2, AlertTriangle, FileJson, FileType2, FileImage } from 'lucide-react';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
@@ -56,26 +56,34 @@ export default function NativeCodeViewer({ repoUrl }: NativeCodeViewerProps) {
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [fileContent, setFileContent] = useState<string>('');
   const [loadingFile, setLoadingFile] = useState(false);
+  const fileAbortRef = useRef<AbortController | null>(null);
 
   const match = repoUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
   const owner = match ? match[1] : '';
   const repo = match ? match[2].replace('.git', '') : '';
 
   useEffect(() => {
+    setSelectedFile(null);
+    setFileContent('');
+    setError('');
+    setLoadingTree(true);
+
     if (!owner || !repo) {
       setError('Geçersiz GitHub URL');
       setLoadingTree(false);
       return;
     }
 
+    const controller = new AbortController();
+
     const fetchTree = async () => {
       try {
-        const branchRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`);
+        const branchRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { signal: controller.signal });
         if (!branchRes.ok) throw new Error('Repo bulunamadı');
         const repoData = await branchRes.json();
         const defaultBranch = repoData.default_branch || 'main';
 
-        const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`);
+        const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`, { signal: controller.signal });
         if (!res.ok) throw new Error('Ağaç çekilemedi');
         const data = await res.json();
         
@@ -103,27 +111,44 @@ export default function NativeCodeViewer({ repoUrl }: NativeCodeViewerProps) {
 
         setTree(root);
       } catch (err: any) {
-        setError(err.message || 'Repo yüklenirken hata oluştu');
+        if (err.name !== 'AbortError') {
+          setError(err.message || 'Repo yüklenirken hata oluştu');
+        }
       } finally {
-        setLoadingTree(false);
+        if (!controller.signal.aborted) {
+          setLoadingTree(false);
+        }
       }
     };
 
     fetchTree();
+    return () => controller.abort();
   }, [owner, repo]);
 
   const fetchFile = async (path: string) => {
+    if (fileAbortRef.current) {
+      fileAbortRef.current.abort();
+    }
+    const controller = new AbortController();
+    fileAbortRef.current = controller;
+
     setLoadingFile(true);
     setSelectedFile(path);
     try {
-      const res = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/HEAD/${path}`);
+      const res = await fetch(`https://raw.githubusercontent.com/${owner}/${repo}/HEAD/${path}`, { signal: controller.signal });
       if (!res.ok) throw new Error('Dosya okunamadı');
       const text = await res.text();
-      setFileContent(text);
-    } catch (err) {
-      setFileContent('// Dosya yüklenirken hata oluştu veya binary dosya.');
+      if (!controller.signal.aborted) {
+        setFileContent(text);
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        setFileContent('// Dosya yüklenirken hata oluştu veya binary dosya.');
+      }
     } finally {
-      setLoadingFile(false);
+      if (!controller.signal.aborted) {
+        setLoadingFile(false);
+      }
     }
   };
 

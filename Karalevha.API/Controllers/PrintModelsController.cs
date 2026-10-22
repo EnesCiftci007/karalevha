@@ -78,6 +78,7 @@ namespace Karalevha.API.Controllers
                 return BadRequest(new { message = "Geçersiz STL dosya içeriği." });
 
             var userId = User.GetRequiredUserId();
+            var username = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "Bilinmeyen";
 
             // Dosya ismi zafiyetlerini (Path Traversal) ve URL bozulmalarını önlemek için sadece GUID kullan
             var safeFileName = $"{Guid.NewGuid()}.stl";
@@ -120,22 +121,72 @@ namespace Karalevha.API.Controllers
                 throw;
             }
 
-            return Ok(new { message = "Dosya başarıyla yüklendi!" });
+            return Ok(new PrintModelDto
+            {
+                Id = printModel.Id,
+                Title = printModel.Title,
+                Description = printModel.Description,
+                FileName = printModel.FileName,
+                FileUrl = relativeFilePath,
+                UploadedAt = printModel.UploadedAt,
+                Uploader = username
+            });
+        }
+
+        // DELETE: api/printmodels/{id}
+        [HttpDelete("{id}")]
+        [Authorize]
+        [CheckBanned]
+        public async Task<IActionResult> DeleteModel(int id)
+        {
+            var userId = User.GetRequiredUserId();
+
+            var model = await _context.PrintModels.FirstOrDefaultAsync(m => m.Id == id);
+            if (model == null)
+                return NotFound(new { message = "Model bulunamadı." });
+
+            var currentUser = await _context.Users.FindAsync(userId);
+            bool isOwnerOrAdmin = currentUser != null && (currentUser.Role == "Owner" || currentUser.Role == "Admin");
+            if (model.UserId != userId && !isOwnerOrAdmin)
+                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Bu modeli silme yetkiniz yok." });
+
+            _context.PrintModels.Remove(model);
+            await _context.SaveChangesAsync();
+
+            var uploadsFolder = Path.Combine(_env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", "stl");
+            var safeName = Path.GetFileName(model.FileName);
+            if (!string.IsNullOrEmpty(safeName))
+            {
+                var absoluteFilePath = Path.Combine(uploadsFolder, safeName);
+                if (System.IO.File.Exists(absoluteFilePath))
+                {
+                    try { System.IO.File.Delete(absoluteFilePath); } catch { /* ignore file lock errors */ }
+                }
+            }
+
+            return Ok(new { message = "Model başarıyla silindi." });
         }
 
         private static async Task<bool> IsValidStlFileAsync(IFormFile file)
         {
             if (file.Length < 15) return false;
 
-            var buffer = new byte[Math.Min(256, (int)file.Length)];
+            var targetLen = (int)Math.Min(256, file.Length);
+            var buffer = new byte[targetLen];
             await using var stream = file.OpenReadStream();
-            var bytesRead = await stream.ReadAsync(buffer.AsMemory(0, buffer.Length));
-            if (bytesRead < 15) return false;
+            int totalRead = 0;
+            while (totalRead < targetLen)
+            {
+                var read = await stream.ReadAsync(buffer.AsMemory(totalRead, targetLen - totalRead));
+                if (read == 0) break;
+                totalRead += read;
+            }
+            if (totalRead < 15) return false;
 
             // PE (.exe/.dll) imzası ("MZ") kontrolü
             if (buffer[0] == 0x4D && buffer[1] == 0x5A) return false;
 
-            var headAscii = Encoding.ASCII.GetString(buffer, 0, bytesRead).TrimStart();
+            var headAscii = Encoding.ASCII.GetString(buffer, 0, totalRead).TrimStart();
             // HTML / Script / XML / PHP içeriklerini reddet
             if (headAscii.StartsWith("<", StringComparison.Ordinal)) return false;
 

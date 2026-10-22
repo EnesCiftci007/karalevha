@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import * as signalR from '@microsoft/signalr';
 import { api, API_URL } from '../services/api';
@@ -58,7 +58,7 @@ export default function ObaDetay() {
     if (!token) return;
 
     const newConnection = new signalR.HubConnectionBuilder()
-      .withUrl(`${import.meta.env.VITE_API_URL || API_URL}/chathub`, { accessTokenFactory: () => token })
+      .withUrl(`${API_URL}/chathub`, { accessTokenFactory: () => token })
       .withAutomaticReconnect()
       .build();
 
@@ -70,13 +70,10 @@ export default function ObaDetay() {
       });
     });
 
-    let currentChannelId: string | null = null;
-
     newConnection.onreconnected(() => {
-      console.log('Reconnected to SignalR');
       setIsConnected(true);
-      if (currentChannelId) {
-        newConnection.invoke('JoinChannel', currentChannelId)
+      if (activeChannelIdRef.current !== null) {
+        newConnection.invoke('JoinChannel', activeChannelIdRef.current.toString())
           .catch(err => console.error("RejoinChannel error: ", err));
       }
     });
@@ -87,11 +84,9 @@ export default function ObaDetay() {
 
     newConnection.start()
       .then(() => {
-        console.log('Connected to SignalR');
         setIsConnected(true);
-        if (activeChannel) {
-          currentChannelId = activeChannel.id.toString();
-          newConnection.invoke('JoinChannel', currentChannelId)
+        if (activeChannelIdRef.current !== null) {
+          newConnection.invoke('JoinChannel', activeChannelIdRef.current.toString())
             .catch(err => console.error("JoinChannel error: ", err));
         }
       })
@@ -100,6 +95,7 @@ export default function ObaDetay() {
     setConnection(newConnection);
 
     return () => {
+      setIsConnected(false);
       newConnection.stop();
     };
   }, [token]);
