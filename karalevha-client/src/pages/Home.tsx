@@ -1,6 +1,9 @@
 import { Link } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
 export default function Home() {
+  const { user } = useAuth();
+
   return (
     <div className="flex flex-col items-center py-10 px-4 max-w-[1250px] mx-auto animate-in fade-in duration-300">
       
@@ -13,6 +16,20 @@ export default function Home() {
           Burası makerlar, yazılımcılar ve donanım geliştiricileri için dijital bir buluşma noktasıdır. 
           Kendi Oba'nı kur, projelere katıl ve üretmeye başla!
         </p>
+
+        {!user && (
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link
+              to="/auth"
+              className="bg-cyan-400 hover:bg-white text-black px-8 py-3 text-[15px] font-black uppercase tracking-widest transition-all duration-300 border-2 border-black hover:shadow-[6px_6px_0px_#00e5ff] hover:-translate-y-0.5 hover:-translate-x-0.5"
+            >
+              Aramıza Katıl
+            </Link>
+            <span className="text-zinc-500 text-xs font-bold uppercase tracking-widest">
+              ya da üye olmadan aşağıdan gezmeye başla
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Cards Grid - Sokak Tarzı (Brutalist/Neon) */}

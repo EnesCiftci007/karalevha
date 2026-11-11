@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "Karalevha.API", "--launch-profile", "http"],
+      "port": 5114
+    },
+    {
+      "name": "client",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "karalevha-client", "run", "dev"],
+      "port": 5173
+    }
+  ]
+}

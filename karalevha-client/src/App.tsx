@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import MainLayout from './components/layout/MainLayout';
-import { ProtectedRoute } from './components/layout/ProtectedRoute';
 import Home from './pages/Home';
 import EOba from './pages/EOba';
 import ObaDetay from './pages/ObaDetay';
@@ -17,20 +16,17 @@ function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Herkese Açık Yollar */}
           <Route path="/auth" element={<Auth />} />
 
-          {/* Korumalı Yollar */}
-          <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<MainLayout />}>
-              <Route index element={<Home />} />
-              <Route path="akis" element={<Akis />} />
-              <Route path="e-oba" element={<EOba />} />
-              <Route path="e-oba/:id" element={<ObaDetay />} />
-              <Route path="baski-istasyonu" element={<BaskiIstasyonu />} />
-              <Route path="projeler" element={<Projeler />} />
-              <Route path="projeler/:id" element={<ProjeDetay />} />
-            </Route>
+          {/* Tüm sayfalar giriş yapmadan gezilebilir; paylaşım ve yazma işlemleri giriş ister. */}
+          <Route path="/" element={<MainLayout />}>
+            <Route index element={<Home />} />
+            <Route path="akis" element={<Akis />} />
+            <Route path="e-oba" element={<EOba />} />
+            <Route path="e-oba/:id" element={<ObaDetay />} />
+            <Route path="baski-istasyonu" element={<BaskiIstasyonu />} />
+            <Route path="projeler" element={<Projeler />} />
+            <Route path="projeler/:id" element={<ProjeDetay />} />
           </Route>
 
           {/* 404 Hata Sayfası */}
