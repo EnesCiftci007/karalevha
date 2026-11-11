@@ -1,12 +1,15 @@
 import { useState } from 'react';
 import { Hexagon, ArrowRight, UserPlus, LogIn } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 
 export default function Auth() {
   const [isLogin, setIsLogin] = useState(true);
   const navigate = useNavigate();
+  const location = useLocation();
+  // Giriş gerektiren bir yerden gelindiyse girişten sonra oraya dön
+  const returnTo = (location.state as { from?: string } | null)?.from ?? '/';
   const { login } = useAuth();
 
   // Form States
@@ -47,7 +50,7 @@ export default function Auth() {
         if (isLogin) {
           // Context üzerinden global state'i güncelle
           login(data.user, data.token);
-          navigate('/');
+          navigate(returnTo, { replace: true });
         } else {
           setSuccessMsg(data.message || 'Kayıt başarılı! Şimdi giriş yapabilirsiniz.');
           setIsLogin(true);
@@ -194,10 +197,10 @@ export default function Auth() {
 
           {/* Süsleme Çizgisi */}
           <div className="mt-8 border-t-2 border-dashed border-[#1f2129] pt-6 text-center">
-            <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest flex items-center justify-center">
-              KaraLevha'ya Hoş Geldiniz
+            <Link to="/" className="text-zinc-500 hover:text-cyan-400 text-xs font-bold uppercase tracking-widest flex items-center justify-center transition-colors">
+              Üye olmadan göz at
               <ArrowRight className="w-4 h-4 ml-2 text-cyan-400" />
-            </p>
+            </Link>
           </div>
         </div>
 

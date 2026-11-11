@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
 using Karalevha.API.Models;
 using Karalevha.API.DTOs;
+using Karalevha.API.Services;
 using System.Security.Claims;
 
 namespace Karalevha.API.Controllers
@@ -13,10 +14,12 @@ namespace Karalevha.API.Controllers
     public class ObalarController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly ObaFileStorage _storage;
 
-        public ObalarController(AppDbContext context)
+        public ObalarController(AppDbContext context, ObaFileStorage storage)
         {
             _context = context;
+            _storage = storage;
         }
 
         // GET: api/obalar
@@ -175,15 +178,20 @@ namespace Karalevha.API.Controllers
             var members = await _context.ObaMembers.Where(m => m.ObaId == id).ToListAsync();
             _context.ObaMembers.RemoveRange(members);
             
+            var storedFiles = new List<string>();
             var channels = await _context.ObaChannels.Where(c => c.ObaId == id).ToListAsync();
             foreach(var channel in channels) {
                 var messages = await _context.ObaMessages.Where(m => m.ChannelId == channel.Id).ToListAsync();
+                storedFiles.AddRange(messages.Where(m => m.FileStoredName != null).Select(m => m.FileStoredName!));
                 _context.ObaMessages.RemoveRange(messages);
             }
             _context.ObaChannels.RemoveRange(channels);
 
             _context.Obalar.Remove(oba);
             await _context.SaveChangesAsync();
+
+            // Kayıtlar silindikten sonra paylaşılan dosyaları da diskten temizle
+            foreach (var stored in storedFiles) _storage.Delete(stored);
 
             return Ok(new { success = true });
         }

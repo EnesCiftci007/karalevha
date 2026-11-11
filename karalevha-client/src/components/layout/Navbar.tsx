@@ -16,7 +16,7 @@ export default function Navbar() {
 
   const handleLogout = () => {
     logout();
-    navigate('/auth');
+    navigate('/'); // çıkıştan sonra giriş ekranına atma, sitede kal
   };
 
   return (

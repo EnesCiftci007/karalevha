@@ -19,24 +19,22 @@ namespace Karalevha.API.Controllers
         }
 
         // GET: api/obachannels/{obaId}
+        // Açık obalar giriş yapmadan da gezilebilir (salt okunur); gizli obalar üyelik ister.
         [HttpGet("{obaId}")]
-        [Authorize]
         public async Task<IActionResult> GetChannels(int obaId)
         {
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null) return Unauthorized();
-            var userId = int.Parse(userIdClaim.Value);
-            
+            int? userId = int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var parsedId) ? parsedId : null;
+
             var oba = await _context.Obalar.FindAsync(obaId);
             if (oba == null) return NotFound("Oba bulunamadı");
-            
-            var isMember = await _context.ObaMembers.AnyAsync(m => m.ObaId == obaId && m.UserId == userId);
-            
-            if (!isMember) {
+
+            if (userId == null) {
+                if (oba.IsPrivate) return Unauthorized();
+            } else if (oba.OwnerId != userId && !await _context.ObaMembers.AnyAsync(m => m.ObaId == obaId && m.UserId == userId)) {
                 if (oba.IsPrivate) {
                     return StatusCode(403, "Bu gizli bir oba, katılmak için şifre girmelisiniz.");
                 } else {
-                    _context.ObaMembers.Add(new ObaMember { ObaId = obaId, UserId = userId, Role = "member" });
+                    _context.ObaMembers.Add(new ObaMember { ObaId = obaId, UserId = userId.Value, Role = "member" });
                     oba.MemberCount += 1;
                     await _context.SaveChangesAsync();
                 }
