@@ -4,6 +4,28 @@
 
 @layer base {
   body {
-    @apply bg-[#0b0c10] text-white;
+    @apply bg-levha text-tebesir font-sans antialiased;
+  }
+
+  /* Klavyeyle gezenler için her yerde aynı, görünür odak çizgisi */
+  :focus-visible {
+    @apply outline outline-2 outline-offset-2 outline-isaret;
+  }
+}
+
+@layer components {
+  /* Küçük teknik etiket: bölüm üst yazıları, sayaçlar */
+  .etiket {
+    @apply font-mono text-[11px] uppercase tracking-[0.14em] text-tebesir-silik;
+  }
+
+  /* Kesim altlığı / kareli defter dokusu; aşağı doğru solarak kaybolur */
+  .kareli {
+    background-image:
+      linear-gradient(to right, rgb(236 231 220 / 0.045) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(236 231 220 / 0.045) 1px, transparent 1px);
+    background-size: 28px 28px;
+    -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent);
+    mask-image: linear-gradient(to bottom, black 35%, transparent);
   }
 }
