@@ -1,18 +1,20 @@
-import { NavLink, useNavigate } from 'react-router-dom';
-import { Bell, Search, LogOut, User } from 'lucide-react';
+import { useState } from 'react';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+
+const menuItems = [
+  { name: 'Ana sayfa', path: '/', end: true },
+  { name: 'Akış', path: '/akis' },
+  { name: 'Projeler', path: '/projeler' },
+  { name: '3B Baskı', path: '/baski-istasyonu' },
+  { name: 'E-Oba', path: '/e-oba' },
+];
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-
-  const menuItems = [
-    { name: 'Ana Sayfa', path: '/' },
-    { name: 'Akış', path: '/akis' },
-    { name: 'Projeler', path: '/projeler' },
-    { name: '3B Baskı', path: '/baski-istasyonu' },
-    { name: 'E-Oba', path: '/e-oba' },
-  ];
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleLogout = () => {
     logout();
@@ -20,76 +22,99 @@ export default function Navbar() {
   };
 
   return (
-    <header className="h-16 bg-[#0b0c10] border-b-2 border-[#1f2129] flex items-center justify-between px-6 sticky top-0 z-20 shrink-0">
-      
-      {/* Sol Kısım: Logo & Linkler */}
-      <div className="flex items-center space-x-8">
-        <div className="flex items-center cursor-pointer" onClick={() => navigate('/')}>
-          <img src="/logo.png" alt="KaraLevha" className="w-8 h-8 mr-3 object-contain" />
-          <span className="font-black text-[20px] tracking-widest text-white uppercase">KaraLevha</span>
+    <header className="sticky top-0 z-20 shrink-0 bg-levha/95 backdrop-blur border-b border-levha-cizgi">
+      <div className="max-w-7xl mx-auto h-16 px-4 sm:px-6 md:px-8 flex items-center justify-between gap-6">
+
+        {/* Logo ve bölümler */}
+        <div className="flex items-center gap-8 min-w-0">
+          <Link to="/" className="flex items-center gap-2.5 shrink-0" aria-label="KaraLevha ana sayfa">
+            <img src="/logo.png" alt="" className="w-7 h-7 object-contain" />
+            <span className="font-display font-bold text-[19px] tracking-tight text-tebesir">KaraLevha</span>
+          </Link>
+
+          <nav className="hidden md:flex items-center gap-1" aria-label="Bölümler">
+            {menuItems.map((item) => (
+              <NavLink
+                key={item.path}
+                to={item.path}
+                end={item.end}
+                className={({ isActive }) =>
+                  'relative px-3 py-2 text-[14px] font-medium rounded-md transition-colors ' +
+                  (isActive
+                    ? 'text-tebesir after:absolute after:left-3 after:right-3 after:-bottom-[13px] after:h-0.5 after:bg-isaret'
+                    : 'text-tebesir-soluk hover:text-tebesir hover:bg-levha-yuzey')
+                }
+              >
+                {item.name}
+              </NavLink>
+            ))}
+          </nav>
         </div>
-        
-        <nav className="hidden md:flex items-center space-x-2">
+
+        {/* Hesap */}
+        <div className="flex items-center gap-2">
+          {user ? (
+            <div className="flex items-center gap-2.5">
+              <span
+                className="w-8 h-8 rounded-full bg-isaret/15 text-isaret border border-isaret/40 flex items-center justify-center font-display font-bold text-sm"
+                aria-hidden="true"
+              >
+                {user.username.charAt(0).toUpperCase()}
+              </span>
+              <span className="hidden sm:block text-[14px] font-medium text-tebesir max-w-[140px] truncate">
+                {user.username}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="p-2 rounded-md text-tebesir-silik hover:text-tebesir hover:bg-levha-yuzey transition-colors"
+                title="Çıkış yap"
+                aria-label="Çıkış yap"
+              >
+                <LogOut className="w-[18px] h-[18px]" />
+              </button>
+            </div>
+          ) : (
+            <Link
+              to="/auth"
+              className="px-4 py-2 rounded-md bg-isaret text-levha-koyu text-[14px] font-semibold hover:bg-isaret-acik transition-colors"
+            >
+              Giriş yap
+            </Link>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="md:hidden p-2 rounded-md text-tebesir-soluk hover:text-tebesir hover:bg-levha-yuzey transition-colors"
+            aria-label={menuOpen ? 'Menüyü kapat' : 'Menüyü aç'}
+            aria-expanded={menuOpen}
+          >
+            {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Mobil menü */}
+      {menuOpen && (
+        <nav className="md:hidden border-t border-levha-cizgi bg-levha px-4 py-2" aria-label="Bölümler">
           {menuItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
+              end={item.end}
+              onClick={() => setMenuOpen(false)}
               className={({ isActive }) =>
-                `px-4 py-2 rounded-none text-[14px] font-bold uppercase tracking-wider transition-all duration-200 border-2 ` +
-                (isActive 
-                  ? 'bg-white text-black border-white shadow-[4px_4px_0px_rgba(255,255,255,0.2)]' 
-                  : 'bg-transparent text-zinc-400 border-transparent hover:text-white hover:border-[#1f2129]')
+                'block px-3 py-3 rounded-md text-[15px] font-medium border-l-2 ' +
+                (isActive
+                  ? 'text-tebesir border-isaret bg-levha-yuzey'
+                  : 'text-tebesir-soluk border-transparent hover:text-tebesir')
               }
             >
               {item.name}
             </NavLink>
           ))}
         </nav>
-      </div>
-
-      {/* Sağ Kısım: Arama, Bildirimler, Profil */}
-      <div className="flex items-center space-x-6">
-        <div className="hidden lg:flex items-center text-zinc-400 focus-within:text-white transition-colors bg-[#13151a] border-2 border-[#1f2129] focus-within:border-cyan-400 px-3 py-1.5 rounded-none w-64">
-          <Search className="w-4 h-4 mr-2" />
-          <input 
-            type="text" 
-            placeholder="Ara..." 
-            className="bg-transparent border-none outline-none text-[14px] font-medium w-full placeholder:text-zinc-600 text-white"
-          />
-        </div>
-
-        {user ? (
-          <>
-            <button className="text-zinc-400 hover:text-white transition-colors relative">
-              <Bell className="w-6 h-6" />
-              <span className="absolute -top-1 -right-1 w-3 h-3 bg-[#ff0055] rounded-full border-2 border-[#0b0c10]"></span>
-            </button>
-            
-            <div className="flex items-center space-x-3 border-2 border-[#1f2129] p-1 transition-all">
-              <img 
-                src={`https://api.dicebear.com/7.x/bottts/svg?seed=${user.avatarSeed || user.username}&backgroundColor=transparent`} 
-                alt="Profile" 
-                className="w-8 h-8 bg-zinc-800"
-              />
-              <span className="text-[14px] font-black text-white uppercase tracking-widest hidden sm:block">
-                {user.username}
-              </span>
-              <button onClick={handleLogout} className="text-zinc-500 hover:text-[#ff0055] p-1 ml-2 transition-colors" title="Çıkış Yap">
-                <LogOut className="w-5 h-5" strokeWidth={3} />
-              </button>
-            </div>
-          </>
-        ) : (
-          <button 
-            onClick={() => navigate('/auth')}
-            className="flex items-center bg-cyan-400 hover:bg-white text-black px-4 py-2 text-[14px] font-black uppercase tracking-widest transition-all duration-300 border-2 border-black hover:shadow-[4px_4px_0px_#00e5ff] hover:-translate-y-0.5 hover:-translate-x-0.5"
-          >
-            <User className="w-4 h-4 mr-2" strokeWidth={3} />
-            GİRİŞ YAP
-          </button>
-        )}
-      </div>
-      
+      )}
     </header>
   );
 }
