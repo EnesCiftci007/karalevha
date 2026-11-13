@@ -18,6 +18,8 @@ namespace Karalevha.API.Models
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        public DateTime? EditedAt { get; set; }
+
         // Foreign Key
         [Required]
         public int UserId { get; set; }

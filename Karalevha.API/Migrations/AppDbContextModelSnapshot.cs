@@ -200,6 +200,9 @@ namespace Karalevha.API.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<DateTime?>("EditedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<int>("Likes")
                         .HasColumnType("integer");
 

@@ -18,12 +18,39 @@ namespace Karalevha.API.Controllers
         private readonly AppDbContext _context;
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly ObaFileStorage _storage;
+        private readonly CurrentUser _current;
 
-        public ObaMessagesController(AppDbContext context, IHubContext<ChatHub> hubContext, ObaFileStorage storage)
+        public ObaMessagesController(AppDbContext context, IHubContext<ChatHub> hubContext, ObaFileStorage storage, CurrentUser current)
         {
             _context = context;
             _hubContext = hubContext;
             _storage = storage;
+            _current = current;
+        }
+
+        // DELETE: api/obamessages/message/{messageId}
+        // Mesajı yazan, obanın kurucusu ya da kulüp yöneticisi silebilir.
+        [HttpDelete("message/{messageId:int}")]
+        [Authorize]
+        public async Task<IActionResult> DeleteMessage(int messageId)
+        {
+            var message = await _context.ObaMessages
+                .Include(m => m.Channel!).ThenInclude(c => c.Oba)
+                .FirstOrDefaultAsync(m => m.Id == messageId);
+            if (message == null) return NotFound(new { message = "Mesaj bulunamadı." });
+
+            var userId = CurrentUser.IdOf(User);
+            var allowed = userId == message.UserId || userId == message.Channel?.Oba?.OwnerId || _current.IsAdmin(User);
+            if (!allowed) return StatusCode(403, new { message = "Bu mesajı silemezsin." });
+
+            var stored = message.FileStoredName;
+            var channelId = message.ChannelId;
+            _context.ObaMessages.Remove(message);
+            await _context.SaveChangesAsync();
+            _storage.Delete(stored);
+
+            _ = _hubContext.Clients.Group(channelId.ToString()).SendAsync("MessageDeleted", messageId);
+            return Ok(new { success = true });
         }
 
         private int? CurrentUserId =>

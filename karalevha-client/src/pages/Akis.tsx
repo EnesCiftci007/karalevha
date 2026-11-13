@@ -4,30 +4,11 @@ import { Lock, Users } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Oba, Post } from '../types';
-import { fullDate, timeAgo } from '../utils/time';
 import Avatar from '../components/ui/Avatar';
 import PageHeader from '../components/ui/PageHeader';
+import PostItem from '../components/akis/PostItem';
 
 const MAX_LENGTH = 1000; // Backend sınırıyla aynı
-
-const URL_PATTERN = /(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g;
-
-/** Gönderi metnindeki bağlantıları tıklanabilir yapar; geri kalanı düz metin olarak kalır. */
-function PostText({ text }: { text: string }) {
-  return (
-    <p className="text-base leading-relaxed text-tebesir whitespace-pre-wrap break-words">
-      {text.split(URL_PATTERN).map((part, i) =>
-        i % 2 === 1 ? (
-          <a key={i} href={part} target="_blank" rel="noopener noreferrer nofollow" className="text-isaret hover:underline underline-offset-2">
-            {part.replace(/^https?:\/\//, '')}
-          </a>
-        ) : (
-          part
-        )
-      )}
-    </p>
-  );
-}
 
 export default function Akis() {
   const { user } = useAuth();
@@ -155,23 +136,14 @@ export default function Akis() {
             </p>
           ) : (
             <ul className="divide-y divide-levha-cizgi">
-              {posts.map((post) => {
-                const name = post.user?.username || 'Bilinmeyen';
-                return (
-                  <li key={post.id} className="flex gap-3 py-5">
-                    <Avatar name={name} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2 mb-1">
-                        <span className="font-semibold text-tebesir truncate">{name}</span>
-                        <time dateTime={post.createdAt} title={fullDate(post.createdAt)} className="text-sm text-tebesir-silik shrink-0">
-                          · {timeAgo(post.createdAt)}
-                        </time>
-                      </div>
-                      <PostText text={post.content} />
-                    </div>
-                  </li>
-                );
-              })}
+              {posts.map((post) => (
+                <PostItem
+                  key={post.id}
+                  post={post}
+                  onUpdated={(updated) => setPosts((prev) => (prev ?? []).map((p) => (p.id === updated.id ? updated : p)))}
+                  onDeleted={(id) => setPosts((prev) => (prev ?? []).filter((p) => p.id !== id))}
+                />
+              ))}
             </ul>
           )}
         </div>
