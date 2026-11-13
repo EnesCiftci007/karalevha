@@ -7,6 +7,25 @@ import { Oba, Post } from '../types';
 import Avatar from '../components/ui/Avatar';
 import PageHeader from '../components/ui/PageHeader';
 import PostItem from '../components/akis/PostItem';
+import { Comments, CommentToggle, LikeButton, useSocialCounts } from '../components/social/Social';
+import { SocialCounts } from '../types';
+
+function PostFooter({ post, counts, onChange }: { post: Post; counts: SocialCounts; onChange: (patch: Partial<SocialCounts>) => void }) {
+  const [open, setOpen] = useState(() => window.location.hash === `#gonderi-${post.id}`);
+  return (
+    <div className="mt-2">
+      <div className="flex items-center gap-2">
+        <LikeButton type="post" id={post.id} counts={counts} onChange={onChange} />
+        <CommentToggle count={counts.comments} open={open} onClick={() => setOpen((v) => !v)} />
+      </div>
+      {open && (
+        <div className="mt-3 pl-1">
+          <Comments type="post" id={post.id} ownerId={post.user?.id} onCountChange={(n) => onChange({ comments: n })} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 const MAX_LENGTH = 1000; // Backend sınırıyla aynı
 
@@ -65,6 +84,14 @@ export default function Akis() {
       setSending(false);
     }
   };
+
+  const social = useSocialCounts('post', (posts ?? []).map((p) => p.id));
+
+  // Bildirimden #gonderi-ID ile gelindiyse o gönderiye kaydır
+  useEffect(() => {
+    if (!posts || !window.location.hash.startsWith('#gonderi-')) return;
+    document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: 'start' });
+  }, [posts]);
 
   const remaining = MAX_LENGTH - content.length;
 
@@ -142,6 +169,7 @@ export default function Akis() {
                   post={post}
                   onUpdated={(updated) => setPosts((prev) => (prev ?? []).map((p) => (p.id === updated.id ? updated : p)))}
                   onDeleted={(id) => setPosts((prev) => (prev ?? []).filter((p) => p.id !== id))}
+                  footer={<PostFooter post={post} counts={social.get(post.id)} onChange={(patch) => social.update(post.id, patch)} />}
                 />
               ))}
             </ul>

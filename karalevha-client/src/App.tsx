@@ -11,6 +11,11 @@ import Projeler from './pages/Projeler';
 import ProjeDetay from './pages/ProjeDetay';
 import { NotFound } from './pages/NotFound';
 import Tasarim from './pages/Tasarim';
+import Atolye from './pages/Atolye';
+import Etkinlikler from './pages/Etkinlikler';
+import EtkinlikDetay from './pages/EtkinlikDetay';
+import Profil from './pages/Profil';
+import Ara from './pages/Ara';
 
 function App() {
   return (
@@ -28,6 +33,11 @@ function App() {
             <Route path="baski-istasyonu" element={<BaskiIstasyonu />} />
             <Route path="projeler" element={<Projeler />} />
             <Route path="projeler/:id" element={<ProjeDetay />} />
+            <Route path="atolye" element={<Atolye />} />
+            <Route path="etkinlikler" element={<Etkinlikler />} />
+            <Route path="etkinlikler/:id" element={<EtkinlikDetay />} />
+            <Route path="u/:username" element={<Profil />} />
+            <Route path="ara" element={<Ara />} />
             <Route path="tasarim" element={<Tasarim />} />
           </Route>
 
