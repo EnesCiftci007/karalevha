@@ -6,6 +6,7 @@ import ConfirmDialog from '../components/ui/ConfirmDialog';
 import ItemMenu from '../components/ui/ItemMenu';
 import UserLink from '../components/ui/UserLink';
 import ProjectFormModal from '../components/projeler/ProjectFormModal';
+import { Comments, LikeButton, useSocialCounts } from '../components/social/Social';
 import { api } from '../services/api';
 import { Project } from '../types';
 import { fullDate, timeAgo } from '../utils/time';
@@ -21,6 +22,7 @@ export default function ProjeDetay() {
   const { user } = useAuth();
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const social = useSocialCounts('project', id ? [Number(id)] : []);
   const [project, setProject] = useState<Project | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -70,6 +72,7 @@ export default function ProjeDetay() {
         back={back}
         action={
           <div className="flex items-center gap-2">
+            <LikeButton type="project" id={project.id} counts={social.get(project.id)} onChange={(p) => social.update(project.id, p)} />
             <a href={project.repoUrl} target="_blank" rel="noopener noreferrer" className="btn-ikincil">
               Depoyu aç
               <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
@@ -113,6 +116,13 @@ export default function ProjeDetay() {
           }
         />
       )}
+
+      <section className="mt-12 max-w-okuma">
+        <h2 className="font-display font-semibold text-lg text-tebesir mb-4">
+          Yorumlar <span className="veri text-base">{social.get(project.id).comments}</span>
+        </h2>
+        <Comments type="project" id={project.id} onCountChange={(n) => social.update(project.id, { comments: n })} />
+      </section>
 
       {editing && <ProjectFormModal project={project} onSaved={setProject} onClose={() => setEditing(false)} />}
       {confirmDelete && (

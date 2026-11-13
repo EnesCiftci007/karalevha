@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Box, Download, Pencil, Rotate3d, Search, Trash2, Upload, UploadCloud, X } from 'lucide-react';
 import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -20,6 +20,8 @@ import ConfirmDialog from '../components/ui/ConfirmDialog';
 import ItemMenu from '../components/ui/ItemMenu';
 import UserLink from '../components/ui/UserLink';
 import ModelEditModal from '../components/modeller/ModelEditModal';
+import MakesSection from '../components/modeller/MakesSection';
+import { Comments, LikeButton, useSocialCounts } from '../components/social/Social';
 
 const MAX_UPLOAD = 50 * 1024 * 1024; // Backend sınırıyla aynı (50 MB)
 
@@ -81,6 +83,7 @@ export default function BaskiIstasyonu() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('hepsi');
   const [preview, setPreview] = useState<PrintModel | null>(null);
+  const [params, setParams] = useSearchParams();
   const [showUpload, setShowUpload] = useState(false);
   const [editing, setEditing] = useState<PrintModel | null>(null);
   const [deleting, setDeleting] = useState<PrintModel | null>(null);
@@ -110,6 +113,15 @@ export default function BaskiIstasyonu() {
     fetchModels();
   }, []);
 
+  // Bildirimlerdeki bağlantılar ?model=ID ile gelir: o modelin penceresini aç
+  useEffect(() => {
+    const id = Number(params.get('model'));
+    if (!id || !models) return;
+    const found = models.find((m) => m.id === id);
+    if (found) setPreview(found);
+    setParams({}, { replace: true });
+  }, [models, params, setParams]);
+
   const visible = useMemo(() => {
     const q = query.trim().toLocaleLowerCase('tr');
     return (models ?? []).filter(
@@ -121,6 +133,8 @@ export default function BaskiIstasyonu() {
           m.uploader.toLocaleLowerCase('tr').includes(q))
     );
   }, [models, query, filter]);
+
+  const social = useSocialCounts('model', (models ?? []).map((m) => m.id));
 
   const count = (c: Category) => (models ?? []).filter((m) => m.category === c).length;
 
@@ -257,6 +271,7 @@ export default function BaskiIstasyonu() {
                   <span className="veri shrink-0 pt-0.5">{model.format.toUpperCase()}</span>
                 </div>
                 <p className="mt-1 text-xs text-tebesir-silik truncate">
+                  {social.get(model.id).likes > 0 && <span className="text-tebesir-soluk">♥ {social.get(model.id).likes} · </span>}
                   {model.uploader} · <time dateTime={model.uploadedAt} title={fullDate(model.uploadedAt)}>{timeAgo(model.uploadedAt)}</time>
                 </p>
                 <div className="mt-auto pt-3">
@@ -295,6 +310,7 @@ export default function BaskiIstasyonu() {
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
+              <LikeButton type="model" id={preview.id} counts={social.get(preview.id)} onChange={(p) => social.update(preview.id, p)} />
               <ItemMenu
                 label="Model seçenekleri"
                 actions={[
@@ -302,12 +318,22 @@ export default function BaskiIstasyonu() {
                   ...(user?.id === preview.userId || user?.isAdmin ? [{ label: 'Sil', icon: Trash2, danger: true, onSelect: () => setDeleting(preview) }] : []),
                 ]}
               />
+              {preview.category === 'baski' && (
+                <Link to={`/atolye?model=${preview.id}`} className="btn-ikincil">Yazıcı ayır</Link>
+              )}
               <a href={fileUrlOf(preview)} download={downloadName(preview)} className="btn-ana">
                 <Download className="w-4 h-4" strokeWidth={2.5} />
                 {preview.format.toUpperCase()} indir
               </a>
             </div>
           </div>
+          <MakesSection modelId={preview.id} />
+          <section className="px-5 pb-5" aria-label="Yorumlar">
+            <h3 className="text-sm font-semibold text-tebesir mb-3">
+              Yorumlar {social.get(preview.id).comments > 0 && <span className="veri">{social.get(preview.id).comments}</span>}
+            </h3>
+            <Comments type="model" id={preview.id} ownerId={preview.userId} onCountChange={(n) => social.update(preview.id, { comments: n })} />
+          </section>
         </Modal>
       )}
 

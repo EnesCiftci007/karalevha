@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Box, FolderGit2, MessagesSquare, Newspaper, type LucideIcon } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { Oba, Post, PrintModel, Project } from '../types';
+import { ClubEvent, Oba, Post, PrintModel, Project } from '../types';
+import { DateBlock, eventTime } from '../components/etkinlik/EventParts';
 import { SkeletonRows } from '../components/ui/Skeleton';
 
 // three.js sahnesi ayrı parça olarak, sayfa açıldıktan sonra yüklenir
@@ -14,6 +15,7 @@ interface HomeData {
   posts: Post[];
   obalar: Oba[];
   models: PrintModel[];
+  events: ClubEvent[];
 }
 
 const relative = new Intl.RelativeTimeFormat('tr', { numeric: 'auto' });
@@ -76,8 +78,9 @@ export default function Home() {
       loadList<Post>('/api/posts'),
       loadList<Oba>('/api/obalar'),
       loadList<PrintModel>('/api/printmodels'),
-    ]).then(([projects, posts, obalar, models]) => {
-      if (!cancelled) setData({ projects, posts, obalar, models });
+      loadList<ClubEvent>('/api/etkinlik?take=3'),
+    ]).then(([projects, posts, obalar, models, events]) => {
+      if (!cancelled) setData({ projects, posts, obalar, models, events });
     });
     return () => {
       cancelled = true;
@@ -151,6 +154,33 @@ export default function Home() {
           </Link>
         ))}
       </nav>
+
+      {/* Yaklaşan etkinlikler: yalnızca varsa görünür */}
+      {data && data.events.length > 0 && (
+        <section className="mt-12">
+          <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-levha-cizgi">
+            <h2 className="font-display font-semibold text-lg text-tebesir">Yaklaşan etkinlikler</h2>
+            <Link to="/etkinlikler" className="inline-flex items-center gap-1 text-sm text-tebesir-soluk hover:text-tebesir transition-colors">
+              Tüm etkinlikler
+              <ArrowRight className="w-4 h-4" aria-hidden="true" />
+            </Link>
+          </div>
+          <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {data.events.map((e) => (
+              <li key={e.id}>
+                <Link to={`/etkinlikler/${e.id}`} className="kart p-4 flex gap-4 h-full hover:border-tebesir-silik transition-colors">
+                  <DateBlock iso={e.startsAt} />
+                  <span className="min-w-0">
+                    <span className="block text-base font-semibold text-tebesir line-clamp-2">{e.title}</span>
+                    <span className="block mt-1 veri">{eventTime(e)}{e.location ? ` · ${e.location}` : ''}</span>
+                    <span className="block mt-1 text-xs text-tebesir-silik">{e.attendeeCount} katılımcı</span>
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <div className="mt-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
 

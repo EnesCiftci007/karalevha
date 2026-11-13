@@ -66,7 +66,7 @@ export default function PostItem({ post, onUpdated, onDeleted, footer }: PostIte
   };
 
   return (
-    <li className="flex gap-3 py-5">
+    <li id={`gonderi-${post.id}`} className="flex gap-3 py-5 scroll-mt-24">
       <Avatar name={name} />
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">

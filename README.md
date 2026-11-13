@@ -76,6 +76,30 @@ Dosyalar `wwwroot` dışında, `Karalevha.API/App_Data/oba-files` klasöründe s
 geçerek sunulur (gizli obaların dosyalarını yalnızca üyeleri açabilir). Klasörü değiştirmek için
 `Storage:ObaFilesPath` ayarını kullanın.
 
+## 🛠️ Kulüp özellikleri
+
+- **Atölye** (`/atolye`): yazıcı, lehim istasyonu gibi ekipmanların haftalık takvimi. Üyeler boş saate tıklayıp
+  rezervasyon yapar (çakışma engellenir, en fazla 12 saat, 30 gün ileriye). 3B Modeller'deki "Yazıcı ayır"
+  bağlantısı modeli rezervasyona iliştirir. Ekipmanı yalnızca yöneticiler ekler; bakımdaki ekipmana rezervasyon alınmaz.
+- **Etkinlikler** (`/etkinlikler`): her üye etkinlik açabilir, "Katılıyorum" der. Saat değişirse ya da iptal edilirse
+  katılımcılara bildirim gider. Yaklaşan etkinlikler ana sayfada görünür.
+- **Bunu bastım**: model penceresinde baskının fotoğrafı ve ayarları paylaşılır.
+- **Beğeni ve yorum**: gönderi, proje ve modellerde. Yorumlarda ve oba mesajlarında `@kullaniciadi` ile birinden bahsedilebilir.
+- **Bildirimler**: üst menüdeki zil (yorum, bahsetme, etkinlik değişikliği, rezervasyon iptali).
+- **Profil** (`/u/kullaniciadi`) ve **genel arama** (üst menü, `/` kısayolu).
+- **Düzenleme/silme**: herkes kendi içeriğini düzenler ve siler; oba kurucusu obasındaki mesajları silebilir.
+
+### Kulüp yöneticileri
+
+Yöneticiler ekipman ekler ve gerektiğinde her içeriği silebilir. Yapılandırmadan belirlenir:
+
+```bash
+dotnet user-secrets set "Admins:0" "kullaniciadi"
+```
+
+Canlıda ortam değişkeni olarak: `Admins__0`, `Admins__1`, … Değişiklikten sonra yöneticinin bir kez çıkış yapıp
+tekrar girmesi gerekir.
+
 ## 🌐 Canlı Yayına Alma (Ortam Değişkenleri)
 
 Uygulama sunucuya (Render, Railway vb.) yüklendiğinde aşağıdaki ortam değişkenlerini tanımlamanız gerekir:
@@ -87,6 +111,7 @@ Uygulama sunucuya (Render, Railway vb.) yüklendiğinde aşağıdaki ortam deği
 | `Cors__Origins__0` | `https://karalevha.vercel.app` (sonda / yok) |
 | `ASPNETCORE_ENVIRONMENT` | `Production` |
 | `Storage__ObaFilesPath` | (İsteğe bağlı) Kalıcı diskteki dosya klasörü |
+| `Admins__0` | (İsteğe bağlı) Kulüp yöneticisinin kullanıcı adı |
 
 > **Not:** Render gibi platformlarda konteyner diski kalıcı değildir; yeniden dağıtımda yüklenen dosyalar
 > (STL'ler ve oba dosyaları) silinir. Canlıda kalıcı bir disk bağlayıp `Storage__ObaFilesPath` ile gösterin.

@@ -48,3 +48,73 @@ export interface Project {
   createdAt: string;
   owner: string;
 }
+
+export interface Equipment {
+  id: number;
+  name: string;
+  kind: 'yazici' | 'lehim' | 'lazer' | 'diger';
+  description?: string | null;
+  status: 'hazir' | 'bakimda';
+  inUse: boolean;
+}
+
+export interface Reservation {
+  id: number;
+  equipmentId: number;
+  equipmentName: string;
+  startsAt: string;
+  endsAt: string;
+  note?: string | null;
+  userId: number;
+  username: string;
+  printModelId?: number | null;
+  printModelTitle?: string | null;
+}
+
+export interface ClubEvent {
+  id: number;
+  title: string;
+  description?: string | null;
+  location?: string | null;
+  startsAt: string;
+  endsAt?: string | null;
+  createdById: number;
+  createdBy: string;
+  attendeeCount: number;
+  attending: boolean;
+  attendees: string[];
+}
+
+export interface PrintMake {
+  id: number;
+  printModelId: number;
+  photoPath: string;
+  note?: string | null;
+  settings?: string | null;
+  createdAt: string;
+  userId: number;
+  username: string;
+}
+
+export interface CommentItem {
+  id: number;
+  content: string;
+  createdAt: string;
+  userId: number;
+  username: string;
+}
+
+export interface SocialCounts {
+  likes: number;
+  liked: boolean;
+  comments: number;
+}
+
+export interface NotificationItem {
+  id: number;
+  text: string;
+  link: string;
+  isRead: boolean;
+  createdAt: string;
+  actor?: string | null;
+}
