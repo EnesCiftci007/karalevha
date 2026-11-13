@@ -1,4 +1,5 @@
 import { API_URL } from './api';
+import { formatOf } from '../utils/loadModel';
 
 export interface ObaFile {
   name: string;
@@ -8,7 +9,7 @@ export interface ObaFile {
 
 export const MAX_FILE_SIZE = 25 * 1024 * 1024; // Backend ile aynı sınır (25 MB)
 
-export type FileKind = 'image' | 'pdf' | 'video' | 'audio' | 'stl' | 'text' | 'other';
+export type FileKind = 'image' | 'pdf' | 'video' | 'audio' | 'model' | 'text' | 'other';
 
 const TEXT_EXTENSIONS = new Set([
   'txt', 'md', 'csv', 'json', 'xml', 'yaml', 'yml', 'ino', 'c', 'cpp', 'h', 'hpp',
@@ -24,7 +25,7 @@ export function fileExtension(name: string): string {
 export function fileKind(file: ObaFile): FileKind {
   const ext = fileExtension(file.name);
   const type = file.contentType || '';
-  if (ext === 'stl') return 'stl';
+  if (formatOf(file.name)) return 'model'; // STL, 3MF, OBJ, FBX, GLB
   if (type === 'application/pdf' || ext === 'pdf') return 'pdf';
   if (type.startsWith('image/')) return 'image';
   if (type.startsWith('video/')) return 'video';

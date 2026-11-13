@@ -9,7 +9,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:9.0
 WORKDIR /app
 COPY --from=build /app/publish .
 
-RUN mkdir -p /app/wwwroot/uploads/stl /app/App_Data/oba-files && chown -R $APP_UID /app/wwwroot /app/App_Data
+RUN mkdir -p /app/wwwroot/uploads/stl /app/wwwroot/uploads/models /app/App_Data/oba-files && chown -R $APP_UID /app/wwwroot /app/App_Data
 USER $APP_UID
 
 ENV ASPNETCORE_URLS=http://+:8080
