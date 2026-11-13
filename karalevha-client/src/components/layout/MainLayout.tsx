@@ -8,8 +8,8 @@ export default function MainLayout() {
       <Navbar />
 
       {/* Değişen Sayfa İçeriği */}
-      <main className="flex-1 px-4 py-6 sm:px-6 md:p-8 relative">
-        <div className="max-w-7xl mx-auto">
+      <main className="flex-1 px-4 sm:px-6 pt-8 pb-16 relative">
+        <div className="max-w-sayfa mx-auto">
           <Outlet />
         </div>
       </main>

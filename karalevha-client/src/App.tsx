@@ -10,6 +10,7 @@ import Auth from './pages/Auth';
 import Projeler from './pages/Projeler';
 import ProjeDetay from './pages/ProjeDetay';
 import { NotFound } from './pages/NotFound';
+import Tasarim from './pages/Tasarim';
 
 function App() {
   return (
@@ -27,6 +28,7 @@ function App() {
             <Route path="baski-istasyonu" element={<BaskiIstasyonu />} />
             <Route path="projeler" element={<Projeler />} />
             <Route path="projeler/:id" element={<ProjeDetay />} />
+            <Route path="tasarim" element={<Tasarim />} />
           </Route>
 
           {/* 404 Hata Sayfası */}

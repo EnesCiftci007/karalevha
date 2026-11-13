@@ -28,7 +28,8 @@ Start-Process -FilePath "$pgBin\pg_ctl.exe" -WindowStyle Hidden -ArgumentList @(
     'start', '-D', "`"$data`"", '-l', "`"$(Join-Path $data 'server.log')`""
 )
 
-foreach ($i in 1..30) {
+# Bilgisayar duzgun kapanmadiysa sunucu once kurtarma (recovery) yapar; bu biraz surebilir
+foreach ($i in 1..120) {
     Start-Sleep -Milliseconds 500
     & "$pgBin\pg_isready.exe" -h localhost -p 5432 -q
     if ($LASTEXITCODE -eq 0) { Write-Host 'PostgreSQL basladi (localhost:5432).'; exit 0 }
