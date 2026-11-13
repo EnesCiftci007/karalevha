@@ -40,6 +40,7 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();
 builder.Services.AddSingleton<ObaFileStorage>();
+builder.Services.AddSingleton<CurrentUser>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -66,6 +67,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
+        // WebSocket bağlantıları başlık gönderemez; SignalR jetonu sorgu dizesinde taşır
+        options.Events = new JwtBearerEvents
+        {
+            OnMessageReceived = context =>
+            {
+                var token = context.Request.Query["access_token"];
+                if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/chathub"))
+                    context.Token = token;
+                return Task.CompletedTask;
+            }
+        };
     });
 
 builder.Services.AddRateLimiter(options =>
@@ -90,6 +102,16 @@ builder.Services.AddRateLimiter(options =>
                 PermitLimit = 2
             }));
 
+    // Gizli oba şifresi denemeleri: kişi başına dakikada 5
+    options.AddPolicy("JoinLimiter", ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 5
+            }));
+
     // Sohbete dosya gönderme: STL yüklemeden daha sık olur ama yine de sınırlı
     options.AddPolicy("ChatFileLimiter", ctx =>
         RateLimitPartition.GetFixedWindowLimiter(
@@ -108,6 +130,12 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
+
+    // Eski sürümlerde oba şifreleri düz metin saklanıyordu; kalanları bir kerelik BCrypt özetine çevir
+    var plainPasswords = db.Obalar.Where(o => o.JoinPassword != null && !o.JoinPassword.StartsWith("$2")).ToList();
+    foreach (var oba in plainPasswords)
+        oba.JoinPassword = BCrypt.Net.BCrypt.HashPassword(oba.JoinPassword!.Trim());
+    if (plainPasswords.Count > 0) db.SaveChanges();
 }
 
 app.UseForwardedHeaders();

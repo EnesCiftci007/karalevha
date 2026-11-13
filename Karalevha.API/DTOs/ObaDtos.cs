@@ -16,6 +16,7 @@ namespace Karalevha.API.DTOs
         
         public bool IsPrivate { get; set; } = false;
         
+        [MaxLength(72)] // BCrypt en fazla 72 baytı dikkate alır
         public string? JoinPassword { get; set; }
     }
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Box, Download, Rotate3d, Search, Upload, UploadCloud, X } from 'lucide-react';
+import { Box, Download, Pencil, Rotate3d, Search, Trash2, Upload, UploadCloud, X } from 'lucide-react';
 import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { PrintModel } from '../types';
@@ -16,6 +16,10 @@ import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
 import Skeleton from '../components/ui/Skeleton';
 import Tabs from '../components/ui/Tabs';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import ItemMenu from '../components/ui/ItemMenu';
+import UserLink from '../components/ui/UserLink';
+import ModelEditModal from '../components/modeller/ModelEditModal';
 
 const MAX_UPLOAD = 50 * 1024 * 1024; // Backend sınırıyla aynı (50 MB)
 
@@ -78,6 +82,8 @@ export default function BaskiIstasyonu() {
   const [filter, setFilter] = useState<Filter>('hepsi');
   const [preview, setPreview] = useState<PrintModel | null>(null);
   const [showUpload, setShowUpload] = useState(false);
+  const [editing, setEditing] = useState<PrintModel | null>(null);
+  const [deleting, setDeleting] = useState<PrintModel | null>(null);
 
   // Yükleme formu
   const [title, setTitle] = useState('');
@@ -285,13 +291,22 @@ export default function BaskiIstasyonu() {
               </div>
               {preview.description && <p className="text-sm text-tebesir-soluk whitespace-pre-wrap break-words">{preview.description}</p>}
               <p className="mt-2 text-xs text-tebesir-silik">
-                {preview.uploader} · {fullDate(preview.uploadedAt)}
+                <UserLink username={preview.uploader} className="text-tebesir-soluk" /> · {fullDate(preview.uploadedAt)}
               </p>
             </div>
-            <a href={fileUrlOf(preview)} download={downloadName(preview)} className="btn-ana shrink-0">
-              <Download className="w-4 h-4" strokeWidth={2.5} />
-              {preview.format.toUpperCase()} indir
-            </a>
+            <div className="flex items-center gap-2 shrink-0">
+              <ItemMenu
+                label="Model seçenekleri"
+                actions={[
+                  ...(user?.id === preview.userId ? [{ label: 'Düzenle', icon: Pencil, onSelect: () => setEditing(preview) }] : []),
+                  ...(user?.id === preview.userId || user?.isAdmin ? [{ label: 'Sil', icon: Trash2, danger: true, onSelect: () => setDeleting(preview) }] : []),
+                ]}
+              />
+              <a href={fileUrlOf(preview)} download={downloadName(preview)} className="btn-ana">
+                <Download className="w-4 h-4" strokeWidth={2.5} />
+                {preview.format.toUpperCase()} indir
+              </a>
+            </div>
           </div>
         </Modal>
       )}
@@ -378,6 +393,31 @@ export default function BaskiIstasyonu() {
             </div>
           </form>
         </Modal>
+      )}
+
+      {editing && (
+        <ModelEditModal
+          model={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(updated) => {
+            setModels((prev) => (prev ?? []).map((m) => (m.id === updated.id ? updated : m)));
+            setPreview(updated);
+          }}
+        />
+      )}
+      {deleting && (
+        <ConfirmDialog
+          title="Model silinsin mi?"
+          confirmLabel="Modeli sil"
+          onClose={() => setDeleting(null)}
+          onConfirm={async () => {
+            await api(`/api/printmodels/${deleting.id}`, { method: 'DELETE' });
+            setModels((prev) => (prev ?? []).filter((m) => m.id !== deleting.id));
+            setPreview(null);
+          }}
+        >
+          <span className="font-medium text-tebesir">{deleting.title}</span> ve dosyası kalıcı olarak silinecek.
+        </ConfirmDialog>
       )}
     </div>
   );

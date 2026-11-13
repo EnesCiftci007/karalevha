@@ -5,6 +5,7 @@ using Karalevha.API.Data;
 using Karalevha.API.Models;
 using System.Security.Claims;
 using Microsoft.AspNetCore.RateLimiting;
+using Karalevha.API.Services;
 
 namespace Karalevha.API.Controllers
 {
@@ -24,11 +25,65 @@ namespace Karalevha.API.Controllers
 
         private readonly AppDbContext _context;
         private readonly IWebHostEnvironment _env;
+        private readonly CurrentUser _current;
 
-        public PrintModelsController(AppDbContext context, IWebHostEnvironment env)
+        public PrintModelsController(AppDbContext context, IWebHostEnvironment env, CurrentUser current)
         {
             _context = context;
             _env = env;
+            _current = current;
+        }
+
+        private string WebRoot => _env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+
+        public class UpdateModelDto
+        {
+            public string Title { get; set; } = string.Empty;
+            public string? Description { get; set; }
+            public string Category { get; set; } = "baski";
+        }
+
+        // PUT: api/printmodels/{id}
+        [HttpPut("{id:int}")]
+        [Authorize]
+        public async Task<IActionResult> UpdateModel(int id, UpdateModelDto dto)
+        {
+            var model = await _context.PrintModels.FindAsync(id);
+            if (model == null) return NotFound(new { message = "Model bulunamadı." });
+            if (CurrentUser.IdOf(User) != model.UserId) return StatusCode(403, new { message = "Bu modeli düzenleyemezsin." });
+
+            var title = dto.Title?.Trim() ?? string.Empty;
+            if (title.Length == 0 || title.Length > 100) return BadRequest(new { message = "Model adı 1-100 karakter olmalı." });
+            var description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
+            if (description?.Length > 500) return BadRequest(new { message = "Açıklama en fazla 500 karakter olabilir." });
+            if (!Categories.Contains(dto.Category)) return BadRequest(new { message = "Geçersiz kategori." });
+
+            model.Title = title;
+            model.Description = description;
+            model.Category = dto.Category;
+            await _context.SaveChangesAsync();
+            return Ok(new { success = true });
+        }
+
+        // DELETE: api/printmodels/{id}
+        [HttpDelete("{id:int}")]
+        [Authorize]
+        public async Task<IActionResult> DeleteModel(int id)
+        {
+            var model = await _context.PrintModels.FindAsync(id);
+            if (model == null) return NotFound(new { message = "Model bulunamadı." });
+            if (!_current.CanManage(User, model.UserId)) return StatusCode(403, new { message = "Bu modeli silemezsin." });
+
+            _context.PrintModels.Remove(model);
+            await _context.SaveChangesAsync();
+
+            // Kayıt silindikten sonra dosyayı da kaldır. Yol yalnızca /uploads altındaysa ve dışarı taşmıyorsa.
+            var uploads = Path.GetFullPath(Path.Combine(WebRoot, "uploads"));
+            var path = Path.GetFullPath(Path.Combine(WebRoot, model.FilePath.TrimStart('/')));
+            if (path.StartsWith(uploads + Path.DirectorySeparatorChar) && System.IO.File.Exists(path))
+                System.IO.File.Delete(path);
+
+            return Ok(new { success = true });
         }
 
         // GET: api/printmodels?category=oyun
@@ -56,6 +111,7 @@ namespace Karalevha.API.Controllers
                     FileUrl = m.FilePath,
                     m.Category,
                     m.UploadedAt,
+                    m.UserId,
                     Uploader = m.User!.Username
                 })
                 .ToListAsync();
@@ -70,6 +126,7 @@ namespace Karalevha.API.Controllers
                 m.Category,
                 Format = Path.GetExtension(m.FileName).TrimStart('.').ToLowerInvariant(),
                 m.UploadedAt,
+                m.UserId,
                 m.Uploader
             }));
         }

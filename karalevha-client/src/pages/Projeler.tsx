@@ -1,11 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ExternalLink, FolderGit2, GitFork, Plus, Search, Star } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Project } from '../types';
 import { fullDate, timeAgo } from '../utils/time';
-import Modal from '../components/ui/Modal';
+import ProjectFormModal from '../components/projeler/ProjectFormModal';
+import UserLink from '../components/ui/UserLink';
 import PageHeader from '../components/ui/PageHeader';
 
 type SortKey = 'yeni' | 'ad';
@@ -27,13 +28,6 @@ export default function Projeler() {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortKey>('yeni');
   const [showModal, setShowModal] = useState(false);
-
-  // Form
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [repoUrl, setRepoUrl] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -65,33 +59,6 @@ export default function Projeler() {
     );
   }, [projects, query, sort]);
 
-  const closeModal = () => {
-    setShowModal(false);
-    setFormError('');
-  };
-
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim() || !description.trim() || !repoUrl.trim() || saving) return;
-
-    setSaving(true);
-    setFormError('');
-    try {
-      const created = await api<Project>('/api/projects', {
-        method: 'POST',
-        body: JSON.stringify({ title: title.trim(), description: description.trim(), repoUrl: repoUrl.trim() }),
-      });
-      setProjects((prev) => [created, ...(prev ?? [])]);
-      setTitle('');
-      setDescription('');
-      setRepoUrl('');
-      closeModal();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : 'Proje eklenemedi.');
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <div className="pb-16">
@@ -165,7 +132,7 @@ export default function Projeler() {
                   <h2 className="flex items-center gap-2 text-base">
                     <FolderGit2 className="w-4 h-4 shrink-0 text-tebesir-silik" strokeWidth={1.75} aria-hidden="true" />
                     <span className="truncate">
-                      <span className="font-normal text-tebesir-soluk">{project.owner} / </span>
+                      <UserLink username={project.owner} className="font-normal text-tebesir-soluk" /><span className="text-tebesir-silik"> / </span>
                       <Link to={`/projeler/${project.id}`} className="font-semibold text-tebesir hover:underline underline-offset-4">
                         {project.title}
                       </Link>
@@ -197,27 +164,10 @@ export default function Projeler() {
 
       {/* Yeni proje */}
       {showModal && (
-        <Modal title="Yeni proje" onClose={closeModal}>
-          <form onSubmit={handleCreateProject} className="p-5 space-y-4">
-            <div>
-              <label htmlFor="proje-ad" className="alan-etiketi">Proje adı</label>
-              <input id="proje-ad" type="text" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} required autoFocus placeholder="Çizgi izleyen robot" className="girdi" />
-            </div>
-            <div>
-              <label htmlFor="proje-aciklama" className="alan-etiketi">Kısa açıklama</label>
-              <textarea id="proje-aciklama" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={1000} required rows={3} placeholder="Ne yapıyor, hangi donanım ve dille yapıldı?" className="girdi resize-y" />
-            </div>
-            <div>
-              <label htmlFor="proje-depo" className="alan-etiketi">Depo adresi</label>
-              <input id="proje-depo" type="url" value={repoUrl} onChange={(e) => setRepoUrl(e.target.value)} required placeholder="https://github.com/kullanici/proje" className="girdi font-mono text-sm" />
-            </div>
-            {formError && <p className="text-sm text-hata" role="alert">{formError}</p>}
-            <div className="flex justify-end gap-3 pt-2">
-              <button type="button" onClick={closeModal} className="btn-ikincil">Vazgeç</button>
-              <button type="submit" disabled={saving} className="btn-ana">{saving ? 'Ekleniyor…' : 'Projeyi ekle'}</button>
-            </div>
-          </form>
-        </Modal>
+        <ProjectFormModal
+          onSaved={(created) => setProjects((prev) => [created, ...(prev ?? [])])}
+          onClose={() => setShowModal(false)}
+        />
       )}
     </div>
   );

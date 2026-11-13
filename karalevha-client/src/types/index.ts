@@ -3,12 +3,14 @@ export interface User {
   username: string;
   email: string;
   avatarSeed: string;
+  isAdmin?: boolean;
 }
 
 export interface Post {
   id: number;
   content: string;
   createdAt: string;
+  editedAt?: string | null;
   user: { id: number; username: string; avatarSeed: string; };
 }
 
@@ -32,6 +34,7 @@ export interface PrintModel {
   category: 'baski' | 'oyun';
   format: 'stl' | '3mf' | 'obj' | 'fbx' | 'glb';
   uploadedAt: string;
+  userId: number;
   uploader: string;
 }
 

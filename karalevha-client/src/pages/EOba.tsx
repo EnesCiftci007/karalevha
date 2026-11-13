@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Lock, MessagesSquare, Plus, Search, Trash2, Users } from 'lucide-react';
+import { Lock, MessagesSquare, Pencil, Plus, Search, Trash2, Users } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Oba } from '../types';
@@ -11,6 +11,7 @@ import Field from '../components/ui/Field';
 import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
 import Skeleton from '../components/ui/Skeleton';
+import ItemMenu from '../components/ui/ItemMenu';
 
 export default function EOba() {
   const { user } = useAuth();
@@ -26,6 +27,13 @@ export default function EOba() {
   const [joinPassword, setJoinPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
+
+  // Düzenleme
+  const [toEdit, setToEdit] = useState<Oba | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
 
   // Silme onayı
   const [toDelete, setToDelete] = useState<Oba | null>(null);
@@ -89,6 +97,32 @@ export default function EOba() {
       setFormError(err instanceof Error ? err.message : 'Oba kurulamadı.');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openEdit = (oba: Oba) => {
+    setToEdit(oba);
+    setEditName(oba.name);
+    setEditDescription(oba.description ?? '');
+    setEditError('');
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!toEdit || !editName.trim() || editSaving) return;
+    setEditSaving(true);
+    setEditError('');
+    try {
+      const updated = await api<Oba>(`/api/obalar/${toEdit.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name: editName.trim(), description: editDescription.trim() }),
+      });
+      setObalar((prev) => (prev ?? []).map((o) => (o.id === updated.id ? { ...o, ...updated } : o)));
+      setToEdit(null);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Kaydedilemedi.');
+    } finally {
+      setEditSaving(false);
     }
   };
 
@@ -181,17 +215,15 @@ export default function EOba() {
                   </div>
                 </Link>
                 {isOwner && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDeleteError('');
-                      setToDelete(oba);
-                    }}
-                    className="absolute top-4 right-4 p-1.5 rounded-md text-tebesir-silik hover:text-hata hover:bg-levha-yuzey transition-colors"
-                    aria-label={`${oba.name} obasını sil`}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <div className="absolute top-4 right-4">
+                    <ItemMenu
+                      label={`${oba.name} seçenekleri`}
+                      actions={[
+                        { label: 'Düzenle', icon: Pencil, onSelect: () => openEdit(oba) },
+                        { label: 'Sil', icon: Trash2, danger: true, onSelect: () => { setDeleteError(''); setToDelete(oba); } },
+                      ]}
+                    />
+                  </div>
                 )}
               </li>
             );
@@ -225,6 +257,25 @@ export default function EOba() {
             <div className="flex justify-end gap-3 pt-2">
               <button type="button" onClick={closeCreate} disabled={saving} className="btn-ikincil">Vazgeç</button>
               <button type="submit" disabled={saving || !name.trim()} className="btn-ana">{saving ? 'Kuruluyor…' : 'Obayı kur'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Düzenleme */}
+      {toEdit && (
+        <Modal title="Obayı düzenle" onClose={() => !editSaving && setToEdit(null)}>
+          <form onSubmit={handleEdit} className="p-5 space-y-4">
+            <Field id="oba-duzenle-ad" label="Oba adı">
+              <input id="oba-duzenle-ad" type="text" required maxLength={100} autoFocus value={editName} onChange={(e) => setEditName(e.target.value)} className="girdi" />
+            </Field>
+            <Field id="oba-duzenle-aciklama" label="Açıklama" note="isteğe bağlı">
+              <textarea id="oba-duzenle-aciklama" rows={3} maxLength={500} value={editDescription} onChange={(e) => setEditDescription(e.target.value)} className="girdi resize-y" />
+            </Field>
+            {editError && <p className="text-sm text-hata" role="alert">{editError}</p>}
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={() => setToEdit(null)} disabled={editSaving} className="btn-ikincil">Vazgeç</button>
+              <button type="submit" disabled={editSaving || !editName.trim()} className="btn-ana">{editSaving ? 'Kaydediliyor…' : 'Kaydet'}</button>
             </div>
           </form>
         </Modal>

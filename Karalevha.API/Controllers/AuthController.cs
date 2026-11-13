@@ -9,6 +9,7 @@ using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.RateLimiting;
+using Karalevha.API.Services;
 
 namespace Karalevha.API.Controllers
 {
@@ -18,11 +19,13 @@ namespace Karalevha.API.Controllers
     {
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
+        private readonly CurrentUser _current;
 
-        public AuthController(AppDbContext context, IConfiguration configuration)
+        public AuthController(AppDbContext context, IConfiguration configuration, CurrentUser current)
         {
             _context = context;
             _configuration = configuration;
+            _current = current;
         }
 
         private static readonly string DummyHash = BCrypt.Net.BCrypt.EnhancedHashPassword("dummy-password");
@@ -79,7 +82,7 @@ namespace Karalevha.API.Controllers
             return Ok(new 
             { 
                 token, 
-                user = new { user.Id, user.Username, user.Email, user.AvatarSeed } 
+                user = new { user.Id, user.Username, user.Email, user.AvatarSeed, IsAdmin = _current.IsAdminName(user.Username) } 
             });
         }
 

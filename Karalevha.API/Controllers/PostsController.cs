@@ -4,7 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
 using Karalevha.API.Models;
 using Karalevha.API.DTOs;
-using System.Security.Claims;
+using Karalevha.API.Services;
 
 namespace Karalevha.API.Controllers
 {
@@ -13,78 +13,84 @@ namespace Karalevha.API.Controllers
     public class PostsController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly CurrentUser _current;
 
-        public PostsController(AppDbContext context)
+        public PostsController(AppDbContext context, CurrentUser current)
         {
             _context = context;
+            _current = current;
         }
+
+        private IQueryable<object> Project(IQueryable<Post> query) =>
+            query.Select(p => new
+            {
+                p.Id,
+                p.Content,
+                p.Likes,
+                p.CreatedAt,
+                p.EditedAt,
+                User = new { p.User!.Id, p.User.Username, p.User.AvatarSeed }
+            });
 
         // GET: api/posts
         [HttpGet]
         public async Task<IActionResult> GetPosts()
         {
-            var posts = await _context.Posts
-                .Include(p => p.User) // Kullanıcı bilgisini (isim, avatar) getir
-                .OrderByDescending(p => p.CreatedAt) // En yeniler en üstte
-                .Select(p => new
-                {
-                    p.Id,
-                    p.Content,
-                    p.Likes,
-                    p.CreatedAt,
-                    User = new
-                    {
-                        p.User.Id,
-                        p.User.Username,
-                        p.User.AvatarSeed
-                    }
-                })
-                .ToListAsync();
-
+            var posts = await Project(_context.Posts.AsNoTracking().OrderByDescending(p => p.CreatedAt)).ToListAsync();
             return Ok(posts);
         }
 
         // POST: api/posts
         [HttpPost]
-        [Authorize] // Sadece giriş yapmış (Token'ı olan) kullanıcılar istek atabilir
+        [Authorize]
         public async Task<IActionResult> CreatePost(CreatePostDto dto)
         {
-            // Token'dan User ID'yi al
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null) return Unauthorized();
+            var userId = CurrentUser.IdOf(User);
+            if (userId == null) return Unauthorized();
 
-            var userId = int.Parse(userIdClaim.Value);
+            var content = dto.Content.Trim();
+            if (content.Length == 0) return BadRequest(new { message = "Gönderi boş olamaz." });
 
-            var post = new Post
-            {
-                Content = dto.Content,
-                UserId = userId,
-                CreatedAt = DateTime.UtcNow
-            };
-
+            var post = new Post { Content = content, UserId = userId.Value, CreatedAt = DateTime.UtcNow };
             _context.Posts.Add(post);
             await _context.SaveChangesAsync();
 
-            // Oluşturulan gönderiyi yazar bilgisiyle geri dön (ekrana hemen basmak için)
-            var createdPost = await _context.Posts
-                .Include(p => p.User)
-                .Where(p => p.Id == post.Id)
-                .Select(p => new
-                {
-                    p.Id,
-                    p.Content,
-                    p.Likes,
-                    p.CreatedAt,
-                    User = new
-                    {
-                        p.User.Id,
-                        p.User.Username,
-                        p.User.AvatarSeed
-                    }
-                })
-                .FirstOrDefaultAsync();
+            var created = await Project(_context.Posts.Where(p => p.Id == post.Id)).FirstAsync();
+            return CreatedAtAction(nameof(GetPosts), new { id = post.Id }, created);
+        }
 
-            return CreatedAtAction(nameof(GetPosts), new { id = post.Id }, createdPost);
+        // PUT: api/posts/{id}
+        [HttpPut("{id:int}")]
+        [Authorize]
+        public async Task<IActionResult> UpdatePost(int id, CreatePostDto dto)
+        {
+            var post = await _context.Posts.FindAsync(id);
+            if (post == null) return NotFound(new { message = "Gönderi bulunamadı." });
+            // Düzenlemeyi yalnızca yazarı yapabilir; yönetici sadece silebilir
+            if (CurrentUser.IdOf(User) != post.UserId) return StatusCode(403, new { message = "Bu gönderiyi düzenleyemezsin." });
+
+            var content = dto.Content.Trim();
+            if (content.Length == 0) return BadRequest(new { message = "Gönderi boş olamaz." });
+
+            post.Content = content;
+            post.EditedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
+
+            return Ok(await Project(_context.Posts.Where(p => p.Id == id)).FirstAsync());
+        }
+
+        // DELETE: api/posts/{id}
+        [HttpDelete("{id:int}")]
+        [Authorize]
+        public async Task<IActionResult> DeletePost(int id)
+        {
+            var post = await _context.Posts.FindAsync(id);
+            if (post == null) return NotFound(new { message = "Gönderi bulunamadı." });
+            if (!_current.CanManage(User, post.UserId)) return StatusCode(403, new { message = "Bu gönderiyi silemezsin." });
+
+            _context.Posts.Remove(post);
+            await _context.SaveChangesAsync();
+            return Ok(new { success = true });
         }
     }
 }

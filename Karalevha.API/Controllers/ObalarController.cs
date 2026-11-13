@@ -5,6 +5,7 @@ using Karalevha.API.Data;
 using Karalevha.API.Models;
 using Karalevha.API.DTOs;
 using Karalevha.API.Services;
+using Microsoft.AspNetCore.RateLimiting;
 using System.Security.Claims;
 
 namespace Karalevha.API.Controllers
@@ -82,7 +83,10 @@ namespace Karalevha.API.Controllers
                 Color = dto.Color,
                 AvatarSeed = seed,
                 OwnerId = userId, IsPrivate = dto.IsPrivate,
-                JoinPassword = dto.JoinPassword,
+                // Katılım şifresi düz metin değil, BCrypt özeti olarak saklanır
+                JoinPassword = dto.IsPrivate && !string.IsNullOrWhiteSpace(dto.JoinPassword)
+                    ? BCrypt.Net.BCrypt.HashPassword(dto.JoinPassword.Trim())
+                    : null,
                 CreatedAt = DateTime.UtcNow
             };
 
@@ -120,6 +124,7 @@ namespace Karalevha.API.Controllers
         // POST: api/obalar/{id}/join
         [HttpPost("{id}/join")]
         [Authorize]
+        [EnableRateLimiting("JoinLimiter")] // şifre denemesini kişi başına dakikada 5 ile sınırla
         public async Task<IActionResult> JoinOba(int id, [FromBody] JoinObaDto dto)
         {
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
@@ -133,8 +138,8 @@ namespace Karalevha.API.Controllers
             if (existingMember != null) return Ok(new { success = true });
 
             if (oba.IsPrivate) {
-                if (string.IsNullOrEmpty(oba.JoinPassword) || oba.JoinPassword != dto.Password) {
-                    return BadRequest("Yanlış şifre");
+                if (string.IsNullOrEmpty(oba.JoinPassword) || !CheckJoinPassword(oba, dto.Password?.Trim() ?? string.Empty)) {
+                    return BadRequest(new { message = "Şifre yanlış." });
                 }
             }
 
@@ -149,6 +154,47 @@ namespace Karalevha.API.Controllers
             
             await _context.SaveChangesAsync();
             return Ok(new { success = true });
+        }
+
+        /// <summary>
+        /// Şifreyi doğrular. Bu sürümden önce kurulan obaların şifresi düz metin duruyordu;
+        /// doğru girildiği ilk seferde BCrypt özetine çevrilir.
+        /// </summary>
+        private static bool CheckJoinPassword(Oba oba, string password)
+        {
+            var stored = oba.JoinPassword!;
+            if (stored.StartsWith("$2"))
+                return BCrypt.Net.BCrypt.Verify(password, stored);
+
+            var ok = System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                System.Text.Encoding.UTF8.GetBytes(stored), System.Text.Encoding.UTF8.GetBytes(password));
+            if (ok) oba.JoinPassword = BCrypt.Net.BCrypt.HashPassword(password);
+            return ok;
+        }
+
+        public class UpdateObaDto {
+            public string Name { get; set; } = string.Empty;
+            public string? Description { get; set; }
+        }
+
+        // PUT: api/obalar/{id}  (yalnızca kurucu)
+        [HttpPut("{id:int}")]
+        [Authorize]
+        public async Task<IActionResult> UpdateOba(int id, UpdateObaDto dto)
+        {
+            var oba = await _context.Obalar.Include(o => o.Owner).FirstOrDefaultAsync(o => o.Id == id);
+            if (oba == null) return NotFound(new { message = "Oba bulunamadı" });
+            if (CurrentUser.IdOf(User) != oba.OwnerId) return StatusCode(403, new { message = "Obayı yalnızca kurucusu düzenleyebilir." });
+
+            var name = dto.Name?.Trim() ?? string.Empty;
+            if (name.Length == 0 || name.Length > 100) return BadRequest(new { message = "Oba adı 1-100 karakter olmalı." });
+            var description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
+            if (description?.Length > 500) return BadRequest(new { message = "Açıklama en fazla 500 karakter olabilir." });
+
+            oba.Name = name;
+            oba.Description = description;
+            await _context.SaveChangesAsync();
+            return Ok(new { oba.Id, oba.Name, oba.Description, oba.AvatarSeed, oba.Color, oba.MemberCount, oba.IsPrivate, Owner = oba.Owner!.Username });
         }
 
         // DELETE: api/obalar/{id}

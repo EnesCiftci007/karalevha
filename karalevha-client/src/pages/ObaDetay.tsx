@@ -3,7 +3,9 @@ import { useParams, Link } from 'react-router-dom';
 import * as signalR from '@microsoft/signalr';
 import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Hash, Volume2, Send, ChevronLeft, MessageSquare, Lock, Menu, X, Paperclip, FolderOpen } from 'lucide-react';
+import { Hash, Volume2, Send, ChevronLeft, MessageSquare, Lock, Menu, X, Paperclip, FolderOpen, Trash2 } from 'lucide-react';
+import ConfirmDialog from '../components/ui/ConfirmDialog';
+import UserLink from '../components/ui/UserLink';
 import Avatar from '../components/ui/Avatar';
 import Field from '../components/ui/Field';
 import Skeleton from '../components/ui/Skeleton';
@@ -55,6 +57,8 @@ export default function ObaDetay() {
   const [showFiles, setShowFiles] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [obaName, setObaName] = useState<string | null>(null);
+  const [obaOwner, setObaOwner] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<Message | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -63,7 +67,10 @@ export default function ObaDetay() {
   // Misafirler de bağlanır: açık obaları canlı olarak (salt okunur) izleyebilirler.
   useEffect(() => {
     const newConnection = new signalR.HubConnectionBuilder()
-      .withUrl(`${import.meta.env.VITE_API_URL || API_URL}/chathub`)
+      .withUrl(`${import.meta.env.VITE_API_URL || API_URL}/chathub`, {
+        // Gizli obaların kanalları için kimlik; her (yeniden) bağlanışta güncel jeton okunur
+        accessTokenFactory: () => localStorage.getItem('token') ?? '',
+      })
       .withAutomaticReconnect()
       .build();
 
@@ -85,6 +92,10 @@ export default function ObaDetay() {
           console.log('Connected to SignalR');
           setIsConnected(true);
           
+          connection.on('MessageDeleted', (messageId: number) => {
+            setMessages(prev => prev.filter(m => m.id !== messageId));
+          });
+
           connection.on('ReceiveMessage', (message: Message) => {
             setMessages(prev => {
               if (prev.some(m => m.id === message.id)) return prev;
@@ -122,7 +133,10 @@ export default function ObaDetay() {
     let cancelled = false;
     api<Oba[]>('/api/obalar')
       .then((list) => {
-        if (!cancelled) setObaName(list.find((o) => String(o.id) === id)?.name ?? null);
+        const oba = list.find((o) => String(o.id) === id);
+        if (cancelled) return;
+        setObaName(oba?.name ?? null);
+        setObaOwner(oba?.owner ?? null);
       })
       .catch(() => {});
     return () => {
@@ -281,27 +295,15 @@ export default function ObaDetay() {
   const handleJoin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!password.trim()) return;
-    setLoading(true);
+    setJoinError('');
     try {
-      const res = await fetch(`${API_URL}/api/obalar/${id}/join`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({ password })
-      });
-      if (res.ok) {
-        setNeedsPassword(false);
-        fetchChannels();
-      } else {
-        const txt = await res.text();
-        setJoinError(txt || "Şifre yanlış!");
-        setLoading(false);
-      }
-    } catch(err) {
-      setJoinError("Bir hata oluştu.");
-      setLoading(false);
+      await api(`/api/obalar/${id}/join`, { method: 'POST', body: JSON.stringify({ password }) });
+      setPassword('');
+      setNeedsPassword(false);
+      setLoading(true);
+      fetchChannels();
+    } catch (err) {
+      setJoinError(err instanceof Error ? err.message : 'Bir hata oluştu.');
     }
   };
 
@@ -497,8 +499,19 @@ export default function ObaDetay() {
             <ol className="space-y-0.5">
               {messages.map((msg, idx) => {
                 const first = startsGroup(idx);
+                const canDelete = !!user && msg.id > 0 && (user.id === msg.user.id || user.username === obaOwner || !!user.isAdmin);
                 return (
-                  <li key={msg.id} className={`group flex gap-3 px-2 py-1 rounded-md hover:bg-levha-yuzey/50 ${first && idx > 0 ? 'mt-3' : ''}`}>
+                  <li key={msg.id} className={`group relative flex gap-3 px-2 py-1 rounded-md hover:bg-levha-yuzey/50 ${first && idx > 0 ? 'mt-3' : ''}`}>
+                    {canDelete && (
+                      <button
+                        type="button"
+                        onClick={() => setToDelete(msg)}
+                        className="absolute right-2 top-1 p-1.5 rounded-md text-tebesir-silik hover:text-hata hover:bg-levha opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                        aria-label="Mesajı sil"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
                     <div className="w-8 shrink-0">
                       {first ? (
                         <Avatar name={msg.user.username} size="sm" />
@@ -511,7 +524,7 @@ export default function ObaDetay() {
                     <div className="min-w-0 flex-1">
                       {first && (
                         <div className="flex items-baseline gap-2">
-                          <span className={`text-sm font-semibold ${user?.id === msg.user.id ? 'text-isaret' : 'text-tebesir'}`}>{msg.user.username}</span>
+                          <UserLink username={msg.user.username} className={`text-sm font-semibold ${user?.id === msg.user.id ? 'text-isaret' : 'text-tebesir'}`} />
                           <time dateTime={msg.createdAt} title={fullDate(msg.createdAt)} className="text-xs text-tebesir-silik">
                             {new Date(msg.createdAt).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
                           </time>
@@ -647,6 +660,20 @@ export default function ObaDetay() {
           </div>
         )}
       </section>
+
+      {toDelete && (
+        <ConfirmDialog
+          title="Mesaj silinsin mi?"
+          confirmLabel="Sil"
+          onClose={() => setToDelete(null)}
+          onConfirm={async () => {
+            await api(`/api/obamessages/message/${toDelete.id}`, { method: 'DELETE' });
+            setMessages((prev) => prev.filter((m) => m.id !== toDelete.id));
+          }}
+        >
+          {toDelete.file ? 'Mesaj ve eklenen dosya herkes için silinecek.' : 'Mesaj herkes için silinecek.'}
+        </ConfirmDialog>
+      )}
 
       {viewer && (
         <FileViewer messageId={viewer.messageId} file={viewer.file} onClose={() => setViewer(null)} />
