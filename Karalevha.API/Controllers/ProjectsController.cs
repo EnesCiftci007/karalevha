@@ -105,6 +105,8 @@ namespace Karalevha.API.Controllers
             if (!_current.CanManage(User, project.UserId)) return StatusCode(403, new { message = "Bu projeyi silemezsin." });
 
             _context.Projects.Remove(project);
+            _context.Likes.RemoveRange(_context.Likes.Where(l => l.TargetType == "project" && l.TargetId == id));
+            _context.Comments.RemoveRange(_context.Comments.Where(c => c.TargetType == "project" && c.TargetId == id));
             await _context.SaveChangesAsync();
             return Ok(new { success = true });
         }

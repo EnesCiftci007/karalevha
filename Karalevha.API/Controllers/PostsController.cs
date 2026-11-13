@@ -89,6 +89,8 @@ namespace Karalevha.API.Controllers
             if (!_current.CanManage(User, post.UserId)) return StatusCode(403, new { message = "Bu gönderiyi silemezsin." });
 
             _context.Posts.Remove(post);
+            _context.Likes.RemoveRange(_context.Likes.Where(l => l.TargetType == "post" && l.TargetId == id));
+            _context.Comments.RemoveRange(_context.Comments.Where(c => c.TargetType == "post" && c.TargetId == id));
             await _context.SaveChangesAsync();
             return Ok(new { success = true });
         }
