@@ -71,19 +71,19 @@ export default function PdfView({ blob }: { blob: Blob }) {
     <div className="w-full h-full overflow-auto relative">
       {status === 'loading' && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <Loader2 className="w-10 h-10 text-[#39ff14] animate-spin" />
+          <Loader2 className="w-10 h-10 text-tebesir-silik animate-spin" />
         </div>
       )}
       {status === 'error' && (
         <div className="absolute inset-0 flex items-center justify-center">
-          <p className="text-red-500 font-bold uppercase tracking-widest text-sm text-center px-4">
+          <p className="text-hata text-sm text-center px-4">
             PDF açılamadı. Dosyayı indirip deneyebilirsiniz.
           </p>
         </div>
       )}
       <div ref={containerRef} className="p-4" />
       {status === 'ready' && pageInfo && pageInfo.shown < pageInfo.total && (
-        <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest text-center pb-6">
+        <p className="text-tebesir-silik text-xs text-center pb-6">
           İlk {pageInfo.shown} sayfa gösteriliyor (toplam {pageInfo.total}). Tamamı için dosyayı indirin.
         </p>
       )}

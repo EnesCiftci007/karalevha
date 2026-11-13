@@ -1,115 +1,98 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useParams } from 'react-router-dom';
+import { Code2, ExternalLink, FolderGit2 } from 'lucide-react';
 import { api } from '../services/api';
-import { ChevronLeft, Code2, AlertTriangle, ExternalLink, GitBranch } from 'lucide-react';
 import { Project } from '../types';
+import { fullDate, timeAgo } from '../utils/time';
+import EmptyState from '../components/ui/EmptyState';
+import PageHeader from '../components/ui/PageHeader';
+import Skeleton from '../components/ui/Skeleton';
+
+const back = { to: '/projeler', label: 'Projeler' };
 
 export default function ProjeDetay() {
   const { id } = useParams();
   const [project, setProject] = useState<Project | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    const fetchProject = async () => {
-      try {
-        const data = await api<Project>(`/api/projects/${id}`);
-        setProject(data);
-      } catch (err) {
-        setError('Proje yüklenirken hata oluştu.');
-      } finally {
-        setLoading(false);
-      }
+    let cancelled = false;
+    setProject(null);
+    setFailed(false);
+    api<Project>(`/api/projects/${id}`)
+      .then((data) => !cancelled && setProject(data))
+      .catch(() => !cancelled && setFailed(true));
+    return () => {
+      cancelled = true;
     };
-    fetchProject();
   }, [id]);
 
-  if (loading) {
+  if (failed) {
     return (
-      <div className="flex justify-center items-center py-20 text-[#00e5ff]">
-        <Code2 className="w-12 h-12 animate-spin" />
+      <div>
+        <PageHeader title="Proje bulunamadı" back={back} />
+        <EmptyState icon={FolderGit2} title="Bu proje yok ya da kaldırılmış" description="Bağlantı eski olabilir. Projeler listesinden bakabilirsin." />
       </div>
     );
   }
 
-  if (error || !project) {
+  if (!project) {
     return (
-      <div className="flex flex-col items-center justify-center py-20 text-red-500">
-        <AlertTriangle className="w-12 h-12 mb-4" />
-        <h2 className="text-xl font-bold uppercase tracking-widest">{error || 'Proje bulunamadı'}</h2>
-        <Link to="/projeler" className="mt-6 text-zinc-500 hover:text-white uppercase font-bold">Geri Dön</Link>
+      <div role="status" aria-label="Yükleniyor">
+        <Skeleton className="h-4 w-20 mb-4" />
+        <Skeleton className="h-8 w-72 mb-3" />
+        <Skeleton className="h-4 w-full max-w-xl mb-8" />
+        <Skeleton className="h-[60vh]" />
       </div>
     );
   }
 
-  // Parse GitHub URL to Github1s URL
-  let isGithub = false;
-  let viewerUrl = '';
-  
-  if (project.repoUrl && project.repoUrl.includes('github.com')) {
-    isGithub = true;
-    viewerUrl = project.repoUrl.replace('github.com', 'github1s.com');
-  }
+  // GitHub depoları github1s ile tarayıcıda VS Code görünümünde açılabilir
+  const isGithub = /^https?:\/\/(www\.)?github\.com\//i.test(project.repoUrl);
+  const viewerUrl = isGithub ? project.repoUrl.replace(/github\.com/i, 'github1s.com') : '';
 
   return (
-    <div className="max-w-7xl mx-auto animate-in fade-in duration-300 pb-20">
-      
-      <div className="mb-6 flex items-center justify-between">
-        <Link to="/projeler" className="flex items-center text-zinc-400 hover:text-[#00e5ff] transition-colors font-bold uppercase tracking-widest text-sm">
-          <ChevronLeft className="w-5 h-5 mr-1" />
-          Projelere Dön
-        </Link>
-        <a 
-          href={project.repoUrl} 
-          target="_blank" 
-          rel="noopener noreferrer"
-          className="flex items-center text-zinc-400 hover:text-white transition-colors text-sm font-bold uppercase"
-        >
-          <GitBranch className="w-4 h-4 mr-2" />
-          Orijinal Repo
-          <ExternalLink className="w-4 h-4 ml-2" />
-        </a>
-      </div>
+    <div>
+      <PageHeader
+        title={project.title}
+        description={project.description}
+        back={back}
+        action={
+          <a href={project.repoUrl} target="_blank" rel="noopener noreferrer" className="btn-ikincil">
+            Depoyu aç
+            <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+          </a>
+        }
+      />
 
-      <div className="bg-[#111216] border-2 border-[#1f2129] p-6 mb-6">
-        <h1 className="text-3xl font-black uppercase tracking-widest text-white mb-2">{project.title}</h1>
-        <p className="text-zinc-400 font-medium mb-4">{project.description}</p>
-        <div className="flex items-center space-x-4 text-xs font-bold uppercase text-zinc-500">
-          <span>Geliştirici: <span className="text-[#00e5ff]">{project.owner}</span></span>
-        </div>
-      </div>
+      <p className="-mt-4 mb-8 text-sm text-tebesir-silik">
+        <span className="text-tebesir-soluk">{project.owner}</span> ·{' '}
+        <time dateTime={project.createdAt} title={fullDate(project.createdAt)}>{timeAgo(project.createdAt)} eklendi</time> ·{' '}
+        <span className="veri">{project.repoUrl.replace(/^https?:\/\/(www\.)?/, '')}</span>
+      </p>
 
-      <div className="bg-[#0b0c10] border-2 border-[#1f2129] relative overflow-hidden flex flex-col" style={{ height: '70vh' }}>
-        {isGithub ? (
-          <>
-            <div className="bg-[#111216] border-b-2 border-[#1f2129] p-3 flex justify-between items-center text-xs font-bold uppercase tracking-widest text-zinc-400">
-              <span className="flex items-center"><Code2 className="w-4 h-4 mr-2 text-[#00e5ff]" /> İnteraktif Kod Görüntüleyici</span>
-              <span>VSCode Web Motoru</span>
-            </div>
-            <iframe 
-              src={viewerUrl} 
-              title="Code Viewer"
-              className="w-full flex-grow border-none"
-              allow="clipboard-read; clipboard-write"
-            />
-          </>
-        ) : (
-          <div className="flex flex-col items-center justify-center h-full text-zinc-500 p-8 text-center">
-            <AlertTriangle className="w-12 h-12 mb-4" />
-            <h3 className="text-lg font-bold uppercase tracking-widest text-white mb-2">Desteklenmeyen Repo Formatı</h3>
-            <p className="mb-4">İnteraktif kod inceleyici şu an sadece GitHub linklerini destekliyor.</p>
-            <a 
-              href={project.repoUrl} 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="px-6 py-3 bg-[#00e5ff] text-black font-black uppercase tracking-widest hover:bg-white transition-colors"
-            >
-              Doğrudan Repoya Git
-            </a>
+      {isGithub ? (
+        <section className="kart overflow-hidden flex flex-col h-[70vh] min-h-[420px]" aria-label="Kod görüntüleyici">
+          <div className="h-10 flex items-center gap-2 px-4 border-b border-levha-cizgi bg-levha-yuzey shrink-0">
+            <Code2 className="w-4 h-4 text-tebesir-silik" aria-hidden="true" />
+            <span className="text-sm text-tebesir-soluk">Kod görüntüleyici</span>
+            <span className="ml-auto text-xs text-tebesir-silik">github1s</span>
           </div>
-        )}
-      </div>
-
+          <iframe src={viewerUrl} title={`${project.title} kodu`} className="w-full flex-1 border-0 bg-levha-koyu" allow="clipboard-read; clipboard-write" />
+        </section>
+      ) : (
+        <EmptyState
+          icon={Code2}
+          title="Kod önizlemesi yok"
+          description="Tarayıcı içi kod görüntüleyici şimdilik yalnızca GitHub depolarını destekliyor."
+          action={
+            <a href={project.repoUrl} target="_blank" rel="noopener noreferrer" className="btn-ikincil">
+              Depoya git
+              <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+            </a>
+          }
+        />
+      )}
     </div>
   );
 }

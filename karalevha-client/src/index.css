@@ -4,19 +4,66 @@
 
 @layer base {
   body {
-    @apply bg-levha text-tebesir font-sans antialiased;
+    @apply bg-levha text-tebesir font-sans text-base antialiased;
   }
 
   /* Klavyeyle gezenler için her yerde aynı, görünür odak çizgisi */
   :focus-visible {
     @apply outline outline-2 outline-offset-2 outline-isaret;
   }
+
+  /* Hareket istemeyen kullanıcılar için geçişleri kapat */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
 }
 
 @layer components {
-  /* Küçük teknik etiket: bölüm üst yazıları, sayaçlar */
+  /* Küçük yardımcı metin: bölüm üst yazısı, ipucu. Büyük harf ve aralık yok. */
   .etiket {
-    @apply font-mono text-[11px] uppercase tracking-[0.14em] text-tebesir-silik;
+    @apply text-xs font-medium text-tebesir-silik;
+  }
+
+  /* Veri: sayı, boyut, adres. Mono yazı yalnızca burada kullanılır. */
+  .veri {
+    @apply font-mono text-xs text-tebesir-silik tabular-nums;
+  }
+
+  /* Butonlar (React tarafında <Button> bileşeni bunları kullanır) */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md text-sm font-semibold whitespace-nowrap transition-colors disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-ana {
+    @apply btn bg-isaret text-levha-koyu hover:bg-isaret-acik;
+  }
+  .btn-ikincil {
+    @apply btn border border-levha-cizgi text-tebesir hover:border-tebesir-silik hover:bg-levha-yuzey;
+  }
+  .btn-sade {
+    @apply btn px-3 text-tebesir-soluk hover:text-tebesir hover:bg-levha-yuzey;
+  }
+  .btn-tehlike {
+    @apply btn border border-levha-cizgi text-hata hover:border-hata hover:bg-hata/10;
+  }
+
+  /* Kart: çerçeveli kutu. Gölge yok; ayrım kenarlıkla yapılır. */
+  .kart {
+    @apply rounded-lg border border-levha-cizgi bg-levha;
+  }
+
+  /* Form alanları */
+  .girdi {
+    @apply w-full h-9 rounded-md bg-levha-koyu border border-levha-cizgi px-3 text-sm text-tebesir placeholder:text-tebesir-silik transition-colors focus:border-isaret focus:outline-none disabled:opacity-50;
+  }
+  textarea.girdi {
+    @apply h-auto py-2 leading-relaxed;
+  }
+  .alan-etiketi {
+    @apply block mb-1.5 text-sm font-medium text-tebesir;
   }
 
   /* Kesim altlığı / kareli defter dokusu; aşağı doğru solarak kaybolur */
