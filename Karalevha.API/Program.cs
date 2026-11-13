@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
 
 Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "stl"));
+Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "models"));
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -115,7 +116,10 @@ app.UseHttpsRedirection();
 app.UseCors("AllowReact");
 
 var provider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
-provider.Mappings[".stl"] = "application/octet-stream";
+// 3B model biçimleri: varsayılan tabloda olmayanlar statik olarak sunulmaz, bu yüzden açıkça eklenir
+foreach (var ext in new[] { ".stl", ".obj", ".fbx", ".3mf" })
+    provider.Mappings[ext] = "application/octet-stream";
+provider.Mappings[".glb"] = "model/gltf-binary";
 app.UseStaticFiles(new StaticFileOptions
 {
     ContentTypeProvider = provider

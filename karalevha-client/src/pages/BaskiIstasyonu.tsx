@@ -1,259 +1,384 @@
-import { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { Box, Download, Rotate3d, Search, Upload, UploadCloud, X } from 'lucide-react';
 import { api, API_URL } from '../services/api';
-import { Box, UploadCloud, Download, FileBox, CheckCircle2, Eye, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { PrintModel } from '../types';
-import StlPreview from '../components/StlPreview';
+import { fullDate, timeAgo } from '../utils/time';
+import { modelThumbnail } from '../utils/modelThumbnail';
+import { GAME_FORMATS, MODEL_ACCEPT, formatOf, type ModelFormat } from '../utils/loadModel';
+import { formatSize } from '../services/files';
+import ModelPreview from '../components/ModelPreview';
+import Badge from '../components/ui/Badge';
+import EmptyState from '../components/ui/EmptyState';
+import Field from '../components/ui/Field';
+import Modal from '../components/ui/Modal';
+import PageHeader from '../components/ui/PageHeader';
+import Skeleton from '../components/ui/Skeleton';
+import Tabs from '../components/ui/Tabs';
+
+const MAX_UPLOAD = 50 * 1024 * 1024; // Backend sınırıyla aynı (50 MB)
+
+type Category = PrintModel['category'];
+type Filter = 'hepsi' | Category;
+
+const CATEGORY_LABEL: Record<Category, string> = { baski: 'Baskı', oyun: 'Oyun' };
+
+const fileUrlOf = (model: PrintModel) => `${API_URL}${model.fileUrl}`;
+const downloadName = (model: PrintModel) => `${model.title}.${model.format}`;
+
+/** Kart görseli: ekrana girince modelden küçük resim üretir. */
+function ModelThumbnail({ url, format }: { url: string; format: ModelFormat }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [image, setImage] = useState<string | null>(null);
+  const [state, setState] = useState<'bekliyor' | 'hazir' | 'yok'>('bekliyor');
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let cancelled = false;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+        observer.disconnect();
+        modelThumbnail(url, format).then((data) => {
+          if (cancelled) return;
+          setImage(data);
+          setState(data ? 'hazir' : 'yok');
+        });
+      },
+      { rootMargin: '200px' }
+    );
+    observer.observe(el);
+    return () => {
+      cancelled = true;
+      observer.disconnect();
+    };
+  }, [url, format]);
+
+  return (
+    <div ref={ref} className="relative aspect-[4/3] bg-levha-koyu overflow-hidden">
+      <div className="kareli absolute inset-0" aria-hidden="true" />
+      {image ? (
+        <img src={image} alt="" className="relative w-full h-full object-contain" />
+      ) : (
+        <div className="relative w-full h-full flex items-center justify-center">
+          <Box className={`w-8 h-8 text-levha-cizgi ${state === 'bekliyor' ? 'animate-pulse' : ''}`} strokeWidth={1.25} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function BaskiIstasyonu() {
-  const { user, token } = useAuth();
-  const [models, setModels] = useState<PrintModel[]>([]);
+  const { user } = useAuth();
+  const [models, setModels] = useState<PrintModel[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<Filter>('hepsi');
+  const [preview, setPreview] = useState<PrintModel | null>(null);
+  const [showUpload, setShowUpload] = useState(false);
+
+  // Yükleme formu
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [category, setCategory] = useState<Category>('baski');
   const [file, setFile] = useState<File | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [initialLoad, setInitialLoad] = useState(true);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null); // Önizleme için dosya url'i tutar
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [formError, setFormError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchModels = () =>
+    api<PrintModel[]>('/api/printmodels?take=100')
+      .then((data) => {
+        setModels(data);
+        setLoadFailed(false);
+      })
+      .catch(() => {
+        setModels((prev) => prev ?? []);
+        setLoadFailed(true);
+      });
 
   useEffect(() => {
     fetchModels();
   }, []);
 
-  const fetchModels = async () => {
-    try {
-      const data = await api<any>('/api/printmodels');
-      setModels(data);
-    } catch (error) {
-      console.error('Modeller yüklenemedi:', error);
-    } finally {
-      setInitialLoad(false);
+  const visible = useMemo(() => {
+    const q = query.trim().toLocaleLowerCase('tr');
+    return (models ?? []).filter(
+      (m) =>
+        (filter === 'hepsi' || m.category === filter) &&
+        (!q ||
+          m.title.toLocaleLowerCase('tr').includes(q) ||
+          (m.description ?? '').toLocaleLowerCase('tr').includes(q) ||
+          m.uploader.toLocaleLowerCase('tr').includes(q))
+    );
+  }, [models, query, filter]);
+
+  const count = (c: Category) => (models ?? []).filter((m) => m.category === c).length;
+
+  const pickFile = (picked: File | undefined | null) => {
+    if (!picked) return;
+    const format = formatOf(picked.name);
+    if (!format) {
+      setFormError('Desteklenen biçimler: STL, 3MF, OBJ, FBX, GLB.');
+      return;
     }
+    if (picked.size > MAX_UPLOAD) {
+      setFormError(`Dosya en fazla ${formatSize(MAX_UPLOAD)} olabilir.`);
+      return;
+    }
+    setFormError('');
+    setFile(picked);
+    // Oyun motoru biçimleri için kategoriyi öner; kullanıcı değiştirebilir
+    setCategory(GAME_FORMATS.includes(format) ? 'oyun' : 'baski');
+    setTitle((current) => current || picked.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' '));
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = e.target.files![0];
-    if (selectedFile && selectedFile.name.toLowerCase().endsWith('.stl')) {
-      setFile(selectedFile);
-    } else {
-      alert("Lütfen sadece .stl uzantılı dosya seçin!");
-      setFile(null);
-      if (fileInputRef.current) fileInputRef.current.value = "";
-    }
+  const closeUpload = () => {
+    if (uploading) return;
+    setShowUpload(false);
+    setFormError('');
+    setDragOver(false);
   };
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file || !title.trim()) return;
+    if (!file || !title.trim() || uploading) return;
 
-    setLoading(true);
+    setUploading(true);
+    setFormError('');
     const formData = new FormData();
-    formData.append('title', title);
-    if (description) formData.append('description', description);
+    formData.append('title', title.trim());
+    if (description.trim()) formData.append('description', description.trim());
+    formData.append('category', category);
     formData.append('file', file);
 
     try {
-      const res = await fetch(`${API_URL}/api/printmodels`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`
-        },
-        body: formData
-      });
-
-      if (res.ok) {
-        fetchModels();
-        setTitle('');
-        setDescription('');
-        setFile(null);
-        if (fileInputRef.current) fileInputRef.current.value = "";
-      } else {
-        const error = await res.json();
-        alert(error.message || 'Yükleme başarısız.');
-      }
-    } catch (error) {
-      console.error('Yükleme hatası:', error);
+      await api<{ message: string }>('/api/printmodels', { method: 'POST', body: formData });
+      await fetchModels();
+      setTitle('');
+      setDescription('');
+      setFile(null);
+      setShowUpload(false);
+      setFilter((f) => (f === 'hepsi' || f === category ? f : category));
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Yükleme başarısız.');
     } finally {
-      setLoading(false);
+      setUploading(false);
     }
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('tr-TR', { 
-      day: 'numeric', month: 'long', year: 'numeric'
-    });
-  };
-
   return (
-    <div className="max-w-6xl mx-auto animate-in fade-in duration-300 pb-20">
-      
-      {/* Banner */}
-      <div className="bg-[#111216] border-2 border-[#1f2129] p-8 mb-8 relative overflow-hidden flex flex-col md:flex-row items-center justify-between group">
-        <div className="absolute inset-0 bg-[#a855f7]/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-        <div className="relative z-10 text-center md:text-left">
-          <h1 className="text-4xl font-black uppercase tracking-widest text-white flex items-center justify-center md:justify-start">
-            <Box className="w-8 h-8 mr-3 text-[#a855f7]" />
-            3B Baskı İstasyonu
-          </h1>
-          <p className="text-zinc-400 text-[15px] mt-2 font-medium tracking-wide">STL dosyalarınızı yükleyin, toplulukla paylaşın ve baskıya hazırlayın.</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        
-        {/* Sol Kolon: Yükleme Formu */}
-        <div className="lg:col-span-1">
-          <div className="bg-[#0b0c10] border-2 border-[#1f2129] p-6 sticky top-24">
-            <h2 className="text-xl font-black uppercase tracking-widest text-white mb-6 flex items-center">
-              <UploadCloud className="w-5 h-5 mr-2 text-[#a855f7]" />
-              Model Yükle
-            </h2>
-            
-            {user ? (
-              <form onSubmit={handleUpload} className="space-y-4">
-                <div>
-                  <label className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest block mb-2">Proje Adı</label>
-                  <input 
-                    type="text" 
-                    required
-                    maxLength={100}
-                    value={title}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
-                    placeholder="Örn: Modüler Robot Kol"
-                    className="w-full bg-[#111216] border-2 border-[#1f2129] px-4 py-3 text-white focus:border-[#a855f7] outline-none transition-colors font-medium text-sm"
-                  />
-                </div>
-                
-                <div>
-                  <label className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest block mb-2">Açıklama</label>
-                  <textarea 
-                    value={description}
-                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
-                    placeholder="Kısa bir açıklama..."
-                    className="w-full bg-[#111216] border-2 border-[#1f2129] px-4 py-3 text-white focus:border-[#a855f7] outline-none transition-colors min-h-[80px] resize-none font-medium text-sm"
-                  ></textarea>
-                </div>
-
-                <div>
-                  <label className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest block mb-2">STL Dosyası</label>
-                  <div className="relative border-2 border-dashed border-[#1f2129] hover:border-[#a855f7] transition-colors p-6 text-center cursor-pointer bg-[#111216]">
-                    <input 
-                      type="file" 
-                      accept=".stl"
-                      required
-                      ref={fileInputRef}
-                      onChange={handleFileChange}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    />
-                    <FileBox className={`w-8 h-8 mx-auto mb-2 ${file ? 'text-[#a855f7]' : 'text-zinc-600'}`} />
-                    <span className="text-sm font-bold text-zinc-400 uppercase tracking-wider block">
-                      {file ? file.name : "Dosya Seç veya Sürükle"}
-                    </span>
-                    {file && <span className="text-xs text-[#a855f7] mt-2 block font-medium">Seçildi</span>}
-                  </div>
-                </div>
-
-                <button 
-                  type="submit"
-                  disabled={loading || !file}
-                  className={`w-full py-4 text-[15px] font-black uppercase tracking-widest border-2 border-black transition-all mt-4
-                    ${loading || !file ? 'bg-zinc-600 text-zinc-400' : 'bg-[#a855f7] text-black hover:bg-white hover:shadow-[4px_4px_0px_#a855f7] hover:-translate-y-1'}`}
-                >
-                  {loading ? 'YÜKLENİYOR...' : 'SİSTEME YÜKLE'}
-                </button>
-              </form>
-            ) : (
-              <div className="text-center p-6 bg-[#111216] border-2 border-[#1f2129]">
-                <p className="text-zinc-500 font-bold uppercase">Model yüklemek için giriş yapmalısınız.</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Sağ Kolon: Modeller Listesi */}
-        <div className="lg:col-span-2 space-y-6">
-          <h2 className="text-xl font-black uppercase tracking-widest text-white mb-6 border-b-2 border-[#1f2129] pb-4">
-            Topluluk Modelleri
-          </h2>
-
-          {initialLoad ? (
-            <div className="bg-[#0b0c10] border-2 border-[#1f2129] p-20 flex flex-col items-center justify-center text-[#a855f7]">
-              <Box className="w-12 h-12 animate-pulse mb-4" />
-              <span className="font-black uppercase tracking-widest text-lg">MODELLER YÜKLENİYOR...</span>
-            </div>
-          ) : models.length === 0 ? (
-            <div className="bg-[#0b0c10] border-2 border-[#1f2129] p-10 text-center text-zinc-500 font-bold uppercase">
-              Henüz STL dosyası yüklenmemiş.
-            </div>
+    <div>
+      <PageHeader
+        title="3B Modeller"
+        description="Basılmaya hazır parçalar ve oyun modelleri. Tarayıcıda çevirerek incele, dosyayı indir."
+        action={
+          user ? (
+            <button type="button" onClick={() => setShowUpload(true)} className="btn-ana">
+              <Upload className="w-4 h-4" strokeWidth={2.5} />
+              Model yükle
+            </button>
           ) : (
-            models.map(model => (
-              <div key={model.id} className="bg-[#111216] border-2 border-[#1f2129] p-6 hover:border-[#a855f7]/50 transition-all flex flex-col md:flex-row items-start md:items-center justify-between group relative overflow-hidden">
-                <div className="absolute inset-0 bg-[url('/baski.png')] bg-cover bg-center opacity-5 grayscale group-hover:grayscale-0 transition-all duration-500 z-0"></div>
-                
-                <div className="relative z-10 flex-grow mb-4 md:mb-0">
-                  <div className="flex items-center space-x-2 mb-1">
-                    <CheckCircle2 className="w-4 h-4 text-[#a855f7]" />
-                    <h3 className="text-lg font-black text-white uppercase tracking-wider">{model.title}</h3>
-                  </div>
-                  <p className="text-sm font-medium text-zinc-400 mb-3">{model.description}</p>
-                  <div className="flex items-center space-x-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">
-                    <span>Yükleyen: <span className="text-zinc-300">{model.uploader}</span></span>
-                    <span>•</span>
-                    <span>{formatDate(model.uploadedAt)}</span>
-                  </div>
-                </div>
+            <Link to="/auth" state={{ from: '/baski-istasyonu' }} className="btn-ikincil">Model yüklemek için giriş yap</Link>
+          )
+        }
+      />
 
-                <div className="relative z-10 shrink-0 flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-3">
-                  <button
-                    onClick={() => setPreviewUrl(`${import.meta.env.VITE_API_URL || `${API_URL}`}${model.fileUrl}`)}
-                    className="flex items-center justify-center bg-zinc-800 text-white hover:bg-zinc-700 border-2 border-zinc-600 px-4 py-3 text-sm font-black uppercase tracking-widest transition-all"
-                  >
-                    <Eye className="w-4 h-4 mr-2" strokeWidth={3} />
-                    3B İNCELE
-                  </button>
-                  <a 
-                    href={`${import.meta.env.VITE_API_URL || `${API_URL}`}${model.fileUrl}`} 
-                    download
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-center bg-[#a855f7]/10 text-[#a855f7] hover:bg-[#a855f7] hover:text-black border-2 border-[#a855f7] px-4 py-3 text-sm font-black uppercase tracking-widest transition-all shadow-[4px_4px_0px_transparent] hover:shadow-[4px_4px_0px_#1f2129] hover:-translate-y-1"
-                  >
-                    <Download className="w-4 h-4 mr-2" strokeWidth={3} />
-                    İNDİR
-                  </a>
-                </div>
-              </div>
-            ))
-          )}
+      {/* Filtre ve arama */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
+        <div className="sm:w-80">
+          <Tabs
+            label="Kategori"
+            value={filter}
+            onChange={setFilter}
+            options={[
+              { value: 'hepsi', label: models ? `Hepsi ${models.length}` : 'Hepsi' },
+              { value: 'baski', label: models ? `Baskı ${count('baski')}` : 'Baskı' },
+              { value: 'oyun', label: models ? `Oyun ${count('oyun')}` : 'Oyun' },
+            ]}
+          />
         </div>
-
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-tebesir-silik pointer-events-none" aria-hidden="true" />
+          <label htmlFor="model-ara" className="sr-only">Modellerde ara</label>
+          <input id="model-ara" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Model ya da yükleyen ara" className="girdi pl-9" />
+        </div>
       </div>
 
-      {/* 3B Önizleme Modal */}
-      {previewUrl && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4 backdrop-blur-md">
-          <div className="w-full max-w-4xl bg-[#111216] border-2 border-[#a855f7] h-[80vh] flex flex-col relative shadow-[12px_12px_0px_#a855f7]">
-            <div className="h-14 border-b-2 border-[#1f2129] flex items-center justify-between px-6 bg-[#0b0c10]">
-              <h3 className="font-black text-white uppercase tracking-widest flex items-center">
-                <Box className="w-5 h-5 mr-2 text-[#a855f7]" />
-                3B MODEL ÖNİZLEME
-              </h3>
-              <button onClick={() => setPreviewUrl(null)} className="text-zinc-500 hover:text-[#ff0055] transition-colors">
-                <X className="w-6 h-6" />
-              </button>
-            </div>
-            
-            <div className="flex-grow bg-[#1a1b22] relative cursor-grab active:cursor-grabbing">
-              <StlPreview url={previewUrl} color="#a855f7" />
-              <div className="absolute bottom-4 right-4 text-xs font-bold text-zinc-500 uppercase tracking-widest pointer-events-none">
-                Fare ile çevir & Yakınlaştır
-              </div>
-            </div>
-          </div>
+      {/* Izgara */}
+      {models === null ? (
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="aspect-[4/5]" />)}
         </div>
+      ) : visible.length === 0 ? (
+        <EmptyState
+          icon={Box}
+          title={
+            loadFailed
+              ? 'Modeller yüklenemedi'
+              : query.trim()
+                ? 'Sonuç bulunamadı'
+                : filter === 'oyun'
+                  ? 'Henüz oyun modeli yok'
+                  : filter === 'baski'
+                    ? 'Henüz baskı modeli yok'
+                    : 'Henüz yüklenmiş model yok'
+          }
+          description={
+            loadFailed
+              ? 'Sayfayı yenilemeyi dene.'
+              : query.trim()
+                ? `"${query.trim()}" ile eşleşen model yok.`
+                : 'STL, 3MF, OBJ, FBX ya da GLB dosyası yükleyebilirsin.'
+          }
+          action={!loadFailed && !query.trim() && user && (
+            <button type="button" onClick={() => setShowUpload(true)} className="btn-ikincil">Model yükle</button>
+          )}
+        />
+      ) : (
+        <ul className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {visible.map((model) => (
+            <li key={model.id} className="kart overflow-hidden flex flex-col hover:border-tebesir-silik transition-colors">
+              <button type="button" onClick={() => setPreview(model)} className="block text-left" aria-label={`${model.title} modelini 3B incele`}>
+                <ModelThumbnail url={fileUrlOf(model)} format={model.format} />
+              </button>
+              <div className="flex-1 flex flex-col p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <h2 className="text-sm font-semibold text-tebesir line-clamp-2">{model.title}</h2>
+                  <span className="veri shrink-0 pt-0.5">{model.format.toUpperCase()}</span>
+                </div>
+                <p className="mt-1 text-xs text-tebesir-silik truncate">
+                  {model.uploader} · <time dateTime={model.uploadedAt} title={fullDate(model.uploadedAt)}>{timeAgo(model.uploadedAt)}</time>
+                </p>
+                <div className="mt-auto pt-3">
+                  <div className="pt-3 border-t border-levha-cizgi flex items-center justify-between gap-2 text-sm">
+                    <button type="button" onClick={() => setPreview(model)} className="inline-flex items-center gap-1.5 text-tebesir-soluk hover:text-tebesir transition-colors">
+                      <Rotate3d className="w-4 h-4" aria-hidden="true" />
+                      İncele
+                    </button>
+                    <a href={fileUrlOf(model)} download={downloadName(model)} className="inline-flex items-center gap-1.5 text-tebesir-soluk hover:text-tebesir transition-colors">
+                      <Download className="w-4 h-4" aria-hidden="true" />
+                      İndir
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
 
+      {/* 3B inceleme */}
+      {preview && (
+        <Modal title={preview.title} onClose={() => setPreview(null)} wide>
+          <div className="h-[55vh] min-h-[280px]">
+            <ModelPreview url={fileUrlOf(preview)} format={preview.format} />
+          </div>
+          <div className="p-5 flex flex-wrap items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <Badge>{CATEGORY_LABEL[preview.category]}</Badge>
+                <span className="veri">{preview.format.toUpperCase()}</span>
+              </div>
+              {preview.description && <p className="text-sm text-tebesir-soluk whitespace-pre-wrap break-words">{preview.description}</p>}
+              <p className="mt-2 text-xs text-tebesir-silik">
+                {preview.uploader} · {fullDate(preview.uploadedAt)}
+              </p>
+            </div>
+            <a href={fileUrlOf(preview)} download={downloadName(preview)} className="btn-ana shrink-0">
+              <Download className="w-4 h-4" strokeWidth={2.5} />
+              {preview.format.toUpperCase()} indir
+            </a>
+          </div>
+        </Modal>
+      )}
+
+      {/* Yükleme */}
+      {showUpload && (
+        <Modal title="Model yükle" onClose={closeUpload}>
+          <form onSubmit={handleUpload} className="p-5 space-y-4">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={MODEL_ACCEPT}
+              className="hidden"
+              onChange={(e) => {
+                pickFile(e.target.files?.[0]);
+                e.target.value = '';
+              }}
+            />
+            {file ? (
+              <div className="flex items-center gap-3 rounded-md border border-levha-cizgi bg-levha-koyu px-3 py-2.5">
+                <Box className="w-5 h-5 shrink-0 text-tebesir-silik" strokeWidth={1.75} aria-hidden="true" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium text-tebesir truncate">{file.name}</span>
+                  <span className="block veri">{formatSize(file.size)}</span>
+                </span>
+                <button type="button" onClick={() => setFile(null)} className="p-1 text-tebesir-silik hover:text-tebesir" aria-label="Dosyayı kaldır">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  pickFile(e.dataTransfer.files[0]);
+                }}
+                className={`w-full rounded-md border border-dashed px-4 py-8 text-center transition-colors ${
+                  dragOver ? 'border-isaret bg-isaret/5' : 'border-levha-cizgi hover:border-tebesir-silik'
+                }`}
+              >
+                <UploadCloud className="w-6 h-6 mx-auto mb-2 text-tebesir-silik" strokeWidth={1.5} aria-hidden="true" />
+                <span className="block text-sm font-medium text-tebesir">Model dosyasını sürükle ya da seç</span>
+                <span className="block mt-1 text-xs text-tebesir-silik">STL, 3MF, OBJ, FBX, GLB · en fazla {formatSize(MAX_UPLOAD)}</span>
+              </button>
+            )}
+
+            <div>
+              <span className="alan-etiketi" id="model-kategori">Kategori</span>
+              <Tabs
+                label="Kategori"
+                value={category}
+                onChange={setCategory}
+                options={[{ value: 'baski', label: 'Baskı modeli' }, { value: 'oyun', label: 'Oyun modeli' }]}
+              />
+            </div>
+            <Field id="model-ad" label="Model adı">
+              <input id="model-ad" type="text" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} required placeholder={category === 'oyun' ? 'Düşük poligon şövalye' : 'Telefon standı'} className="girdi" />
+            </Field>
+            <Field
+              id="model-aciklama"
+              label="Açıklama"
+              note="isteğe bağlı"
+              hint={category === 'oyun' ? 'Poligon sayısı, rig ve animasyonlar, hangi motorda denendiği…' : 'Baskı ayarları, malzeme, destek gerekip gerekmediği…'}
+            >
+              <textarea id="model-aciklama" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={3} className="girdi resize-y" />
+            </Field>
+            {file && formatOf(file.name) === 'obj' && (
+              <p className="text-xs text-tebesir-silik">OBJ'nin malzeme ve doku dosyaları (.mtl, resimler) yüklenmez; model düz renkte görünür.</p>
+            )}
+
+            {formError && <p className="text-sm text-hata" role="alert">{formError}</p>}
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={closeUpload} disabled={uploading} className="btn-ikincil">Vazgeç</button>
+              <button type="submit" disabled={uploading || !file || !title.trim()} className="btn-ana">
+                {uploading ? 'Yükleniyor…' : 'Yükle'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
     </div>
   );
 }

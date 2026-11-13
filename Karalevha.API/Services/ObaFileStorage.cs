@@ -22,8 +22,8 @@ namespace Karalevha.API.Services
             ".mp3", ".wav", ".ogg", ".mp4", ".webm",
             // Arşivler
             ".zip", ".rar", ".7z",
-            // Maker / 3B / elektronik
-            ".stl", ".3mf", ".obj", ".step", ".stp", ".gcode", ".dxf", ".f3d", ".fzz", ".kicad_pcb", ".kicad_sch", ".sch", ".brd",
+            // Maker / 3B / oyun / elektronik
+            ".stl", ".3mf", ".obj", ".fbx", ".glb", ".blend", ".step", ".stp", ".gcode", ".dxf", ".f3d", ".fzz", ".kicad_pcb", ".kicad_sch", ".sch", ".brd",
             // Kod
             ".ino", ".c", ".cpp", ".h", ".hpp", ".py", ".js", ".ts", ".cs", ".java", ".json", ".xml", ".yaml", ".yml", ".ipynb"
         };

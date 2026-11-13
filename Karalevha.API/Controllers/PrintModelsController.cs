@@ -12,6 +12,16 @@ namespace Karalevha.API.Controllers
     [ApiController]
     public class PrintModelsController : ControllerBase
     {
+        private const long MaxFileSize = 50_000_000; // 50 MB
+
+        // Tek dosyadan oluşan 3B biçimler. .gltf kabul edilmez: dokuları ve verisi ayrı dosyalarda durur.
+        private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".stl", ".3mf", ".obj", ".fbx", ".glb"
+        };
+
+        private static readonly HashSet<string> Categories = new() { "baski", "oyun" };
+
         private readonly AppDbContext _context;
         private readonly IWebHostEnvironment _env;
 
@@ -21,14 +31,18 @@ namespace Karalevha.API.Controllers
             _env = env;
         }
 
-        // GET: api/printmodels
+        // GET: api/printmodels?category=oyun
         [HttpGet]
-        public async Task<IActionResult> GetModels([FromQuery] int skip = 0, [FromQuery] int take = 50)
+        public async Task<IActionResult> GetModels([FromQuery] int skip = 0, [FromQuery] int take = 50, [FromQuery] string? category = null)
         {
             skip = Math.Max(skip, 0);
             take = Math.Clamp(take, 1, 100);
 
-            var models = await _context.PrintModels
+            var query = _context.PrintModels.AsNoTracking();
+            if (!string.IsNullOrEmpty(category) && Categories.Contains(category))
+                query = query.Where(m => m.Category == category);
+
+            var models = await query
                 .OrderByDescending(m => m.UploadedAt)
                 .Skip(skip)
                 .Take(take)
@@ -38,56 +52,80 @@ namespace Karalevha.API.Controllers
                     m.Title,
                     m.Description,
                     m.FileName,
-                    FileUrl = $"/uploads/stl/{m.FileName}", 
+                    // Eski kayıtların FilePath'i de /uploads/stl/... biçiminde; doğrudan kullanılabilir
+                    FileUrl = m.FilePath,
+                    m.Category,
                     m.UploadedAt,
-                    Uploader = m.User.Username
+                    Uploader = m.User!.Username
                 })
                 .ToListAsync();
 
-            return Ok(models);
+            return Ok(models.Select(m => new
+            {
+                m.Id,
+                m.Title,
+                m.Description,
+                m.FileName,
+                m.FileUrl,
+                m.Category,
+                Format = Path.GetExtension(m.FileName).TrimStart('.').ToLowerInvariant(),
+                m.UploadedAt,
+                m.Uploader
+            }));
         }
 
         // POST: api/printmodels
         [HttpPost]
         [Authorize]
         [EnableRateLimiting("UploadLimiter")]
-        [RequestSizeLimit(50_000_000)] // 50 MB sınır
-        public async Task<IActionResult> UploadModel([FromForm] string title, [FromForm] string? description, IFormFile file)
+        [RequestSizeLimit(MaxFileSize + 1_000_000)]
+        [RequestFormLimits(MultipartBodyLengthLimit = MaxFileSize + 1_000_000)]
+        public async Task<IActionResult> UploadModel([FromForm] string title, [FromForm] string? description, [FromForm] string? category, IFormFile file)
         {
             if (file == null || file.Length == 0)
-                return BadRequest(new { message = "Lütfen bir STL dosyası seçin." });
+                return BadRequest(new { message = "Lütfen bir model dosyası seçin." });
 
-            if (!file.FileName.EndsWith(".stl", StringComparison.OrdinalIgnoreCase))
-                return BadRequest(new { message = "Sadece .stl uzantılı dosyalar kabul edilir." });
+            if (file.Length > MaxFileSize)
+                return BadRequest(new { message = "Dosya en fazla 50 MB olabilir." });
 
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier);
-            if (userIdClaim == null) return Unauthorized();
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!AllowedExtensions.Contains(extension))
+                return BadRequest(new { message = "Desteklenen biçimler: STL, 3MF, OBJ, FBX, GLB." });
 
-            if (!int.TryParse(userIdClaim.Value, out var userId))
+            title = title?.Trim() ?? string.Empty;
+            if (title.Length == 0 || title.Length > 100)
+                return BadRequest(new { message = "Model adı 1-100 karakter olmalı." });
+
+            description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+            if (description?.Length > 500)
+                return BadRequest(new { message = "Açıklama en fazla 500 karakter olabilir." });
+
+            category = string.IsNullOrEmpty(category) ? "baski" : category;
+            if (!Categories.Contains(category))
+                return BadRequest(new { message = "Geçersiz kategori." });
+
+            if (!int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId))
                 return Unauthorized();
 
             // Dosya ismi zafiyetlerini (Path Traversal) ve URL bozulmalarını önlemek için sadece GUID kullan
-            var safeFileName = $"{Guid.NewGuid()}.stl";
-            
-            var uploadsFolder = Path.Combine(_env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", "stl");
-            
-            if (!Directory.Exists(uploadsFolder))
-                Directory.CreateDirectory(uploadsFolder);
+            var safeFileName = $"{Guid.NewGuid()}{extension}";
+            var uploadsFolder = Path.Combine(_env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", "models");
+            Directory.CreateDirectory(uploadsFolder);
 
             var absoluteFilePath = Path.Combine(uploadsFolder, safeFileName);
-            var relativeFilePath = $"/uploads/stl/{safeFileName}"; // Veritabanına mutlak (C:\...) yol yazılmaz
 
-            await using (var stream = new FileStream(absoluteFilePath, FileMode.Create))
+            await using (var stream = new FileStream(absoluteFilePath, FileMode.CreateNew))
             {
                 await file.CopyToAsync(stream);
             }
 
             var printModel = new PrintModel
             {
-                Title = title, // Kullanıcının girdiği orijinal isim başlıkta saklanır
+                Title = title,
                 Description = description,
-                FilePath = relativeFilePath, 
+                FilePath = $"/uploads/models/{safeFileName}", // Veritabanına mutlak (C:\...) yol yazılmaz
                 FileName = safeFileName,
+                Category = category,
                 UserId = userId,
                 UploadedAt = DateTime.UtcNow
             };
@@ -107,7 +145,7 @@ namespace Karalevha.API.Controllers
                 throw;
             }
 
-            return Ok(new { message = "Dosya başarıyla yüklendi!" });
+            return Ok(new { message = "Model yüklendi." });
         }
     }
 }

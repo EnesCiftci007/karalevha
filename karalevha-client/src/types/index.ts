@@ -29,6 +29,8 @@ export interface PrintModel {
   title: string;
   description: string;
   fileUrl: string;
+  category: 'baski' | 'oyun';
+  format: 'stl' | '3mf' | 'obj' | 'fbx' | 'glb';
   uploadedAt: string;
   uploader: string;
 }

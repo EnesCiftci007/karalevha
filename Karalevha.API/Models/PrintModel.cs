@@ -17,10 +17,15 @@ namespace Karalevha.API.Models
         public string? Description { get; set; }
 
         [Required]
-        public string FilePath { get; set; } = string.Empty; // STL dosyasının sunucudaki yolu
+        public string FilePath { get; set; } = string.Empty; // Model dosyasının sunucudaki göreli yolu (/uploads/...)
         
         [Required]
         public string FileName { get; set; } = string.Empty; // Orijinal dosya adı
+
+        /// <summary>"baski" (3B yazıcı için) ya da "oyun" (oyun / görselleştirme modeli)</summary>
+        [Required]
+        [MaxLength(20)]
+        public string Category { get; set; } = "baski";
 
         public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
 
