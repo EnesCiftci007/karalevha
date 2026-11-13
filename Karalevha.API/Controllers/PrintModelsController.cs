@@ -74,14 +74,22 @@ namespace Karalevha.API.Controllers
             if (model == null) return NotFound(new { message = "Model bulunamadı." });
             if (!_current.CanManage(User, model.UserId)) return StatusCode(403, new { message = "Bu modeli silemezsin." });
 
+            // "Bunu bastım" fotoğrafları kayıtla birlikte (cascade) silinir; dosyalarını önceden topla
+            var makePhotos = await _context.PrintMakes.Where(m => m.PrintModelId == id).Select(m => m.PhotoPath).ToListAsync();
+
             _context.PrintModels.Remove(model);
+            _context.Likes.RemoveRange(_context.Likes.Where(l => l.TargetType == "model" && l.TargetId == id));
+            _context.Comments.RemoveRange(_context.Comments.Where(c => c.TargetType == "model" && c.TargetId == id));
             await _context.SaveChangesAsync();
 
-            // Kayıt silindikten sonra dosyayı da kaldır. Yol yalnızca /uploads altındaysa ve dışarı taşmıyorsa.
+            // Kayıt silindikten sonra dosyaları da kaldır. Yol yalnızca /uploads altındaysa ve dışarı taşmıyorsa.
             var uploads = Path.GetFullPath(Path.Combine(WebRoot, "uploads"));
-            var path = Path.GetFullPath(Path.Combine(WebRoot, model.FilePath.TrimStart('/')));
-            if (path.StartsWith(uploads + Path.DirectorySeparatorChar) && System.IO.File.Exists(path))
-                System.IO.File.Delete(path);
+            foreach (var relative in makePhotos.Append(model.FilePath))
+            {
+                var path = Path.GetFullPath(Path.Combine(WebRoot, relative.TrimStart('/')));
+                if (path.StartsWith(uploads + Path.DirectorySeparatorChar) && System.IO.File.Exists(path))
+                    System.IO.File.Delete(path);
+            }
 
             return Ok(new { success = true });
         }

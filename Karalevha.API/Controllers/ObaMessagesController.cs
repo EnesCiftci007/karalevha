@@ -19,13 +19,32 @@ namespace Karalevha.API.Controllers
         private readonly IHubContext<ChatHub> _hubContext;
         private readonly ObaFileStorage _storage;
         private readonly CurrentUser _current;
+        private readonly NotificationService _notifications;
 
-        public ObaMessagesController(AppDbContext context, IHubContext<ChatHub> hubContext, ObaFileStorage storage, CurrentUser current)
+        public ObaMessagesController(AppDbContext context, IHubContext<ChatHub> hubContext, ObaFileStorage storage, CurrentUser current, NotificationService notifications)
         {
             _context = context;
             _hubContext = hubContext;
             _storage = storage;
             _current = current;
+            _notifications = notifications;
+        }
+
+        /// <summary>Mesajda @adı geçen ve kanalı okuyabilen kişilere bildirim ekler (SaveChanges çağıranda).</summary>
+        private async Task NotifyMentions(ObaChannel channel, string content, int authorId)
+        {
+            if (string.IsNullOrEmpty(content) || !content.Contains('@')) return;
+            var ids = await SocialController.MentionedUserIds(_context, content);
+            if (ids.Count == 0) return;
+            var oba = channel.Oba!;
+            if (oba.IsPrivate)
+            {
+                var members = await _context.ObaMembers.Where(m => m.ObaId == oba.Id).Select(m => m.UserId).ToListAsync();
+                ids = ids.Where(id => id == oba.OwnerId || members.Contains(id)).ToList();
+            }
+            var author = CurrentUser.NameOf(User);
+            foreach (var id in ids)
+                _notifications.Add(id, authorId, $"{author}, {oba.Name} obasında #{channel.Name} kanalında senden bahsetti.", $"/e-oba/{oba.Id}");
         }
 
         // DELETE: api/obamessages/message/{messageId}
@@ -150,6 +169,7 @@ namespace Karalevha.API.Controllers
             };
 
             _context.ObaMessages.Add(message);
+            await NotifyMentions(access.Channel, content, userId.Value);
             await _context.SaveChangesAsync();
 
             return Ok(Broadcast(message, userId.Value));
@@ -206,6 +226,7 @@ namespace Karalevha.API.Controllers
             try
             {
                 _context.ObaMessages.Add(message);
+                await NotifyMentions(access.Channel, caption, userId.Value);
                 await _context.SaveChangesAsync();
             }
             catch
