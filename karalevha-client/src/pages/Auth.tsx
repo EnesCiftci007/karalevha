@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { api } from '../services/api';
+import { ApiError, api } from '../services/api';
 import { User } from '../types';
 import Field from '../components/ui/Field';
 import Tabs from '../components/ui/Tabs';
@@ -24,11 +24,14 @@ export default function Auth() {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
+  // Giriş, e-posta doğrulanmadığı için reddedildiyse bağlantıyı yeniden göndermek için adres
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
 
   const isLogin = mode === 'giris';
 
   const switchMode = (next: Mode) => {
     setMode(next);
+    setUnverifiedEmail(null);
     setErrorMsg('');
     setSuccessMsg('');
     setPassword('');
@@ -39,6 +42,7 @@ export default function Auth() {
     setLoading(true);
     setErrorMsg('');
     setSuccessMsg('');
+    setUnverifiedEmail(null);
 
     try {
       if (isLogin) {
@@ -59,8 +63,26 @@ export default function Auth() {
       }
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : 'Sunucuya bağlanılamadı.');
+      if (error instanceof ApiError && error.body?.requiresVerification) {
+        setUnverifiedEmail(String(error.body.email ?? ''));
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const resendVerification = async () => {
+    if (!unverifiedEmail) return;
+    try {
+      const data = await api<{ message: string }>('/api/auth/resend-verification', {
+        method: 'POST',
+        body: JSON.stringify({ email: unverifiedEmail }),
+      });
+      setErrorMsg('');
+      setUnverifiedEmail(null);
+      setSuccessMsg(data.message);
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Gönderilemedi.');
     }
   };
 
@@ -97,7 +119,14 @@ export default function Auth() {
           />
 
           {errorMsg && (
-            <p className="mt-5 rounded-md border border-hata/40 bg-hata/10 px-3 py-2 text-sm text-hata" role="alert">{errorMsg}</p>
+            <div className="mt-5 rounded-md border border-hata/40 bg-hata/10 px-3 py-2 text-sm text-hata" role="alert">
+              <p>{errorMsg}</p>
+              {unverifiedEmail && (
+                <button type="button" onClick={resendVerification} className="mt-1.5 underline underline-offset-4 text-tebesir hover:text-isaret">
+                  Doğrulama bağlantısını yeniden gönder
+                </button>
+              )}
+            </div>
           )}
           {successMsg && (
             <p className="mt-5 rounded-md border border-basari/40 bg-basari/10 px-3 py-2 text-sm text-basari" role="status">{successMsg}</p>

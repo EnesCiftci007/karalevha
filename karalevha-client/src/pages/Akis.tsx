@@ -1,19 +1,48 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Lock, Users } from 'lucide-react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Lock, Users, X } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Oba, Post } from '../types';
+import { Oba, POST_TAGS, Post } from '../types';
 import Avatar from '../components/ui/Avatar';
 import PageHeader from '../components/ui/PageHeader';
 import PostItem from '../components/akis/PostItem';
 import { Comments, CommentToggle, LikeButton, useSocialCounts } from '../components/social/Social';
+import Tabs from '../components/ui/Tabs';
 import { SocialCounts } from '../types';
 
-function PostFooter({ post, counts, onChange }: { post: Post; counts: SocialCounts; onChange: (patch: Partial<SocialCounts>) => void }) {
+const MAX_TAGS = 3;
+
+/** Etiket düğmesi: seçili olunca işaret rengi */
+function TagChip({ tag, active, onClick, count }: { tag: string; active?: boolean; onClick: () => void; count?: number }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded border text-xs transition-colors ${
+        active ? 'border-isaret text-isaret bg-isaret/10' : 'border-levha-cizgi text-tebesir-soluk hover:border-tebesir-silik hover:text-tebesir'
+      }`}
+    >
+      #{tag}
+      {count !== undefined && count > 0 && <span className="veri">{count}</span>}
+    </button>
+  );
+}
+
+function PostFooter({ post, counts, onChange, onTag }: { post: Post; counts: SocialCounts; onChange: (patch: Partial<SocialCounts>) => void; onTag: (tag: string) => void }) {
   const [open, setOpen] = useState(() => window.location.hash === `#gonderi-${post.id}`);
   return (
     <div className="mt-2">
+      {post.tags && post.tags.length > 0 && (
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2">
+          {post.tags.map((t) => (
+            <button key={t} type="button" onClick={() => onTag(t)} className="text-sm text-isaret/90 hover:text-isaret hover:underline underline-offset-4">
+              #{t}
+            </button>
+          ))}
+        </div>
+      )}
       <div className="flex items-center gap-2">
         <LikeButton type="post" id={post.id} counts={counts} onChange={onChange} />
         <CommentToggle count={counts.comments} open={open} onClick={() => setOpen((v) => !v)} />
@@ -32,6 +61,11 @@ const PAGE = 20; // bir seferde gösterilen gönderi sayısı
 
 export default function Akis() {
   const { user } = useAuth();
+  const [params, setParams] = useSearchParams();
+  const tagFilter = params.get('etiket');
+  const scope = params.get('kapsam') === 'takip' && user ? 'takip' : 'hepsi';
+  const [trending, setTrending] = useState<{ tag: string; count: number }[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [shown, setShown] = useState(PAGE);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -41,22 +75,42 @@ export default function Akis() {
   const [error, setError] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // Süzgeç adreste durur: /akis?etiket=Robotik&kapsam=takip (paylaşılabilir, geri tuşu çalışır)
+  const setFilter = (next: { etiket?: string | null; kapsam?: 'hepsi' | 'takip' }) => {
+    const p = new URLSearchParams(params);
+    if (next.etiket !== undefined) (next.etiket ? p.set('etiket', next.etiket) : p.delete('etiket'));
+    if (next.kapsam !== undefined) (next.kapsam === 'takip' ? p.set('kapsam', 'takip') : p.delete('kapsam'));
+    setParams(p);
+    window.scrollTo({ top: 0 });
+  };
+
   useEffect(() => {
     let cancelled = false;
-    api<Post[]>('/api/posts')
+    setPosts(null);
+    setShown(PAGE);
+    setLoadFailed(false);
+    const q = new URLSearchParams();
+    if (tagFilter) q.set('etiket', tagFilter);
+    if (scope === 'takip') q.set('kapsam', 'takip');
+    api<Post[]>(`/api/posts${q.size ? `?${q}` : ''}`)
       .then((data) => !cancelled && setPosts(data))
       .catch(() => {
         if (cancelled) return;
         setPosts([]);
         setLoadFailed(true);
       });
-    api<Oba[]>('/api/obalar')
-      .then((data) => !cancelled && setObalar(data))
-      .catch(() => {});
     return () => {
       cancelled = true;
     };
+  }, [tagFilter, scope]);
+
+  useEffect(() => {
+    api<Oba[]>('/api/obalar').then(setObalar).catch(() => {});
+    api<{ tag: string; count: number }[]>('/api/posts/etiketler').then(setTrending).catch(() => {});
   }, []);
+
+  const toggleTag = (tag: string) =>
+    setTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : prev.length < MAX_TAGS ? [...prev, tag] : prev));
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value);
@@ -75,10 +129,13 @@ export default function Akis() {
     try {
       const newPost = await api<Post>('/api/posts', {
         method: 'POST',
-        body: JSON.stringify({ content: text }),
+        body: JSON.stringify({ content: text, tags }),
       });
-      setPosts((prev) => [newPost, ...(prev ?? [])]);
+      // Süzgeçle uyuşmayan yeni gönderi listeye eklenmez (ör. başka etiket seçiliyken)
+      if (!tagFilter || newPost.tags?.includes(tagFilter)) setPosts((prev) => [newPost, ...(prev ?? [])]);
+      setTrending((prev) => prev.map((t) => (newPost.tags?.includes(t.tag) ? { ...t, count: t.count + 1 } : t)));
       setContent('');
+      setTags([]);
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gönderi paylaşılamadı.');
@@ -126,7 +183,14 @@ export default function Akis() {
                   className="w-full resize-none bg-transparent pt-1.5 text-base leading-relaxed text-tebesir placeholder:text-tebesir-silik focus:outline-none max-h-80"
                 />
                 {error && <p className="text-sm text-hata mb-2" role="alert">{error}</p>}
-                <div className="flex items-center justify-end gap-4 mt-1">
+                {(content.length > 0 || tags.length > 0) && (
+                  <div className="flex flex-wrap items-center gap-1.5 mt-1" role="group" aria-label={`Etiketler, en fazla ${MAX_TAGS}`}>
+                    {POST_TAGS.map((t) => (
+                      <TagChip key={t} tag={t} active={tags.includes(t)} onClick={() => toggleTag(t)} />
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center justify-end gap-4 mt-3">
                   {content.length > 0 && (
                     <span className={`veri ${remaining < 50 ? 'text-hata' : ''}`}>
                       {remaining}
@@ -145,6 +209,32 @@ export default function Akis() {
             </div>
           )}
 
+          {/* Süzgeç */}
+          <div className="flex flex-wrap items-center gap-3 pt-5 pb-1">
+            {user && (
+              <div className="w-64 max-w-full">
+              <Tabs
+                label="Akış"
+                value={scope}
+                onChange={(v) => setFilter({ kapsam: v })}
+                options={[{ value: 'hepsi', label: 'Herkes' }, { value: 'takip', label: 'Takip ettiklerim' }]}
+              />
+              </div>
+            )}
+            {tagFilter && (
+              <button type="button" onClick={() => setFilter({ etiket: null })} className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded border border-isaret text-sm text-isaret bg-isaret/10">
+                #{tagFilter}
+                <X className="w-3.5 h-3.5" aria-label="Etiket süzgecini kaldır" />
+              </button>
+            )}
+          </div>
+          {/* Telefonda gündem: yan sütun gizli olduğundan etiketler burada */}
+          <div className="lg:hidden flex gap-1.5 overflow-x-auto pb-2 -mx-1 px-1">
+            {trending.map((t) => (
+              <TagChip key={t.tag} tag={t.tag} count={t.count} active={tagFilter === t.tag} onClick={() => setFilter({ etiket: tagFilter === t.tag ? null : t.tag })} />
+            ))}
+          </div>
+
           {/* Gönderiler */}
           {posts === null ? (
             <div className="divide-y divide-levha-cizgi" aria-hidden="true">
@@ -161,7 +251,13 @@ export default function Akis() {
             </div>
           ) : posts.length === 0 ? (
             <p className="py-12 text-center text-tebesir-silik">
-              {loadFailed ? 'Akış yüklenemedi. Sayfayı yenilemeyi dene.' : 'Akış henüz sessiz. İlk paylaşımı sen yap.'}
+              {loadFailed
+                ? 'Akış yüklenemedi. Sayfayı yenilemeyi dene.'
+                : tagFilter
+                  ? `#${tagFilter} etiketiyle henüz gönderi yok.`
+                  : scope === 'takip'
+                    ? 'Takip ettiğin kimse henüz paylaşım yapmadı. Profillerden kişileri takip edebilirsin.'
+                    : 'Akış henüz sessiz. İlk paylaşımı sen yap.'}
             </p>
           ) : (
             <>
@@ -172,7 +268,7 @@ export default function Akis() {
                   post={post}
                   onUpdated={(updated) => setPosts((prev) => (prev ?? []).map((p) => (p.id === updated.id ? updated : p)))}
                   onDeleted={(id) => setPosts((prev) => (prev ?? []).filter((p) => p.id !== id))}
-                  footer={<PostFooter post={post} counts={social.get(post.id)} onChange={(patch) => social.update(post.id, patch)} />}
+                  footer={<PostFooter post={post} counts={social.get(post.id)} onChange={(patch) => social.update(post.id, patch)} onTag={(t) => setFilter({ etiket: t })} />}
                 />
               ))}
             </ul>
@@ -190,6 +286,28 @@ export default function Akis() {
         {/* Yan sütun */}
         <aside className="hidden lg:block lg:col-span-4">
           <div className="sticky top-24 space-y-8">
+            <section className="rounded-lg border border-levha-cizgi">
+              <h2 className="text-sm font-semibold text-tebesir px-4 pt-4 pb-1">Gündem</h2>
+              <p className="px-4 pb-2 text-xs text-tebesir-silik">Son 7 günün etiketleri</p>
+              <ul className="pb-2">
+                {trending.map((t) => (
+                  <li key={t.tag}>
+                    <button
+                      type="button"
+                      onClick={() => setFilter({ etiket: tagFilter === t.tag ? null : t.tag })}
+                      aria-pressed={tagFilter === t.tag}
+                      className={`w-full flex items-center justify-between px-4 py-1.5 text-sm text-left transition-colors hover:bg-levha-yuzey ${
+                        tagFilter === t.tag ? 'text-isaret' : 'text-tebesir-soluk hover:text-tebesir'
+                      }`}
+                    >
+                      <span>#{t.tag}</span>
+                      <span className="veri">{t.count > 0 ? `${t.count} gönderi` : ''}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
             <section className="rounded-lg border border-levha-cizgi">
               <h2 className="text-sm font-semibold text-tebesir px-4 pt-4 pb-2">Obalar</h2>
               {obalar.length === 0 ? (

@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link, useSearchParams } from 'react-router-dom';
+import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import * as signalR from '@microsoft/signalr';
 import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Hash, Volume2, Send, ChevronLeft, MessageSquare, Lock, Menu, X, Paperclip, FolderOpen, Trash2, Plus, Pencil } from 'lucide-react';
+import { Hash, Volume2, Send, ChevronLeft, MessageSquare, Lock, Menu, X, Paperclip, FolderOpen, Trash2, Plus, Pencil, LogOut } from 'lucide-react';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import UserLink from '../components/ui/UserLink';
 import Avatar from '../components/ui/Avatar';
@@ -44,7 +44,7 @@ export default function ObaDetay() {
   const [joinError, setJoinError] = useState('');
   const [connection, setConnection] = useState<signalR.HubConnection | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  
+
 
   const [needsLogin, setNeedsLogin] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -54,6 +54,11 @@ export default function ObaDetay() {
   const [dragOver, setDragOver] = useState(false);
   const [obaName, setObaName] = useState<string | null>(null);
   const [obaOwner, setObaOwner] = useState<string | null>(null);
+  // Açık obada okumak serbest, yazmak üyelik ister ("Katıl")
+  const [isMember, setIsMember] = useState(false);
+  const [joining, setJoining] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const navigate = useNavigate();
   const [toDelete, setToDelete] = useState<Message | null>(null);
   const [, setSearchParams] = useSearchParams();
   // Kanal formu: yeni kanal (bölümüyle) ya da düzenlenen kanal
@@ -93,7 +98,7 @@ export default function ObaDetay() {
         .then(() => {
           console.log('Connected to SignalR');
           setIsConnected(true);
-          
+
           connection.on('MessageDeleted', (messageId: number) => {
             setMessages(prev => prev.filter(m => m.id !== messageId));
           });
@@ -115,7 +120,7 @@ export default function ObaDetay() {
       connection.invoke('JoinChannel', activeChannel.id.toString())
         .then(() => console.log("Joined channel: ", activeChannel.id))
         .catch(err => console.error("JoinChannel error: ", err));
-        
+
       return () => {
         // Bağlantı zaten kapandıysa (çıkış, sayfadan ayrılma) ayrılma çağrısı gereksiz
         if (connection.state !== signalR.HubConnectionState.Connected) return;
@@ -130,7 +135,7 @@ export default function ObaDetay() {
     fetchChannels();
   }, [id, token]);
 
-  // Başlıkta göstermek için obanın adı (liste herkese açık)
+  // Başlıkta göstermek için obanın adı ve kişinin üyeliği (liste herkese açık)
   useEffect(() => {
     let cancelled = false;
     api<Oba[]>('/api/obalar')
@@ -139,12 +144,25 @@ export default function ObaDetay() {
         if (cancelled) return;
         setObaName(oba?.name ?? null);
         setObaOwner(oba?.owner ?? null);
+        setIsMember(!!oba?.isMember);
       })
       .catch(() => {});
     return () => {
       cancelled = true;
     };
-  }, [id]);
+  }, [id, token]);
+
+  const joinPublic = async () => {
+    setJoining(true);
+    try {
+      await api(`/api/obalar/${id}/join`, { method: 'POST', body: JSON.stringify({}) });
+      setIsMember(true);
+    } catch (err) {
+      setSendError(err instanceof Error ? err.message : 'Katılılamadı.');
+    } finally {
+      setJoining(false);
+    }
+  };
 
   useEffect(() => {
     if (activeChannel) {
@@ -208,13 +226,13 @@ export default function ObaDetay() {
         return;
       }
       setNeedsLogin(false);
-      
+
       if (res.status === 403) {
         setNeedsPassword(true);
         setLoading(false);
         return;
       }
-      
+
       if (res.ok) {
         const data: Channel[] = await res.json();
         setChannels(data);
@@ -338,6 +356,7 @@ export default function ObaDetay() {
       await api(`/api/obalar/${id}/join`, { method: 'POST', body: JSON.stringify({ password }) });
       setPassword('');
       setNeedsPassword(false);
+      setIsMember(true);
       setLoading(true);
       fetchChannels();
     } catch (err) {
@@ -436,6 +455,9 @@ export default function ObaDetay() {
             <ChevronLeft className="w-4 h-4" />
           </Link>
           <h1 className="flex-1 min-w-0 text-sm font-semibold text-tebesir truncate">{obaName ?? 'Oba'}</h1>
+          {isMember && user && user.username !== obaOwner && (
+            <ItemMenu label="Oba seçenekleri" actions={[{ label: 'Obadan ayrıl', icon: LogOut, danger: true, onSelect: () => setConfirmLeave(true) }]} />
+          )}
           <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-1.5 rounded-md text-tebesir-silik hover:text-tebesir" aria-label="Kanal listesini kapat">
             <X className="w-4 h-4" />
           </button>
@@ -446,7 +468,7 @@ export default function ObaDetay() {
             <div key={category}>
               <div className="group/bolum flex items-center justify-between px-2 mb-1">
                 <p className="etiket">{categoryLabel(category)}</p>
-                {user && textCategories.includes(category) && (
+                {user && isMember && textCategories.includes(category) && (
                   <button
                     type="button"
                     onClick={() => setChannelForm({ category })}
@@ -480,7 +502,7 @@ export default function ObaDetay() {
               </ul>
             </div>
           ))}
-          {user && (
+          {user && isMember && (
             <button
               type="button"
               onClick={() => setChannelForm({})}
@@ -636,7 +658,13 @@ export default function ObaDetay() {
 
         {/* Yazma alanı */}
         <div className="px-3 sm:px-4 pb-3 sm:pb-4 shrink-0">
-          {user ? (
+          {user && !isMember ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-levha-cizgi px-4 py-3">
+              <p className="text-sm text-tebesir-soluk">Okumak serbest. Mesaj ve dosya göndermek için obaya katıl.</p>
+              {sendError && <p className="w-full text-sm text-hata" role="alert">{sendError}</p>}
+              <button type="button" onClick={joinPublic} disabled={joining} className="btn-ana">{joining ? 'Katılıyor…' : 'Obaya katıl'}</button>
+            </div>
+          ) : user ? (
             <form onSubmit={handleSendMessage}>
               {sendError && <p className="mb-2 text-sm text-hata" role="alert">{sendError}</p>}
               <div className="rounded-lg border border-levha-cizgi bg-levha-koyu focus-within:border-tebesir-silik transition-colors">
@@ -752,6 +780,20 @@ export default function ObaDetay() {
           }}
         >
           {toDelete.file ? 'Mesaj ve eklenen dosya herkes için silinecek.' : 'Mesaj herkes için silinecek.'}
+        </ConfirmDialog>
+      )}
+
+      {confirmLeave && (
+        <ConfirmDialog
+          title={`${obaName ?? 'Obadan'} ayrılınsın mı?`}
+          confirmLabel="Ayrıl"
+          onClose={() => setConfirmLeave(false)}
+          onConfirm={async () => {
+            await api(`/api/obalar/${id}/leave`, { method: 'POST' });
+            navigate('/e-oba');
+          }}
+        >
+          Mesajların obada kalır. Eklendiğin gizli kanallardan da çıkarsın; açık obaya istediğin zaman yeniden katılabilirsin.
         </ConfirmDialog>
       )}
 
