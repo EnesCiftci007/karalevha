@@ -17,6 +17,7 @@ namespace Karalevha.API.Data
         public DbSet<ObaChannel> ObaChannels { get; set; }
         public DbSet<ObaMessage> ObaMessages { get; set; }
         public DbSet<ObaMember> ObaMembers { get; set; }
+        public DbSet<ObaChannelMember> ObaChannelMembers { get; set; }
         public DbSet<Equipment> Equipment { get; set; }
         public DbSet<Reservation> Reservations { get; set; }
         public DbSet<ClubEvent> Events { get; set; }
@@ -53,6 +54,10 @@ namespace Karalevha.API.Data
             // Bir kişi aynı şeyi bir kez beğenebilir
             modelBuilder.Entity<Like>().HasIndex(l => new { l.TargetType, l.TargetId, l.UserId }).IsUnique();
             modelBuilder.Entity<Comment>().HasIndex(c => new { c.TargetType, c.TargetId, c.CreatedAt });
+
+            modelBuilder.Entity<ObaChannelMember>().HasIndex(m => new { m.ChannelId, m.UserId }).IsUnique();
+            modelBuilder.Entity<ObaChannelMember>().HasOne(m => m.Channel).WithMany().OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ObaChannelMember>().HasOne(m => m.User).WithMany().OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<Notification>().HasIndex(n => new { n.UserId, n.IsRead, n.CreatedAt });
             modelBuilder.Entity<Notification>().HasOne(n => n.Actor).WithMany().HasForeignKey(n => n.ActorId).OnDelete(DeleteBehavior.SetNull);

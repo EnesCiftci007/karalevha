@@ -52,24 +52,6 @@ namespace Karalevha.API.Controllers
         }
 
 
-        // GET: api/obalar/{id}/channels
-        [HttpGet("{id}/channels")]
-        [Authorize]
-        public async Task<IActionResult> GetObaChannels(int id)
-        {
-            var channels = await _context.ObaChannels
-                .Where(c => c.ObaId == id)
-                .OrderBy(c => c.Id)
-                .Select(c => new {
-                    c.Id,
-                    c.Name,
-                    c.Type,
-                    c.Category
-                })
-                .ToListAsync();
-
-            return Ok(channels);
-        }
         // POST: api/obalar
         [HttpPost]
         [Authorize]

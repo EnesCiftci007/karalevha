@@ -298,6 +298,12 @@ namespace Karalevha.API.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int?>("CreatedById")
+                        .HasColumnType("integer");
+
+                    b.Property<bool>("IsPrivate")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(50)
@@ -316,6 +322,33 @@ namespace Karalevha.API.Migrations
                     b.HasIndex("ObaId");
 
                     b.ToTable("ObaChannels");
+                });
+
+            modelBuilder.Entity("Karalevha.API.Models.ObaChannelMember", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ChannelId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ChannelId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("ObaChannelMembers");
                 });
 
             modelBuilder.Entity("Karalevha.API.Models.ObaMember", b =>
@@ -725,6 +758,25 @@ namespace Karalevha.API.Migrations
                         .IsRequired();
 
                     b.Navigation("Oba");
+                });
+
+            modelBuilder.Entity("Karalevha.API.Models.ObaChannelMember", b =>
+                {
+                    b.HasOne("Karalevha.API.Models.ObaChannel", "Channel")
+                        .WithMany()
+                        .HasForeignKey("ChannelId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Karalevha.API.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Channel");
+
+                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Karalevha.API.Models.ObaMember", b =>

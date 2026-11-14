@@ -13,10 +13,12 @@ namespace Karalevha.API.Hubs
     public class ChatHub : Hub
     {
         private readonly AppDbContext _context;
+        private readonly ObaAccess _access;
 
-        public ChatHub(AppDbContext context)
+        public ChatHub(AppDbContext context, ObaAccess access)
         {
             _context = context;
+            _access = access;
         }
 
         public async Task JoinChannel(string channelId)
@@ -31,15 +33,10 @@ namespace Karalevha.API.Hubs
             if (channel?.Oba == null)
                 throw new HubException("Kanal bulunamadı.");
 
-            if (channel.Oba.IsPrivate)
-            {
-                var userId = Context.User == null ? null : CurrentUser.IdOf(Context.User);
-                var allowed = userId != null && (
-                    channel.Oba.OwnerId == userId ||
-                    await _context.ObaMembers.AnyAsync(m => m.ObaId == channel.ObaId && m.UserId == userId));
-                if (!allowed)
-                    throw new HubException("Bu kanalı dinleme yetkin yok.");
-            }
+            var userId = Context.User == null ? null : CurrentUser.IdOf(Context.User);
+            var (canRead, _) = await _access.ChannelAsync(channel, userId);
+            if (!canRead)
+                throw new HubException("Bu kanalı dinleme yetkin yok.");
 
             await Groups.AddToGroupAsync(Context.ConnectionId, id.ToString());
         }

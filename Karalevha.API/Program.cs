@@ -43,6 +43,7 @@ builder.Services.AddHealthChecks();
 builder.Services.AddSingleton<ObaFileStorage>();
 builder.Services.AddSingleton<CurrentUser>();
 builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<ObaAccess>();
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient<RepoService>();
 
