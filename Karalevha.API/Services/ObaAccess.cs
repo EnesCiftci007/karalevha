@@ -7,7 +7,7 @@ namespace Karalevha.API.Services
     /// <summary>
     /// Oba ve kanal erişim kuralları. Mesajlar, canlı sohbet (SignalR) ve kanal listesi aynı kuralı kullanır.
     ///
-    /// Açık oba: herkes okur, giriş yapan herkes yazar.
+    /// Açık oba: herkes okur, üyeler (ve kurucu) yazar. Üyelik "Katıl" ile alınır.
     /// Gizli oba: okumak ve yazmak üyelik (ya da kuruculuk) ister.
     /// Gizli kanal: yukarıdakine ek olarak yalnızca oba kurucusu, kanalı açan kişi ve kanala eklenenler.
     /// </summary>
@@ -32,9 +32,8 @@ namespace Karalevha.API.Services
 
             if (!channel.IsPrivate)
             {
-                if (!oba.IsPrivate) return (true, userId != null);
                 var inside = await IsInsideAsync(oba, userId);
-                return (inside, inside);
+                return (inside || !oba.IsPrivate, inside);
             }
 
             if (userId == null || !await IsInsideAsync(oba, userId)) return (false, false);

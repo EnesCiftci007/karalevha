@@ -7,5 +7,8 @@ namespace Karalevha.API.DTOs
         [Required]
         [MaxLength(1000)]
         public string Content { get; set; } = string.Empty;
+
+        /// <summary>En fazla 3 etiket; listede olmayanlar yok sayılır</summary>
+        public List<string>? Tags { get; set; }
     }
 }

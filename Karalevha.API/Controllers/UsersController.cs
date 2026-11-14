@@ -2,6 +2,8 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
 using Karalevha.API.Services;
+using Karalevha.API.Models;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Karalevha.API.Controllers
 {
@@ -12,11 +14,19 @@ namespace Karalevha.API.Controllers
     {
         private readonly AppDbContext _context;
         private readonly CurrentUser _current;
+        private readonly NotificationService _notifications;
 
-        public UsersController(AppDbContext context, CurrentUser current)
+        public UsersController(AppDbContext context, CurrentUser current, NotificationService notifications)
         {
             _context = context;
             _current = current;
+            _notifications = notifications;
+        }
+
+        private Task<User?> FindByName(string username)
+        {
+            var normalized = username.Trim().ToLowerInvariant();
+            return _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == normalized);
         }
 
         // GET: api/users/{username}
@@ -49,17 +59,108 @@ namespace Karalevha.API.Controllers
                 .Select(m => new { m.Oba!.Id, m.Oba.Name })
                 .ToListAsync();
 
+            var me = CurrentUser.IdOf(User);
+            var followers = await _context.UserFollows.CountAsync(f => f.FollowingId == user.Id);
+            var following = await _context.UserFollows.CountAsync(f => f.FollowerId == user.Id);
+            var isFollowing = me != null && await _context.UserFollows.AnyAsync(f => f.FollowerId == me && f.FollowingId == user.Id);
+
             return Ok(new
             {
+                user.Id,
                 user.Username,
                 JoinedAt = user.CreatedAt,
-                IsAdmin = _current.IsAdminName(user.Username),
+                user.Bio,
+                user.Interests,
+                user.Role,
+                IsAdmin = Roles.IsStaff(user.Role),
+                // Askı bilgisi yalnızca kişinin kendisine ve yöneticilere gösterilir
+                BannedUntil = user.BannedUntil > DateTime.UtcNow && (me == user.Id || _current.IsAdmin(User)) ? user.BannedUntil : null,
+                FollowerCount = followers,
+                FollowingCount = following,
+                IsFollowing = isFollowing,
                 Projects = projects,
                 Models = models.Select(m => new { m.Id, m.Title, m.Category, m.FileUrl, Format = Path.GetExtension(m.FileName).TrimStart('.').ToLowerInvariant(), m.UploadedAt }),
                 Posts = posts,
                 Makes = makes,
                 Obalar = obalar
             });
+        }
+
+        // POST: api/users/{username}/follow
+        [HttpPost("users/{username}/follow")]
+        [Authorize]
+        public async Task<IActionResult> Follow(string username)
+        {
+            var me = CurrentUser.IdOf(User)!.Value;
+            var target = await FindByName(username);
+            if (target == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
+            if (target.Id == me) return BadRequest(new { message = "Kendini takip edemezsin." });
+
+            if (!await _context.UserFollows.AnyAsync(f => f.FollowerId == me && f.FollowingId == target.Id))
+            {
+                _context.UserFollows.Add(new UserFollow { FollowerId = me, FollowingId = target.Id });
+                var name = CurrentUser.NameOf(User);
+                _notifications.Add(target.Id, me, $"{name} seni takip etmeye başladı.", $"/u/{name}");
+                try
+                {
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505" })
+                {
+                    // Aynı anda iki istek: zaten takip ediliyor
+                }
+            }
+            return Ok(new { isFollowing = true, followerCount = await _context.UserFollows.CountAsync(f => f.FollowingId == target.Id) });
+        }
+
+        // DELETE: api/users/{username}/follow
+        [HttpDelete("users/{username}/follow")]
+        [Authorize]
+        public async Task<IActionResult> Unfollow(string username)
+        {
+            var me = CurrentUser.IdOf(User)!.Value;
+            var target = await FindByName(username);
+            if (target == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
+
+            await _context.UserFollows.Where(f => f.FollowerId == me && f.FollowingId == target.Id).ExecuteDeleteAsync();
+            return Ok(new { isFollowing = false, followerCount = await _context.UserFollows.CountAsync(f => f.FollowingId == target.Id) });
+        }
+
+        // GET: api/users/{username}/takip?yon=takipci|takip
+        // Takipçiler ya da takip edilenler (en fazla 200)
+        [HttpGet("users/{username}/takip")]
+        public async Task<IActionResult> FollowList(string username, [FromQuery] string yon = "takipci")
+        {
+            var target = await FindByName(username);
+            if (target == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
+
+            var query = yon == "takip"
+                ? _context.UserFollows.Where(f => f.FollowerId == target.Id).Select(f => new { f.CreatedAt, f.Following!.Username })
+                : _context.UserFollows.Where(f => f.FollowingId == target.Id).Select(f => new { f.CreatedAt, f.Follower!.Username });
+            return Ok(await query.OrderByDescending(f => f.CreatedAt).Take(200).Select(f => f.Username).ToListAsync());
+        }
+
+        public class UpdateProfileDto
+        {
+            public string? Bio { get; set; }
+            public List<string>? Interests { get; set; }
+        }
+
+        // PUT: api/users/me
+        [HttpPut("users/me")]
+        [Authorize]
+        public async Task<IActionResult> UpdateProfile(UpdateProfileDto dto)
+        {
+            var user = await _context.Users.FindAsync(CurrentUser.IdOf(User));
+            if (user == null) return Unauthorized();
+
+            var bio = string.IsNullOrWhiteSpace(dto.Bio) ? null : dto.Bio.Trim();
+            if (bio?.Length > 300) return BadRequest(new { message = "Tanıtım en fazla 300 karakter olabilir." });
+
+            user.Bio = bio;
+            if (dto.Interests != null) user.Interests = PostTags.Clean(dto.Interests, PostTags.All.Length);
+            await _context.SaveChangesAsync();
+            return Ok(new { user.Bio, user.Interests });
         }
 
         // GET: api/search?q=...

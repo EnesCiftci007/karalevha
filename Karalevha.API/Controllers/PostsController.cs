@@ -29,15 +29,64 @@ namespace Karalevha.API.Controllers
                 p.Likes,
                 p.CreatedAt,
                 p.EditedAt,
+                p.Tags,
                 User = new { p.User!.Id, p.User.Username, p.User.AvatarSeed }
             });
 
-        // GET: api/posts
+        private const int MaxTags = 3;
+
+        // GET: api/posts?etiket=Robotik&kapsam=takip
+        // Giriş yapan kişinin ilgi alanlarıyla eşleşen son 7 günün gönderileri öne çıkar; geri kalanı yeniden eskiye.
+        // kapsam=takip yalnızca takip edilen kişilerin (ve kişinin kendi) gönderilerini getirir.
         [HttpGet]
-        public async Task<IActionResult> GetPosts()
+        public async Task<IActionResult> GetPosts([FromQuery] string? etiket, [FromQuery] string? kapsam)
         {
-            var posts = await Project(_context.Posts.AsNoTracking().OrderByDescending(p => p.CreatedAt)).ToListAsync();
-            return Ok(posts);
+            var me = CurrentUser.IdOf(User);
+            var query = _context.Posts.AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(etiket))
+            {
+                var tag = PostTags.Clean(new[] { etiket }, 1).FirstOrDefault();
+                if (tag == null) return Ok(Array.Empty<object>());
+                query = query.Where(p => p.Tags.Contains(tag));
+            }
+
+            if (kapsam == "takip")
+            {
+                if (me == null) return Unauthorized();
+                var followed = _context.UserFollows.Where(f => f.FollowerId == me).Select(f => f.FollowingId);
+                query = query.Where(p => p.UserId == me || followed.Contains(p.UserId));
+            }
+
+            var interests = me == null ? new List<string>()
+                : await _context.Users.Where(u => u.Id == me).Select(u => u.Interests).FirstOrDefaultAsync() ?? new List<string>();
+            var boostSince = DateTime.UtcNow.AddDays(-7);
+            var boost = interests.Count > 0;
+
+            var ordered = query
+                .OrderByDescending(p => boost && p.CreatedAt >= boostSince && p.Tags.Any(t => interests.Contains(t)))
+                .ThenByDescending(p => p.CreatedAt)
+                .ThenByDescending(p => p.Id);
+            return Ok(await Project(ordered).ToListAsync());
+        }
+
+        // GET: api/posts/etiketler
+        // Gündem: her etiketin son 7 gündeki gönderi sayısı (çoktan aza), sonra hiç kullanılmamışlar.
+        [HttpGet("etiketler")]
+        public async Task<IActionResult> GetTags()
+        {
+            var since = DateTime.UtcNow.AddDays(-7);
+            var recent = await _context.Posts.AsNoTracking()
+                .Where(p => p.CreatedAt >= since)
+                .SelectMany(p => p.Tags)
+                .GroupBy(t => t)
+                .Select(g => new { Tag = g.Key, Count = g.Count() })
+                .ToListAsync();
+            var counts = recent.ToDictionary(r => r.Tag, r => r.Count);
+            return Ok(PostTags.All
+                .Select(t => new { tag = t, count = counts.GetValueOrDefault(t) })
+                .OrderByDescending(t => t.count)
+                .ThenBy(t => Array.IndexOf(PostTags.All, t.tag)));
         }
 
         // POST: api/posts
@@ -51,7 +100,7 @@ namespace Karalevha.API.Controllers
             var content = dto.Content.Trim();
             if (content.Length == 0) return BadRequest(new { message = "Gönderi boş olamaz." });
 
-            var post = new Post { Content = content, UserId = userId.Value, CreatedAt = DateTime.UtcNow };
+            var post = new Post { Content = content, Tags = PostTags.Clean(dto.Tags, MaxTags), UserId = userId.Value, CreatedAt = DateTime.UtcNow };
             _context.Posts.Add(post);
             await _context.SaveChangesAsync();
 
@@ -73,6 +122,7 @@ namespace Karalevha.API.Controllers
             if (content.Length == 0) return BadRequest(new { message = "Gönderi boş olamaz." });
 
             post.Content = content;
+            if (dto.Tags != null) post.Tags = PostTags.Clean(dto.Tags, MaxTags);
             post.EditedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 

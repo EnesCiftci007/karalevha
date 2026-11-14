@@ -27,6 +27,7 @@ namespace Karalevha.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetObalar()
         {
+            var me = CurrentUser.IdOf(User);
             // Son etkinliğe göre sıralı: en son yazışılan oba üstte. Gizli obalarda yalnızca zaman ve sayı
             // döner, mesaj içeriği değil.
             var obalar = await _context.Obalar
@@ -42,6 +43,7 @@ namespace Karalevha.API.Controllers
                     o.IsPrivate,
                     o.CreatedAt,
                     Owner = o.Owner!.Username,
+                    IsMember = me != null && (o.OwnerId == me || _context.ObaMembers.Any(m => m.ObaId == o.Id && m.UserId == me)),
                     MessageCount = _context.ObaMessages.Count(m => m.Channel!.ObaId == o.Id),
                     LastMessageAt = _context.ObaMessages.Where(m => m.Channel!.ObaId == o.Id).Max(m => (DateTime?)m.CreatedAt)
                 })
@@ -138,9 +140,9 @@ namespace Karalevha.API.Controllers
                 Role = "member"
             };
             _context.ObaMembers.Add(member);
-            
+
             oba.MemberCount += 1;
-            
+
             await _context.SaveChangesAsync();
             return Ok(new { success = true });
         }
@@ -159,6 +161,27 @@ namespace Karalevha.API.Controllers
                 System.Text.Encoding.UTF8.GetBytes(stored), System.Text.Encoding.UTF8.GetBytes(password));
             if (ok) oba.JoinPassword = BCrypt.Net.BCrypt.HashPassword(password);
             return ok;
+        }
+
+        // POST: api/obalar/{id}/leave
+        // Üye obadan ayrılır; gizli kanallardaki yeri de silinir. Kurucu ayrılamaz (obayı silebilir).
+        [HttpPost("{id:int}/leave")]
+        [Authorize]
+        public async Task<IActionResult> LeaveOba(int id)
+        {
+            var userId = CurrentUser.IdOf(User)!.Value;
+            var oba = await _context.Obalar.FindAsync(id);
+            if (oba == null) return NotFound(new { message = "Oba bulunamadı." });
+            if (oba.OwnerId == userId) return BadRequest(new { message = "Kurucu obadan ayrılamaz; obayı kapatmak için silebilirsin." });
+
+            var removed = await _context.ObaMembers.Where(m => m.ObaId == id && m.UserId == userId).ExecuteDeleteAsync();
+            if (removed > 0)
+            {
+                await _context.ObaChannelMembers.Where(m => m.UserId == userId && m.Channel!.ObaId == id).ExecuteDeleteAsync();
+                await _context.Obalar.Where(o => o.Id == id && o.MemberCount > 1)
+                    .ExecuteUpdateAsync(s => s.SetProperty(o => o.MemberCount, o => o.MemberCount - 1));
+            }
+            return Ok(new { success = true });
         }
 
         public class UpdateObaDto {
@@ -198,7 +221,7 @@ namespace Karalevha.API.Controllers
             var oba = await _context.Obalar
                 .Include(o => o.Owner) // Include it if we need it
                 .FirstOrDefaultAsync(o => o.Id == id);
-                
+
             if (oba == null) return NotFound("Oba bulunamadı");
 
             // OwnerCheck based on OwnerId, fallback to ObaMembers for admins later
@@ -212,7 +235,7 @@ namespace Karalevha.API.Controllers
             // Remove all related members and channels and messages manually if Cascade isn't working
             var members = await _context.ObaMembers.Where(m => m.ObaId == id).ToListAsync();
             _context.ObaMembers.RemoveRange(members);
-            
+
             var storedFiles = new List<string>();
             var channels = await _context.ObaChannels.Where(c => c.ObaId == id).ToListAsync();
             foreach(var channel in channels) {
