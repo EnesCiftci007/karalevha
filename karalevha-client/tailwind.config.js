@@ -15,7 +15,6 @@ export default {
       lg: ['20px', { lineHeight: '28px', letterSpacing: '-0.01em' }],    // bölüm başlığı
       xl: ['28px', { lineHeight: '36px', letterSpacing: '-0.02em' }],    // sayfa başlığı
       '2xl': ['40px', { lineHeight: '44px', letterSpacing: '-0.025em' }], // yalnızca ana sayfa başlığı
-      '3xl': ['72px', { lineHeight: '72px' }],                           // yalnızca ana sayfadaki graffiti imzası
     },
     // Köşeler: sokak afişi/çıkartma gibi neredeyse keskin
     borderRadius: {
@@ -55,11 +54,9 @@ export default {
       },
       fontFamily: {
         sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
-        // Dar, ağır, afiş/tabela havası. Başlıklar büyük harf (index.css)
-        display: ['"Big Shoulders Display Variable"', '"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+        // Başlıklar gövdeyle aynı ailede, yalnızca daha kalın
+        display: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
         mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
-        // Graffiti imzası: yalnızca KaraLevha yazısı ve 404 gibi tek kelimelik işaretler (DESIGN.md)
-        tag: ['"Sedgwick Ave Display"', 'cursive'],
       },
       maxWidth: {
         sayfa: '72rem',  // 1152px: tüm sayfaların içerik genişliği

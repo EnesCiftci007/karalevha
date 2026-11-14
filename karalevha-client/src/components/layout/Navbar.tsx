@@ -80,7 +80,7 @@ export default function Navbar() {
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2.5 shrink-0" aria-label="KaraLevha ana sayfa">
           <Logo className="w-7 h-7 text-isaret" />
-          <Wordmark className="text-xl" />
+          <Wordmark className="text-lg" />
         </Link>
 
         {/* Bölümler (geniş ekran) */}

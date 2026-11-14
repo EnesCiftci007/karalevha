@@ -45,7 +45,7 @@ function Section({ title, to, linkLabel, children }: { title: string; to: string
   return (
     <section>
       <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-levha-cizgi">
-        <h2 className="flex items-center gap-2 font-display font-bold text-xl text-tebesir">
+        <h2 className="flex items-center gap-2 font-display font-semibold text-lg text-tebesir">
           <TiltMark className="text-isaret" />
           {title}
         </h2>
@@ -108,7 +108,7 @@ export default function Home() {
 
           <div className="lg:col-span-7">
             <h1>
-              <Wordmark className="text-2xl sm:text-3xl" />
+              <Wordmark className="text-2xl" />
               <span className="sr-only"> ana sayfa</span>
             </h1>
             <p className="mt-5 text-base text-tebesir max-w-xl">
@@ -158,7 +158,7 @@ export default function Home() {
       {data && data.events.length > 0 && (
         <section className="mt-12">
           <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-levha-cizgi">
-            <h2 className="font-display font-bold text-xl text-tebesir">Yaklaşan etkinlikler</h2>
+            <h2 className="font-display font-semibold text-lg text-tebesir">Yaklaşan etkinlikler</h2>
             <Link to="/etkinlikler" className="inline-flex items-center gap-1 text-sm text-tebesir-soluk hover:text-tebesir transition-colors">
               Tüm etkinlikler
               <ArrowRight className="w-4 h-4" aria-hidden="true" />

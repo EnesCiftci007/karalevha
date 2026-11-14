@@ -11,10 +11,8 @@ havası.** Resmî kurum sitesi gibi değil, kulübün duvarı gibi durur. Ama s�
 
 - **Yapmacık metin yok.** Slogan, kampanya cümlesi, "dijital buluşma noktası" gibi kalıplar, temalı kelime
   oyunları kullanılmaz. Metin ne olduğunu düz söyler: "Projeler", "Kayıt ol", "Sayfa bulunamadı".
-- **Graffiti işi az ve gerçek:** `font-tag` (Sedgwick Ave Display) yalnızca KaraLevha imzasında (`<Wordmark>`)
-  ve 404 gibi tek kelimelik işaretlerde. Etkin menü öğesinin altında elle çekilmiş sprey çizgisi (`.sprey-alti`).
-- **Afiş başlıkları:** `font-display` (Big Shoulders Display) dar ve ağırdır, otomatik büyük harf olur. Yalnızca
-  başlıklarda; gövde ve butonlarda değil.
+- **Yazı normal kalır:** süslü, graffiti ya da afiş yazı tipi kullanılmaz. Sokak havası renk, doku ve küçük
+  işaretlerle verilir: etkin menü öğesinin altında elle çekilmiş sprey çizgisi (`.sprey-alti`), çıkartma rozetler.
 - **Dokular hafif:** gövdede neredeyse görünmez beton kumlanması, ana sayfa karşılamasında fotokopi yarım tonu
   (`.kareli`). Parlama (glow), gradyan yazı, neon gölge yok.
 - **Köşeler neredeyse keskin** (2-4 px), afiş ve çıkartma gibi. "Kurucu" gibi önemli rozetler sprey renginde
@@ -26,7 +24,7 @@ havası.** Resmî kurum sitesi gibi değil, kulübün duvarı gibi durur. Ama s�
 
 ## 1. Yazı
 
-Yalnızca yedi boyut var (`tailwind.config.js` içinde Tailwind'in varsayılanlarının yerine geçer).
+Yalnızca altı boyut var (`tailwind.config.js` içinde Tailwind'in varsayılanlarının yerine geçer).
 `text-[13px]` gibi ölçek dışı boyutlar **kullanılmaz**.
 
 | Sınıf | Boyut | Ne için |
@@ -34,16 +32,15 @@ Yalnızca yedi boyut var (`tailwind.config.js` içinde Tailwind'in varsayılanla
 | `text-xs` | 12 px | Tarih, sayaç, dosya boyutu, alan yardım metni |
 | `text-sm` | 14 px | İkincil metin, buton, form alanı ve etiketi, menü |
 | `text-base` | 16 px | Gövde metni, liste başlıkları |
-| `text-lg` | 20 px | Pencere başlığı, kart içi başlık |
-| `text-xl` | 28 px | Bölüm başlığı (`h2`, `font-display`) |
-| `text-2xl` | 40 px | Sayfa başlığı (`h1`, `font-display`, dar yazı tipi için bir kademe büyük) |
-| `text-3xl` | 72 px | Yalnızca ana sayfadaki graffiti imzası (geniş ekran) |
+| `text-lg` | 20 px | Bölüm başlığı (`h2`), pencere başlığı |
+| `text-xl` | 28 px | Sayfa başlığı (`h1`) |
+| `text-2xl` | 40 px | Yalnızca ana sayfadaki KaraLevha başlığı |
 
-- **Yazı tipleri:** başlıklar `font-display` (Big Shoulders Display, büyük harf), metin `font-sans`
-  (IBM Plex Sans), veri `font-mono` (IBM Plex Mono), imza `font-tag` (Sedgwick Ave Display).
-- **Kalınlık:** 400 metin, 500 vurgu ve etiket, 600 buton ve liste başlığı, 700 yalnızca `font-display` başlıklar.
-- **Büyük harf yalnızca başlıklarda** (`font-display` bunu kendisi yapar). Gövde, buton ve etiketlerde cümle
-  düzeni: "Yeni proje", "YENİ PROJE" değil. Geniş harf aralığı (`tracking-widest`) kullanılmaz.
+- **Yazı tipleri:** başlık ve metin IBM Plex Sans (`font-display` başlıklar için aynı aile, daha kalın),
+  veri `font-mono` (IBM Plex Mono). Başka yazı tipi eklenmez.
+- **Kalınlık:** 400 metin, 500 vurgu ve etiket, 600 buton, liste ve bölüm başlığı, 700 sayfa başlığı.
+- **Büyük harf yok.** Başlık dahil her yerde cümle düzeni: "Yeni proje", "YENİ PROJE" değil. Geniş harf
+  aralığı (`tracking-widest`) kullanılmaz.
 - **Mono yalnızca veri için:** sayı, boyut, depo adresi, kod. Hazır sınıf: `.veri`. Etiket ya da başlıkta kullanılmaz.
 
 ## 2. Renk

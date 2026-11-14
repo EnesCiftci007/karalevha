@@ -80,12 +80,12 @@ export default function Auth() {
           <div className="flex items-center justify-between mb-8">
             <Link to="/" className="inline-flex items-center gap-2.5" aria-label="KaraLevha ana sayfa">
               <Logo className="w-8 h-8 text-isaret" />
-              <Wordmark className="text-xl" />
+              <Wordmark className="text-lg" />
             </Link>
             <Mascot className="w-16 h-16" />
           </div>
 
-          <h1 className="mb-6 font-display font-extrabold text-2xl text-tebesir">
+          <h1 className="mb-6 font-display font-bold text-xl text-tebesir">
             {isLogin ? 'Giriş yap' : 'Kayıt ol'}
           </h1>
 
