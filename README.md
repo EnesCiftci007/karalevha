@@ -19,7 +19,8 @@ Geliştirme ortamı Render'daki veritabanını değil, bilgisayarınızdaki Post
 [PostgreSQL](https://www.postgresql.org/download/windows/) kurulu olmalıdır (17 ile denendi).
 
 Veritabanı kümesi yönetici yetkisi gerektirmeyen bir kullanıcı klasöründe durur
-(`%LOCALAPPDATA%\Karalevha\pgdata`); bilerek OneDrive/depo dışındadır.
+(`%LOCALAPPDATA%\Karalevha\pgdata`); bilerek OneDrive/depo dışındadır. Sunucu **5433** portunda çalışır,
+böylece bilgisayardaki başka PostgreSQL kurulumlarıyla (5432) çakışmaz.
 
 İlk kurulum (bir kere):
 
@@ -27,8 +28,9 @@ Veritabanı kümesi yönetici yetkisi gerektirmeyen bir kullanıcı klasöründe
 $bin  = "C:\Program Files\PostgreSQL\17\bin"
 $data = "$env:LOCALAPPDATA\Karalevha\pgdata"
 & "$bin\initdb.exe" -D $data -U postgres -W -E UTF8 --locale=C --locale-provider=builtin --builtin-locale=C.UTF-8 -A scram-sha-256
+Add-Content "$data\postgresql.conf" "port = 5433"
 .\scripts\db-start.ps1
-& "$bin\createdb.exe" -h localhost -U postgres -E UTF8 karalevha
+& "$bin\createdb.exe" -h localhost -p 5433 -U postgres -E UTF8 karalevha
 ```
 
 Sonraki her seferde (bilgisayar yeniden başladığında sunucu kendiliğinden açılmaz):
@@ -44,7 +46,7 @@ Gizli ayarlar depoya girmez; `dotnet user-secrets` ile tutulur. `Karalevha.API` 
 
 ```bash
 dotnet user-secrets set "Jwt:Key" "GIZLI_VE_EN_AZ_32_KARAKTER_UZUNLUGUNDA_BIR_SIFRE_YAZIN"
-dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5432;Database=karalevha;Username=postgres;Password=sifreniz"
+dotnet user-secrets set "ConnectionStrings:DefaultConnection" "Host=localhost;Port=5433;Database=karalevha;Username=postgres;Password=sifreniz"
 dotnet run
 ```
 
