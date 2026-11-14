@@ -27,8 +27,10 @@ namespace Karalevha.API.Controllers
         [HttpGet]
         public async Task<IActionResult> GetObalar()
         {
+            // Son etkinliğe göre sıralı: en son yazışılan oba üstte. Gizli obalarda yalnızca zaman ve sayı
+            // döner, mesaj içeriği değil.
             var obalar = await _context.Obalar
-                .OrderByDescending(o => o.CreatedAt)
+                .AsNoTracking()
                 .Select(o => new
                 {
                     o.Id,
@@ -36,9 +38,14 @@ namespace Karalevha.API.Controllers
                     o.Description,
                     o.AvatarSeed,
                     o.Color,
-                    o.MemberCount, o.IsPrivate,
-                    Owner = o.Owner.Username
+                    o.MemberCount,
+                    o.IsPrivate,
+                    o.CreatedAt,
+                    Owner = o.Owner!.Username,
+                    MessageCount = _context.ObaMessages.Count(m => m.Channel!.ObaId == o.Id),
+                    LastMessageAt = _context.ObaMessages.Where(m => m.Channel!.ObaId == o.Id).Max(m => (DateTime?)m.CreatedAt)
                 })
+                .OrderByDescending(o => o.LastMessageAt ?? o.CreatedAt)
                 .ToListAsync();
 
             return Ok(obalar);

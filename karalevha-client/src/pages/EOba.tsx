@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Lock, MessagesSquare, Pencil, Plus, Search, Trash2, Users } from 'lucide-react';
+import { Lock, MessageSquare, MessagesSquare, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Oba } from '../types';
@@ -12,12 +12,17 @@ import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
 import Skeleton from '../components/ui/Skeleton';
 import ItemMenu from '../components/ui/ItemMenu';
+import ListToolbar from '../components/ui/ListToolbar';
+import { fullDate, timeAgo } from '../utils/time';
+
+type SortKey = 'aktif' | 'uye' | 'ad';
 
 export default function EOba() {
   const { user } = useAuth();
   const [obalar, setObalar] = useState<Oba[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<SortKey>('aktif');
 
   // Oba kurma
   const [showCreate, setShowCreate] = useState(false);
@@ -56,10 +61,14 @@ export default function EOba() {
 
   const visible = useMemo(() => {
     const q = query.trim().toLocaleLowerCase('tr');
-    return (obalar ?? []).filter(
+    const list = (obalar ?? []).filter(
       (o) => !q || o.name.toLocaleLowerCase('tr').includes(q) || (o.description ?? '').toLocaleLowerCase('tr').includes(q)
     );
-  }, [obalar, query]);
+    // "aktif": sunucunun sırası (son mesaj ya da kuruluş zamanı, en yeni üstte)
+    if (sort === 'uye') return [...list].sort((a, b) => (b.memberCount ?? 1) - (a.memberCount ?? 1));
+    if (sort === 'ad') return [...list].sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+    return list;
+  }, [obalar, query, sort]);
 
   const closeCreate = () => {
     if (saving) return;
@@ -159,14 +168,20 @@ export default function EOba() {
       />
 
       {obalar && obalar.length > 0 && (
-        <div className="flex items-center gap-4 mb-6">
-          <div className="relative flex-1 max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-tebesir-silik pointer-events-none" aria-hidden="true" />
-            <label htmlFor="oba-ara" className="sr-only">Obalarda ara</label>
-            <input id="oba-ara" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Oba ara" className="girdi pl-9" />
-          </div>
-          <span className="veri">{visible.length} oba</span>
-        </div>
+        <ListToolbar
+          id="oba-ara"
+          query={query}
+          onQuery={setQuery}
+          placeholder="Oba ara"
+          sort={sort}
+          onSort={setSort}
+          sortOptions={[
+            { value: 'aktif', label: 'Son etkinlik' },
+            { value: 'uye', label: 'Üye sayısı' },
+            { value: 'ad', label: 'Ada göre (A–Z)' },
+          ]}
+          count={{ shown: visible.length, total: obalar.length, unit: 'oba' }}
+        />
       )}
 
       {obalar === null ? (
@@ -205,10 +220,20 @@ export default function EOba() {
                   <p className="mt-3 text-sm text-tebesir-soluk line-clamp-2 flex-1">
                     {oba.description || 'Açıklama eklenmemiş.'}
                   </p>
-                  <div className="mt-4 flex items-center gap-2">
-                    <span className="inline-flex items-center gap-1 text-xs text-tebesir-silik">
+                  <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-tebesir-silik">
+                    <span className="inline-flex items-center gap-1">
                       <Users className="w-3.5 h-3.5" aria-hidden="true" />
                       {oba.memberCount ?? 1} üye
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
+                      {oba.lastMessageAt ? (
+                        <time dateTime={oba.lastMessageAt} title={`Son mesaj: ${fullDate(oba.lastMessageAt)}`}>
+                          {oba.messageCount} mesaj · son {timeAgo(oba.lastMessageAt)}
+                        </time>
+                      ) : (
+                        'Henüz mesaj yok'
+                      )}
                     </span>
                     {oba.isPrivate && <Badge><Lock className="w-3 h-3" aria-hidden="true" />Gizli</Badge>}
                     {isOwner && <Badge tone="isaret">Kurucu</Badge>}

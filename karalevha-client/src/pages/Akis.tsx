@@ -28,10 +28,12 @@ function PostFooter({ post, counts, onChange }: { post: Post; counts: SocialCoun
 }
 
 const MAX_LENGTH = 1000; // Backend sınırıyla aynı
+const PAGE = 20; // bir seferde gösterilen gönderi sayısı
 
 export default function Akis() {
   const { user } = useAuth();
   const [posts, setPosts] = useState<Post[] | null>(null);
+  const [shown, setShown] = useState(PAGE);
   const [loadFailed, setLoadFailed] = useState(false);
   const [obalar, setObalar] = useState<Oba[]>([]);
   const [content, setContent] = useState('');
@@ -162,8 +164,9 @@ export default function Akis() {
               {loadFailed ? 'Akış yüklenemedi. Sayfayı yenilemeyi dene.' : 'Akış henüz sessiz. İlk paylaşımı sen yap.'}
             </p>
           ) : (
+            <>
             <ul className="divide-y divide-levha-cizgi">
-              {posts.map((post) => (
+              {posts.slice(0, shown).map((post) => (
                 <PostItem
                   key={post.id}
                   post={post}
@@ -173,6 +176,14 @@ export default function Akis() {
                 />
               ))}
             </ul>
+            {posts.length > shown && (
+              <div className="pt-4 text-center">
+                <button type="button" className="btn-ikincil" onClick={() => setShown((n) => n + PAGE)}>
+                  Daha fazla göster <span className="veri">{posts.length - shown}</span>
+                </button>
+              </div>
+            )}
+            </>
           )}
         </div>
 

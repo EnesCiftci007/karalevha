@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Box, Download, Pencil, Rotate3d, Search, Trash2, Upload, UploadCloud, X } from 'lucide-react';
+import { Box, Download, Heart, MessageSquare, Pencil, Trash2, Upload, UploadCloud, X } from 'lucide-react';
 import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { PrintModel } from '../types';
@@ -16,6 +16,7 @@ import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
 import Skeleton from '../components/ui/Skeleton';
 import Tabs from '../components/ui/Tabs';
+import ListToolbar from '../components/ui/ListToolbar';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import ItemMenu from '../components/ui/ItemMenu';
 import UserLink from '../components/ui/UserLink';
@@ -27,6 +28,7 @@ const MAX_UPLOAD = 50 * 1024 * 1024; // Backend sınırıyla aynı (50 MB)
 
 type Category = PrintModel['category'];
 type Filter = 'hepsi' | Category;
+type SortKey = 'yeni' | 'begeni' | 'ad';
 
 const CATEGORY_LABEL: Record<Category, string> = { baski: 'Baskı', oyun: 'Oyun' };
 
@@ -43,19 +45,23 @@ function ModelThumbnail({ url, format }: { url: string; format: ModelFormat }) {
     const el = ref.current;
     if (!el) return;
     let cancelled = false;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (!entry.isIntersecting) return;
-        observer.disconnect();
-        modelThumbnail(url, format).then((data) => {
-          if (cancelled) return;
-          setImage(data);
-          setState(data ? 'hazir' : 'yok');
-        });
-      },
-      { rootMargin: '200px' }
-    );
+    let started = false;
+    const start = () => {
+      if (started) return;
+      started = true;
+      observer.disconnect();
+      modelThumbnail(url, format).then((data) => {
+        if (cancelled) return;
+        setImage(data);
+        setState(data ? 'hazir' : 'yok');
+      });
+    };
+    const observer = new IntersectionObserver(([entry]) => entry.isIntersecting && start(), { rootMargin: '200px' });
     observer.observe(el);
+    // Kart açılışta zaten görünür alandaysa gözlemcinin ilk bildirimini bekleme
+    // (arka planda kalan sekmelerde bu bildirim gecikebiliyor ya da hiç gelmiyor)
+    const rect = el.getBoundingClientRect();
+    if (rect.top < window.innerHeight + 200 && rect.bottom > -200) start();
     return () => {
       cancelled = true;
       observer.disconnect();
@@ -82,6 +88,7 @@ export default function BaskiIstasyonu() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('hepsi');
+  const [sort, setSort] = useState<SortKey>('yeni');
   const [preview, setPreview] = useState<PrintModel | null>(null);
   const [params, setParams] = useSearchParams();
   const [showUpload, setShowUpload] = useState(false);
@@ -122,9 +129,11 @@ export default function BaskiIstasyonu() {
     setParams({}, { replace: true });
   }, [models, params, setParams]);
 
+  const social = useSocialCounts('model', (models ?? []).map((m) => m.id));
+
   const visible = useMemo(() => {
     const q = query.trim().toLocaleLowerCase('tr');
-    return (models ?? []).filter(
+    const list = (models ?? []).filter(
       (m) =>
         (filter === 'hepsi' || m.category === filter) &&
         (!q ||
@@ -132,9 +141,13 @@ export default function BaskiIstasyonu() {
           (m.description ?? '').toLocaleLowerCase('tr').includes(q) ||
           m.uploader.toLocaleLowerCase('tr').includes(q))
     );
-  }, [models, query, filter]);
-
-  const social = useSocialCounts('model', (models ?? []).map((m) => m.id));
+    const newest = (a: PrintModel, b: PrintModel) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime();
+    return [...list].sort((a, b) => {
+      if (sort === 'ad') return a.title.localeCompare(b.title, 'tr');
+      if (sort === 'begeni') return social.get(b.id).likes - social.get(a.id).likes || newest(a, b);
+      return newest(a, b);
+    });
+  }, [models, query, filter, sort, social]);
 
   const count = (c: Category) => (models ?? []).filter((m) => m.category === c).length;
 
@@ -207,26 +220,35 @@ export default function BaskiIstasyonu() {
         }
       />
 
-      {/* Filtre ve arama */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-6">
-        <div className="sm:w-80">
-          <Tabs
-            label="Kategori"
-            value={filter}
-            onChange={setFilter}
-            options={[
-              { value: 'hepsi', label: models ? `Hepsi ${models.length}` : 'Hepsi' },
-              { value: 'baski', label: models ? `Baskı ${count('baski')}` : 'Baskı' },
-              { value: 'oyun', label: models ? `Oyun ${count('oyun')}` : 'Oyun' },
-            ]}
-          />
-        </div>
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-tebesir-silik pointer-events-none" aria-hidden="true" />
-          <label htmlFor="model-ara" className="sr-only">Modellerde ara</label>
-          <input id="model-ara" type="search" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Model ya da yükleyen ara" className="girdi pl-9" />
-        </div>
-      </div>
+      {/* Kategori, arama, sıralama */}
+      <ListToolbar
+        id="model-ara"
+        query={query}
+        onQuery={setQuery}
+        placeholder="Model ya da kişi ara"
+        sort={sort}
+        onSort={setSort}
+        sortOptions={[
+          { value: 'yeni', label: 'En yeni' },
+          { value: 'begeni', label: 'En çok beğenilen' },
+          { value: 'ad', label: 'Ada göre (A–Z)' },
+        ]}
+        count={models && models.length > 0 ? { shown: visible.length, total: filter === 'hepsi' ? models.length : count(filter), unit: 'model' } : undefined}
+        leading={
+          <div className="sm:w-72 shrink-0">
+            <Tabs
+              label="Kategori"
+              value={filter}
+              onChange={setFilter}
+              options={[
+                { value: 'hepsi', label: 'Hepsi' },
+                { value: 'baski', label: 'Baskı' },
+                { value: 'oyun', label: 'Oyun' },
+              ]}
+            />
+          </div>
+        }
+      />
 
       {/* Izgara */}
       {models === null ? (
@@ -267,24 +289,34 @@ export default function BaskiIstasyonu() {
               </button>
               <div className="flex-1 flex flex-col p-3">
                 <div className="flex items-start justify-between gap-2">
-                  <h2 className="text-sm font-semibold text-tebesir line-clamp-2">{model.title}</h2>
+                  <h2 className="text-sm font-semibold text-tebesir line-clamp-2">
+                    <button type="button" onClick={() => setPreview(model)} className="text-left hover:underline underline-offset-4">{model.title}</button>
+                  </h2>
                   <span className="veri shrink-0 pt-0.5">{model.format.toUpperCase()}</span>
                 </div>
                 <p className="mt-1 text-xs text-tebesir-silik truncate">
-                  {social.get(model.id).likes > 0 && <span className="text-tebesir-soluk">♥ {social.get(model.id).likes} · </span>}
                   {model.uploader} · <time dateTime={model.uploadedAt} title={fullDate(model.uploadedAt)}>{timeAgo(model.uploadedAt)}</time>
                 </p>
-                <div className="mt-auto pt-3">
-                  <div className="pt-3 border-t border-levha-cizgi flex items-center justify-between gap-2 text-sm">
-                    <button type="button" onClick={() => setPreview(model)} className="inline-flex items-center gap-1.5 text-tebesir-soluk hover:text-tebesir transition-colors">
-                      <Rotate3d className="w-4 h-4" aria-hidden="true" />
-                      İncele
-                    </button>
-                    <a href={fileUrlOf(model)} download={downloadName(model)} className="inline-flex items-center gap-1.5 text-tebesir-soluk hover:text-tebesir transition-colors">
-                      <Download className="w-4 h-4" aria-hidden="true" />
-                      İndir
-                    </a>
-                  </div>
+                <div className="mt-auto pt-2.5 flex items-center gap-3 text-xs text-tebesir-silik">
+                  <span className={`inline-flex items-center gap-1 ${social.get(model.id).liked ? 'text-isaret' : ''}`} title="Beğeni">
+                    <Heart className={`w-3.5 h-3.5 ${social.get(model.id).liked ? 'fill-isaret' : ''}`} aria-hidden="true" />
+                    <span className="font-mono tabular-nums">{social.get(model.id).likes}</span>
+                    <span className="sr-only">beğeni</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1" title="Yorum">
+                    <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span className="font-mono tabular-nums">{social.get(model.id).comments}</span>
+                    <span className="sr-only">yorum</span>
+                  </span>
+                  <a
+                    href={fileUrlOf(model)}
+                    download={downloadName(model)}
+                    className="ml-auto -mr-1 p-1.5 rounded-md hover:text-tebesir hover:bg-levha-yuzey transition-colors"
+                    title={`${model.format.toUpperCase()} dosyasını indir`}
+                    aria-label={`${model.title} dosyasını indir`}
+                  >
+                    <Download className="w-4 h-4" />
+                  </a>
                 </div>
               </div>
             </li>

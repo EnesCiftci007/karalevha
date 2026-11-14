@@ -24,6 +24,8 @@ export interface Oba {
   owner: string;
   isPrivate?: boolean;
   memberCount?: number;
+  messageCount?: number;
+  lastMessageAt?: string | null;
 }
 
 export interface PrintModel {
