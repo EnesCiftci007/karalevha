@@ -87,4 +87,51 @@
     height: 7px;
     background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 8' preserveAspectRatio='none'%3E%3Cpath d='M2 5.5c14-3 26-2.5 38-1.5s27 1.6 40-1.2c6-1.2 11-1 18 .4' fill='none' stroke='%23d4ff3d' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
   }
+
+  /* Kod görüntüleyici: satır üzerine gelme, seçili satır, tıklanabilir satır numarası */
+  .kod-satir {
+    display: block;
+    padding-right: 1rem;
+  }
+  .kod-satir:hover {
+    background: rgb(236 235 230 / 0.03);
+  }
+  .kod-satir-secili,
+  .kod-satir-secili:hover {
+    background: rgb(212 255 61 / 0.09);
+    box-shadow: inset 2px 0 0 #d4ff3d;
+  }
+  .kod-satir .linenumber {
+    cursor: pointer;
+  }
+  .kod-satir .linenumber:hover {
+    color: #d4ff3d !important;
+  }
+
+  /* README ve diğer markdown dosyaları */
+  .md-icerik {
+    @apply text-base leading-relaxed text-tebesir break-words;
+  }
+  .md-icerik > * + * {
+    @apply mt-4;
+  }
+  .md-icerik h1 { @apply font-display font-bold text-xl text-tebesir pb-2 border-b border-levha-cizgi; }
+  .md-icerik h2 { @apply font-display font-semibold text-lg text-tebesir pt-2 pb-1.5 border-b border-levha-cizgi; }
+  .md-icerik h3,
+  .md-icerik h4 { @apply font-display font-semibold text-base text-tebesir pt-1; }
+  .md-icerik a { @apply text-isaret underline underline-offset-2 decoration-isaret/40 hover:decoration-isaret; }
+  .md-icerik ul { @apply list-disc pl-6 space-y-1; }
+  .md-icerik ol { @apply list-decimal pl-6 space-y-1; }
+  .md-icerik li > ul,
+  .md-icerik li > ol { @apply mt-1; }
+  .md-icerik code { @apply font-mono text-sm bg-levha-koyu border border-levha-cizgi rounded px-1 py-0.5; }
+  .md-icerik pre { @apply font-mono text-sm bg-levha-koyu border border-levha-cizgi rounded-lg p-4 overflow-x-auto leading-relaxed; }
+  .md-icerik pre code { @apply bg-transparent border-0 p-0; }
+  .md-icerik blockquote { @apply border-l-2 border-levha-cizgi pl-4 text-tebesir-soluk; }
+  .md-icerik img { @apply inline max-w-full rounded; }
+  .md-icerik hr { @apply border-levha-cizgi; }
+  .md-icerik table { @apply block w-full overflow-x-auto text-sm border-collapse; }
+  .md-icerik th,
+  .md-icerik td { @apply border border-levha-cizgi px-3 py-1.5 text-left; }
+  .md-icerik th { @apply bg-levha-yuzey font-semibold; }
 }
