@@ -23,7 +23,7 @@ export default function PageHeader({ title, description, action, back }: PageHea
       )}
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
         <div className="min-w-0">
-          <h1 className="font-display font-bold text-xl text-tebesir">{title}</h1>
+          <h1 className="font-display font-extrabold text-2xl text-tebesir">{title}</h1>
           {description && <p className="mt-1 text-base text-tebesir-soluk max-w-2xl">{description}</p>}
         </div>
         {action && <div className="shrink-0">{action}</div>}

@@ -69,7 +69,7 @@ export default function Profil() {
         <div className="scale-150 origin-left mr-4"><Avatar name={profile.username} /></div>
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <h1 className="font-display font-bold text-xl text-tebesir truncate">{profile.username}</h1>
+            <h1 className="font-display font-extrabold text-2xl text-tebesir truncate">{profile.username}</h1>
             {profile.isAdmin && <Badge tone="isaret">Yönetici</Badge>}
             {isMe && <Badge>Sen</Badge>}
           </div>
