@@ -20,14 +20,16 @@ namespace Karalevha.API.Controllers
         private readonly ObaFileStorage _storage;
         private readonly CurrentUser _current;
         private readonly NotificationService _notifications;
+        private readonly ObaAccess _access;
 
-        public ObaMessagesController(AppDbContext context, IHubContext<ChatHub> hubContext, ObaFileStorage storage, CurrentUser current, NotificationService notifications)
+        public ObaMessagesController(AppDbContext context, IHubContext<ChatHub> hubContext, ObaFileStorage storage, CurrentUser current, NotificationService notifications, ObaAccess access)
         {
             _context = context;
             _hubContext = hubContext;
             _storage = storage;
             _current = current;
             _notifications = notifications;
+            _access = access;
         }
 
         /// <summary>Mesajda @adı geçen ve kanalı okuyabilen kişilere bildirim ekler (SaveChanges çağıranda).</summary>
@@ -37,7 +39,12 @@ namespace Karalevha.API.Controllers
             var ids = await SocialController.MentionedUserIds(_context, content);
             if (ids.Count == 0) return;
             var oba = channel.Oba!;
-            if (oba.IsPrivate)
+            if (channel.IsPrivate)
+            {
+                var readers = await _access.PrivateChannelReadersAsync(channel);
+                ids = ids.Where(readers.Contains).ToList();
+            }
+            else if (oba.IsPrivate)
             {
                 var members = await _context.ObaMembers.Where(m => m.ObaId == oba.Id).Select(m => m.UserId).ToListAsync();
                 ids = ids.Where(id => id == oba.OwnerId || members.Contains(id)).ToList();
@@ -77,10 +84,7 @@ namespace Karalevha.API.Controllers
 
         private record ChannelAccess(ObaChannel? Channel, bool CanRead, bool CanWrite);
 
-        /// <summary>
-        /// Açık obalar herkese okunur, giriş yapan herkes yazabilir.
-        /// Gizli obalarda okumak da yazmak da üyelik (veya kuruculuk) ister.
-        /// </summary>
+        /// <summary>Kurallar ObaAccess içinde: açık/gizli oba ve gizli kanal.</summary>
         private async Task<ChannelAccess> ResolveAccess(int channelId)
         {
             var channel = await _context.ObaChannels
@@ -88,13 +92,8 @@ namespace Karalevha.API.Controllers
                 .FirstOrDefaultAsync(c => c.Id == channelId);
             if (channel?.Oba == null) return new ChannelAccess(null, false, false);
 
-            var userId = CurrentUserId;
-            if (!channel.Oba.IsPrivate) return new ChannelAccess(channel, true, userId != null);
-
-            var isInside = userId != null && (
-                channel.Oba.OwnerId == userId ||
-                await _context.ObaMembers.AnyAsync(m => m.ObaId == channel.ObaId && m.UserId == userId));
-            return new ChannelAccess(channel, isInside, isInside);
+            var (canRead, canWrite) = await _access.ChannelAsync(channel, CurrentUserId);
+            return new ChannelAccess(channel, canRead, canWrite);
         }
 
         private static object ToDto(ObaMessage m, int userId, string username) => new

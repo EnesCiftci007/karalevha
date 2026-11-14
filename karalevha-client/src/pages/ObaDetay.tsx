@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import * as signalR from '@microsoft/signalr';
 import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Hash, Volume2, Send, ChevronLeft, MessageSquare, Lock, Menu, X, Paperclip, FolderOpen, Trash2 } from 'lucide-react';
+import { Hash, Volume2, Send, ChevronLeft, MessageSquare, Lock, Menu, X, Paperclip, FolderOpen, Trash2, Plus, Pencil } from 'lucide-react';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import UserLink from '../components/ui/UserLink';
 import Avatar from '../components/ui/Avatar';
@@ -13,15 +13,11 @@ import { fullDate } from '../utils/time';
 import { Oba } from '../types';
 import Attachment, { FileTypeIcon } from '../components/oba/Attachment';
 import FileViewer from '../components/oba/FileViewer';
+import ItemMenu from '../components/ui/ItemMenu';
+import ChannelFormModal, { categoryLabel, type ChannelDetail, type ChannelSummary } from '../components/oba/ChannelFormModal';
 import { MAX_FILE_SIZE, ObaFile, canPreview, downloadObaFile, formatSize } from '../services/files';
 
-interface Channel {
-  id: number;
-  name: string;
-  type: string;
-  category: string;
-  oba?: any;
-}
+type Channel = ChannelSummary;
 
 interface Message {
   id: number;
@@ -59,9 +55,15 @@ export default function ObaDetay() {
   const [obaName, setObaName] = useState<string | null>(null);
   const [obaOwner, setObaOwner] = useState<string | null>(null);
   const [toDelete, setToDelete] = useState<Message | null>(null);
+  const [, setSearchParams] = useSearchParams();
+  // Kanal formu: yeni kanal (bölümüyle) ya da düzenlenen kanal
+  const [channelForm, setChannelForm] = useState<{ category?: string; channel?: ChannelDetail } | null>(null);
+  const [channelInfo, setChannelInfo] = useState<ChannelDetail | null>(null);
+  const [channelToDelete, setChannelToDelete] = useState<Channel | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesBoxRef = useRef<HTMLDivElement>(null);
+  const scrolledChannelRef = useRef<number | null>(null);
 
   // Setup SignalR connection
   // Misafirler de bağlanır: açık obaları canlı olarak (salt okunur) izleyebilirler.
@@ -153,13 +155,47 @@ export default function ObaDetay() {
     }
   }, [activeChannel]);
 
+  // Yeni mesajda listenin sonuna in. Yalnızca mesaj kutusu kayar; scrollIntoView
+  // bütün sayfayı da kaydırıyordu (kanala tıklayınca sayfa en alta iniyordu).
   useEffect(() => {
-    // Scroll to bottom when messages change
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    const box = messagesBoxRef.current;
+    if (!box || !activeChannel) return;
+    const sameChannel = scrolledChannelRef.current === activeChannel.id;
+    scrolledChannelRef.current = activeChannel.id;
+    box.scrollTo({ top: box.scrollHeight, behavior: sameChannel ? 'smooth' : 'auto' });
+  }, [messages, activeChannel]);
+
+  // Gizli kanalın kişileri başlıkta gösterilir
+  useEffect(() => {
+    setChannelInfo(null);
+    if (!activeChannel?.isPrivate) return;
+    let cancelled = false;
+    api<ChannelDetail>(`/api/obachannels/kanal/${activeChannel.id}`)
+      .then((d) => !cancelled && setChannelInfo(d))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [activeChannel]);
+
+  const selectChannel = (channel: Channel) => {
+    setActiveChannel(channel);
+    setIsSidebarOpen(false);
+    // Bağlantıyla paylaşılabilsin; geçmişe yeni kayıt eklemeden
+    setSearchParams({ kanal: String(channel.id) }, { replace: true });
+  };
+
+  const openEdit = async (channel: Channel) => {
+    try {
+      const detail = await api<ChannelDetail>(`/api/obachannels/kanal/${channel.id}`);
+      setChannelForm({ channel: detail });
+    } catch (err) {
+      console.error('Kanal bilgisi alınamadı:', err);
+    }
+  };
 
 
-  const fetchChannels = async () => {
+  const fetchChannels = async (selectId?: number) => {
     try {
       const res = await fetch(`${API_URL}/api/obachannels/${id}`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
@@ -180,11 +216,13 @@ export default function ObaDetay() {
       }
       
       if (res.ok) {
-        const data = await res.json();
+        const data: Channel[] = await res.json();
         setChannels(data);
-        if (data.length > 0) {
-          setActiveChannel(data[0]);
-        }
+        // Seçilecek kanal: az önce kaydedilen, bağlantıdaki ?kanal= ya da şimdiki; yoksa ilk kanal
+        const wanted = selectId ?? Number(new URLSearchParams(window.location.search).get('kanal'));
+        setActiveChannel((current) =>
+          data.find((c) => c.id === wanted) ?? data.find((c) => c.id === current?.id) ?? data[0] ?? null
+        );
       }
     } catch (error) {
       console.error('Kanallar yüklenemedi:', error);
@@ -312,6 +350,8 @@ export default function ObaDetay() {
     (acc[ch.category] ??= []).push(ch);
     return acc;
   }, {} as Record<string, Channel[]>);
+  // Yeni kanal yalnızca metin bölümlerine eklenir (ses kanalları henüz çalışmıyor)
+  const textCategories = Object.keys(channelGroups).filter((c) => channelGroups[c].some((ch) => ch.type === 'text'));
 
   // Aynı kişinin 5 dakika içindeki ardışık mesajları tek başlık altında toplanır
   const startsGroup = (idx: number) => {
@@ -404,18 +444,28 @@ export default function ObaDetay() {
         <nav className="flex-1 overflow-y-auto p-2 space-y-5">
           {Object.entries(channelGroups).map(([category, list]) => (
             <div key={category}>
-              <p className="etiket px-2 mb-1">{category.charAt(0) + category.slice(1).toLocaleLowerCase('tr')}</p>
+              <div className="group/bolum flex items-center justify-between px-2 mb-1">
+                <p className="etiket">{categoryLabel(category)}</p>
+                {user && textCategories.includes(category) && (
+                  <button
+                    type="button"
+                    onClick={() => setChannelForm({ category })}
+                    className="p-0.5 rounded text-tebesir-silik hover:text-tebesir md:opacity-0 md:group-hover/bolum:opacity-100 focus:opacity-100 transition-opacity"
+                    aria-label={`${categoryLabel(category)} bölümüne kanal ekle`}
+                    title="Kanal ekle"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
               <ul className="space-y-0.5">
                 {list.map((channel) => {
                   const active = activeChannel?.id === channel.id;
-                  const Icon = channel.type === 'voice' ? Volume2 : Hash;
+                  const Icon = channel.type === 'voice' ? Volume2 : channel.isPrivate ? Lock : Hash;
                   return (
                     <li key={channel.id}>
                       <button
-                        onClick={() => {
-                          setActiveChannel(channel);
-                          setIsSidebarOpen(false);
-                        }}
+                        onClick={() => selectChannel(channel)}
                         aria-current={active ? 'page' : undefined}
                         className={`w-full flex items-center gap-2 h-8 px-2 rounded-md text-sm text-left transition-colors ${
                           active ? 'bg-levha-yuzey text-tebesir font-medium md:bg-levha-yuzey' : 'text-tebesir-soluk hover:bg-levha-yuzey/60 hover:text-tebesir'
@@ -430,6 +480,16 @@ export default function ObaDetay() {
               </ul>
             </div>
           ))}
+          {user && (
+            <button
+              type="button"
+              onClick={() => setChannelForm({})}
+              className="w-full flex items-center gap-2 h-8 px-2 rounded-md text-sm text-tebesir-silik hover:bg-levha-yuzey/60 hover:text-tebesir transition-colors"
+            >
+              <Plus className="w-4 h-4" aria-hidden="true" />
+              Kanal ekle
+            </button>
+          )}
         </nav>
 
         {user && (
@@ -473,8 +533,29 @@ export default function ObaDetay() {
           <button onClick={() => setIsSidebarOpen(true)} className="md:hidden p-1.5 rounded-md text-tebesir-silik hover:text-tebesir" aria-label="Kanal listesini aç">
             <Menu className="w-4 h-4" />
           </button>
-          <Hash className="w-4 h-4 text-tebesir-silik shrink-0" aria-hidden="true" />
-          <h2 className="flex-1 min-w-0 text-base font-semibold text-tebesir truncate">{activeChannel?.name ?? 'Kanal'}</h2>
+          {activeChannel?.isPrivate ? (
+            <Lock className="w-4 h-4 text-tebesir-silik shrink-0" aria-label="Gizli kanal" />
+          ) : (
+            <Hash className="w-4 h-4 text-tebesir-silik shrink-0" aria-hidden="true" />
+          )}
+          <h2 className="min-w-0 text-base font-semibold text-tebesir truncate">{activeChannel?.name ?? 'Kanal'}</h2>
+          <span className="flex-1 min-w-0 truncate text-xs text-tebesir-silik">
+            {channelInfo && (
+              <span title={channelInfo.members.map((m) => m.username).join(', ')}>
+                {channelInfo.members.length} kişi<span className="hidden sm:inline"> · {channelInfo.members.slice(0, 4).map((m) => m.username).join(', ')}
+                {channelInfo.members.length > 4 && ` +${channelInfo.members.length - 4}`}</span>
+              </span>
+            )}
+          </span>
+          {activeChannel?.canManage && activeChannel.type === 'text' && (
+            <ItemMenu
+              label="Kanal seçenekleri"
+              actions={[
+                { label: activeChannel.isPrivate ? 'Kanalı ve kişileri düzenle' : 'Kanalı düzenle', icon: Pencil, onSelect: () => openEdit(activeChannel) },
+                { label: 'Kanalı sil', icon: Trash2, danger: true, onSelect: () => setChannelToDelete(activeChannel) },
+              ]}
+            />
+          )}
           <button
             type="button"
             onClick={() => setShowFiles((v) => !v)}
@@ -488,7 +569,7 @@ export default function ObaDetay() {
         </header>
 
         {/* Mesajlar */}
-        <div className="flex-1 overflow-y-auto px-3 sm:px-4 py-4">
+        <div ref={messagesBoxRef} className="flex-1 overflow-y-auto px-3 sm:px-4 py-4">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center px-6">
               <MessageSquare className="w-6 h-6 mb-3 text-tebesir-silik" strokeWidth={1.5} aria-hidden="true" />
@@ -551,7 +632,6 @@ export default function ObaDetay() {
               })}
             </ol>
           )}
-          <div ref={messagesEndRef} />
         </div>
 
         {/* Yazma alanı */}
@@ -672,6 +752,40 @@ export default function ObaDetay() {
           }}
         >
           {toDelete.file ? 'Mesaj ve eklenen dosya herkes için silinecek.' : 'Mesaj herkes için silinecek.'}
+        </ConfirmDialog>
+      )}
+
+      {channelForm && user && (
+        <ChannelFormModal
+          obaId={id!}
+          userId={user.id}
+          categories={textCategories}
+          initialCategory={channelForm.category}
+          channel={channelForm.channel}
+          onClose={() => setChannelForm(null)}
+          onSaved={(saved) => {
+            setChannelForm(null);
+            setSearchParams({ kanal: String(saved.id) }, { replace: true });
+            // Düzenlenen kanal açıksa başlık ve kişiler tazelensin
+            setActiveChannel((cur) => (cur?.id === saved.id ? { ...saved } : cur));
+            fetchChannels(saved.id);
+          }}
+        />
+      )}
+
+      {channelToDelete && (
+        <ConfirmDialog
+          title={`#${channelToDelete.name} silinsin mi?`}
+          confirmLabel="Kanalı sil"
+          onClose={() => setChannelToDelete(null)}
+          onConfirm={async () => {
+            await api(`/api/obachannels/kanal/${channelToDelete.id}`, { method: 'DELETE' });
+            setSearchParams({}, { replace: true });
+            setActiveChannel(null);
+            await fetchChannels();
+          }}
+        >
+          Kanaldaki bütün mesajlar ve paylaşılan dosyalar herkes için silinecek. Bu geri alınamaz.
         </ConfirmDialog>
       )}
 
