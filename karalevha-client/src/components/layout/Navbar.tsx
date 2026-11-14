@@ -3,6 +3,7 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut, Menu, Search, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import NotificationBell from './NotificationBell';
+import { Logo } from '../brand/Brand';
 
 const menuItems = [
   { name: 'Ana sayfa', path: '/', end: true },
@@ -78,7 +79,7 @@ export default function Navbar() {
 
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2.5 shrink-0" aria-label="KaraLevha ana sayfa">
-          <img src="/logo.png" alt="" className="w-7 h-7 object-contain" />
+          <Logo className="w-7 h-7 text-isaret" />
           <span className="font-display font-bold text-lg text-tebesir">KaraLevha</span>
         </Link>
 

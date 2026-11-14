@@ -6,6 +6,7 @@ import { api } from '../services/api';
 import { User } from '../types';
 import Field from '../components/ui/Field';
 import Tabs from '../components/ui/Tabs';
+import { Logo, Mascot } from '../components/brand/Brand';
 
 type Mode = 'giris' | 'kayit';
 
@@ -76,18 +77,21 @@ export default function Auth() {
 
       <main className="relative flex-1 flex items-start sm:items-center justify-center px-4 pb-16 pt-6 sm:pt-0">
         <div className="w-full max-w-sm">
-          <Link to="/" className="inline-flex items-center gap-2.5 mb-8" aria-label="KaraLevha ana sayfa">
-            <img src="/logo.png" alt="" className="w-8 h-8 object-contain" />
-            <span className="font-display font-bold text-lg text-tebesir">KaraLevha</span>
-          </Link>
+          <div className="flex items-center justify-between mb-8">
+            <Link to="/" className="inline-flex items-center gap-2.5" aria-label="KaraLevha ana sayfa">
+              <Logo className="w-8 h-8 text-isaret" />
+              <span className="font-display font-bold text-lg text-tebesir">KaraLevha</span>
+            </Link>
+            <Mascot className="w-16 h-16" />
+          </div>
 
           <h1 className="font-display font-bold text-xl text-tebesir">
-            {isLogin ? 'Tekrar hoş geldin' : 'Aramıza katıl'}
+            {isLogin ? 'Güverteye hoş geldin' : 'Tayfaya katıl'}
           </h1>
           <p className="mt-1 mb-6 text-base text-tebesir-soluk">
             {isLogin
               ? 'Paylaşım yapmak ve obalara yazmak için giriş yap.'
-              : 'Bir hesapla proje, model ve not paylaşabilirsin.'}
+              : 'Bir hesapla proje, model ve not paylaşır, atölyede yer ayırırsın.'}
           </p>
 
           <Tabs
