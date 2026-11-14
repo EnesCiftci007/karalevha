@@ -118,7 +118,7 @@ export default function ProjeDetay() {
       )}
 
       <section className="mt-12 max-w-okuma">
-        <h2 className="font-display font-bold text-xl text-tebesir mb-4">
+        <h2 className="font-display font-semibold text-lg text-tebesir mb-4">
           Yorumlar <span className="veri text-base">{social.get(project.id).comments}</span>
         </h2>
         <Comments type="project" id={project.id} onCountChange={(n) => social.update(project.id, { comments: n })} />

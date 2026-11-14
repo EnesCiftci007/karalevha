@@ -17,7 +17,7 @@ export default function Footer() {
       <div className="max-w-sayfa mx-auto px-4 sm:px-6 py-8 flex flex-col sm:flex-row sm:items-center gap-6">
         <Link to="/" className="inline-flex items-center gap-2.5 shrink-0" aria-label="KaraLevha ana sayfa">
           <Logo className="w-6 h-6 text-isaret" />
-          <Wordmark className="text-lg" />
+          <Wordmark className="text-base" />
         </Link>
         <nav aria-label="Alt menü" className="flex flex-wrap gap-x-5 gap-y-2 sm:ml-6">
           {links.map((l) => (

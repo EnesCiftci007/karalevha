@@ -18,7 +18,7 @@ import { Logo, Mascot, TiltMark, Wordmark } from '../components/brand/Brand';
 function Bolum({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="py-12 border-t border-levha-cizgi first:border-t-0 first:pt-0">
-      <h2 className="font-display font-bold text-xl text-tebesir mb-6">{title}</h2>
+      <h2 className="font-display font-semibold text-lg text-tebesir mb-6">{title}</h2>
       {children}
     </section>
   );
@@ -39,10 +39,9 @@ const renkler: [string, string, string][] = [
 ];
 
 const yazilar: [string, string, string][] = [
-  ['text-3xl', 'font-tag text-3xl text-isaret', 'KaraLevha'],
-  ['text-2xl', 'font-display font-extrabold text-2xl', 'Sayfa başlığı · 40'],
-  ['text-xl', 'font-display font-bold text-xl', 'Bölüm başlığı · 28'],
-  ['text-lg', 'font-display font-bold text-lg', 'Pencere başlığı · 20'],
+  ['text-2xl', 'font-display font-bold text-2xl', 'Ana sayfa başlığı · 40'],
+  ['text-xl', 'font-display font-bold text-xl', 'Sayfa başlığı · 28'],
+  ['text-lg', 'font-display font-semibold text-lg', 'Bölüm ve pencere başlığı · 20'],
   ['text-base', 'text-base', 'Gövde metni, liste başlığı · 16'],
   ['text-sm', 'text-sm text-tebesir-soluk', 'İkincil metin, buton, form · 14'],
   ['text-xs', 'text-xs text-tebesir-silik', 'Tarih, sayaç, yardım metni · 12'],
@@ -71,15 +70,15 @@ export default function Tasarim() {
           </div>
           <div className="text-center">
             <Wordmark className="text-2xl" />
-            <p className="mt-3 veri">Wordmark (font-tag)</p>
+            <p className="mt-3 veri">Wordmark</p>
           </div>
           <div className="text-center">
-            <p className="flex items-center gap-2 font-display font-bold text-xl text-tebesir"><TiltMark className="text-isaret" />Bölüm başlığı</p>
+            <p className="flex items-center gap-2 font-display font-semibold text-lg text-tebesir"><TiltMark className="text-isaret" />Bölüm başlığı</p>
             <p className="mt-2 veri">TiltMark</p>
           </div>
         </div>
         <p className="mt-6 text-sm text-tebesir-soluk max-w-2xl">
-          Graffiti yazı tipi yalnızca KaraLevha imzasında ve 404 gibi tek kelimelik işaretlerde. Kurallar DESIGN.md'nin 0. bölümünde.
+          Kurallar DESIGN.md'nin 0. bölümünde.
         </p>
       </Bolum>
 

@@ -72,7 +72,7 @@ export function TiltMark({ className = '' }: { className?: string }) {
   );
 }
 
-/** Graffiti imzası olarak KaraLevha yazısı. Yalnızca menü, alt bilgi ve ana sayfada. */
+/** KaraLevha yazısı: logonun yanında düz, kalın. */
 export function Wordmark({ className = '' }: { className?: string }) {
-  return <span className={`font-tag text-isaret leading-none ${className}`}>KaraLevha</span>;
+  return <span className={`font-display font-bold tracking-tight text-tebesir leading-none ${className}`}>KaraLevha</span>;
 }
