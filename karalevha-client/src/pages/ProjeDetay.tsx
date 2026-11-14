@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
+
+const CodeViewer = lazy(() => import('../components/kod/CodeViewer'));
 import { useNavigate, useParams } from 'react-router-dom';
-import { Code2, ExternalLink, FolderGit2, Pencil, Trash2 } from 'lucide-react';
+import { ExternalLink, FolderGit2, Pencil, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import ItemMenu from '../components/ui/ItemMenu';
@@ -60,10 +62,6 @@ export default function ProjeDetay() {
 
   const isOwner = user?.username === project.owner;
 
-  // GitHub depoları github1s ile tarayıcıda VS Code görünümünde açılabilir
-  const isGithub = /^https?:\/\/(www\.)?github\.com\//i.test(project.repoUrl);
-  const viewerUrl = isGithub ? project.repoUrl.replace(/github\.com/i, 'github1s.com') : '';
-
   return (
     <div>
       <PageHeader
@@ -94,28 +92,10 @@ export default function ProjeDetay() {
         <span className="veri">{project.repoUrl.replace(/^https?:\/\/(www\.)?/, '')}</span>
       </p>
 
-      {isGithub ? (
-        <section className="kart overflow-hidden flex flex-col h-[70vh] min-h-[420px]" aria-label="Kod görüntüleyici">
-          <div className="h-10 flex items-center gap-2 px-4 border-b border-levha-cizgi bg-levha-yuzey shrink-0">
-            <Code2 className="w-4 h-4 text-tebesir-silik" aria-hidden="true" />
-            <span className="text-sm text-tebesir-soluk">Kod görüntüleyici</span>
-            <span className="ml-auto text-xs text-tebesir-silik">github1s</span>
-          </div>
-          <iframe src={viewerUrl} title={`${project.title} kodu`} className="w-full flex-1 border-0 bg-levha-koyu" allow="clipboard-read; clipboard-write" />
-        </section>
-      ) : (
-        <EmptyState
-          icon={Code2}
-          title="Kod önizlemesi yok"
-          description="Tarayıcı içi kod görüntüleyici şimdilik yalnızca GitHub depolarını destekliyor."
-          action={
-            <a href={project.repoUrl} target="_blank" rel="noopener noreferrer" className="btn-ikincil">
-              Depoya git
-              <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
-            </a>
-          }
-        />
-      )}
+      {/* Kod: depoyu sitenin kendi görüntüleyicisiyle göster (renklendirme kütüphanesi bu sayfada yüklenir) */}
+      <Suspense fallback={<Skeleton className="h-[60vh]" />}>
+        <CodeViewer projectId={project.id} />
+      </Suspense>
 
       <section className="mt-12 max-w-okuma">
         <h2 className="font-display font-semibold text-lg text-tebesir mb-4">

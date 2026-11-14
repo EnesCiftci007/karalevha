@@ -43,6 +43,8 @@ builder.Services.AddHealthChecks();
 builder.Services.AddSingleton<ObaFileStorage>();
 builder.Services.AddSingleton<CurrentUser>();
 builder.Services.AddScoped<NotificationService>();
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<RepoService>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
