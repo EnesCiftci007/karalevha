@@ -21,7 +21,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
-var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() 
+var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>()
                      ?? (builder.Environment.IsDevelopment()
                         ? new[] { "http://localhost:5173" }
                         : new[] { "https://karalevha.vercel.app" });
@@ -37,13 +37,15 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddControllers();
+// Askıdaki hesaplar okuyabilir ama yazamaz (Filters/BanFilter.cs)
+builder.Services.AddControllers(options => options.Filters.Add<Karalevha.API.Filters.BanFilter>());
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();
 builder.Services.AddSingleton<ObaFileStorage>();
 builder.Services.AddSingleton<CurrentUser>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<ObaAccess>();
+builder.Services.AddHttpClient<IEmailService, EmailService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient<RepoService>();
 
@@ -78,7 +80,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             OnMessageReceived = context =>
             {
                 var token = context.Request.Query["access_token"];
-                if (!string.IsNullOrEmpty(token) && context.HttpContext.Request.Path.StartsWithSegments("/chathub"))
+                var path = context.HttpContext.Request.Path;
+                if (!string.IsNullOrEmpty(token) && (path.StartsWithSegments("/chathub") || path.StartsWithSegments("/notificationhub")))
                     context.Token = token;
                 return Task.CompletedTask;
             }
@@ -136,6 +139,9 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
 
+    // Yapılandırmadaki Owner/Admin rollerini veritabanına yaz, yöneticileri belleğe al
+    await app.Services.GetRequiredService<CurrentUser>().LoadAsync(db);
+
     // Eski sürümlerde oba şifreleri düz metin saklanıyordu; kalanları bir kerelik BCrypt özetine çevir
     var plainPasswords = db.Obalar.Where(o => o.JoinPassword != null && !o.JoinPassword.StartsWith("$2")).ToList();
     foreach (var oba in plainPasswords)
@@ -164,6 +170,7 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<Karalevha.API.Hubs.ChatHub>("/chathub");
+app.MapHub<Karalevha.API.Hubs.NotificationHub>("/notificationhub");
 app.MapHealthChecks("/health");
 app.Map("/error", () => Results.Problem("Beklenmeyen bir hata oluştu.")).AllowAnonymous();
 

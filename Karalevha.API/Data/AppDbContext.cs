@@ -18,6 +18,7 @@ namespace Karalevha.API.Data
         public DbSet<ObaMessage> ObaMessages { get; set; }
         public DbSet<ObaMember> ObaMembers { get; set; }
         public DbSet<ObaChannelMember> ObaChannelMembers { get; set; }
+        public DbSet<UserFollow> UserFollows { get; set; }
         public DbSet<Equipment> Equipment { get; set; }
         public DbSet<Reservation> Reservations { get; set; }
         public DbSet<ClubEvent> Events { get; set; }
@@ -54,6 +55,17 @@ namespace Karalevha.API.Data
             // Bir kişi aynı şeyi bir kez beğenebilir
             modelBuilder.Entity<Like>().HasIndex(l => new { l.TargetType, l.TargetId, l.UserId }).IsUnique();
             modelBuilder.Entity<Comment>().HasIndex(c => new { c.TargetType, c.TargetId, c.CreatedAt });
+
+            // Bir kişi bir obaya bir kez üye olur; bir kişiyi bir kez takip eder
+            modelBuilder.Entity<ObaMember>().HasIndex(m => new { m.ObaId, m.UserId }).IsUnique();
+            modelBuilder.Entity<UserFollow>().HasIndex(f => new { f.FollowerId, f.FollowingId }).IsUnique();
+            modelBuilder.Entity<UserFollow>().HasIndex(f => f.FollowingId);
+            modelBuilder.Entity<UserFollow>().HasOne(f => f.Follower).WithMany().HasForeignKey(f => f.FollowerId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UserFollow>().HasOne(f => f.Following).WithMany().HasForeignKey(f => f.FollowingId).OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<User>().Property(u => u.Role).HasDefaultValue(Roles.User);
+            modelBuilder.Entity<User>().Property(u => u.Interests).HasDefaultValueSql("'{}'::text[]");
+            modelBuilder.Entity<Post>().Property(p => p.Tags).HasDefaultValueSql("'{}'::text[]");
 
             modelBuilder.Entity<ObaChannelMember>().HasIndex(m => new { m.ChannelId, m.UserId }).IsUnique();
             modelBuilder.Entity<ObaChannelMember>().HasOne(m => m.Channel).WithMany().OnDelete(DeleteBehavior.Cascade);

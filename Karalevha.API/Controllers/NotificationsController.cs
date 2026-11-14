@@ -9,6 +9,7 @@ namespace Karalevha.API.Controllers
     [Route("api/notifications")]
     [ApiController]
     [Authorize]
+    [Karalevha.API.Filters.AllowWhileBanned] // askıdaki hesap da bildirimlerini okuyabilir
     public class NotificationsController : ControllerBase
     {
         private readonly AppDbContext _context;

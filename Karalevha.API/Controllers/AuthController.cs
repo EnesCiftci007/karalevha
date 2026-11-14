@@ -10,6 +10,8 @@ using System.Security.Claims;
 using System.Text;
 using Microsoft.AspNetCore.RateLimiting;
 using Karalevha.API.Services;
+using Microsoft.AspNetCore.Authorization;
+using System.Security.Cryptography;
 
 namespace Karalevha.API.Controllers
 {
@@ -20,13 +22,48 @@ namespace Karalevha.API.Controllers
         private readonly AppDbContext _context;
         private readonly IConfiguration _configuration;
         private readonly CurrentUser _current;
+        private readonly IEmailService _email;
+        private readonly IWebHostEnvironment _env;
 
-        public AuthController(AppDbContext context, IConfiguration configuration, CurrentUser current)
+        public AuthController(AppDbContext context, IConfiguration configuration, CurrentUser current, IEmailService email, IWebHostEnvironment env)
         {
             _context = context;
             _configuration = configuration;
             _current = current;
+            _email = email;
+            _env = env;
         }
+
+        /// <summary>
+        /// E-posta doğrulaması posta altyapısı (Resend) kurulana kadar kapalı. Açmak için:
+        /// Auth:RequireEmailVerification=true ve Resend:ApiKey. Kapalıyken hesaplar doğrulanmış sayılır.
+        /// </summary>
+        private bool RequireEmailVerification => _configuration.GetValue("Auth:RequireEmailVerification", false);
+
+        private static string NewToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+
+        private static object UserDto(User user) => new
+        {
+            user.Id,
+            user.Username,
+            user.Email,
+            user.AvatarSeed,
+            user.Role,
+            IsAdmin = Roles.IsStaff(user.Role),
+            BannedUntil = user.BannedUntil > DateTime.UtcNow ? user.BannedUntil : null,
+        };
+
+        private string FrontendBaseUrl()
+        {
+            var origin = _configuration.GetSection("Cors:Origins").Get<string[]>()?.FirstOrDefault();
+            if (!string.IsNullOrEmpty(origin)) return origin.TrimEnd('/');
+            if (_env.IsDevelopment()) return "http://localhost:5173";
+            throw new InvalidOperationException("Cors:Origins tanımlı değil; doğrulama bağlantısı üretilemiyor.");
+        }
+
+        private Task SendVerification(User user) =>
+            _email.SendVerificationEmailAsync(user.Email,
+                $"{FrontendBaseUrl()}/verify-email?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(user.EmailVerificationToken!)}");
 
         private static readonly string DummyHash = BCrypt.Net.BCrypt.EnhancedHashPassword("dummy-password");
 
@@ -46,8 +83,16 @@ namespace Karalevha.API.Controllers
                 NormalizedUsername = usernameNormal,
                 Email = emailNormal,
                 PasswordHash = BCrypt.Net.BCrypt.EnhancedHashPassword(dto.Password),
-                AvatarSeed = usernameNormal
+                AvatarSeed = usernameNormal,
+                EmailConfirmed = !RequireEmailVerification,
             };
+            if (RequireEmailVerification)
+            {
+                user.EmailVerificationToken = NewToken();
+                user.EmailVerificationTokenExpiresAt = DateTime.UtcNow.AddHours(24);
+            }
+            // Yapılandırmada Owner/Admin olarak adı geçen kişi kayıt olunca rolünü alır
+            _current.Promote(user);
 
             try
             {
@@ -59,7 +104,18 @@ namespace Karalevha.API.Controllers
                 return BadRequest(new { message = "Bu kullanıcı adı veya e-posta zaten kullanılıyor." });
             }
 
-            return Ok(new { message = "Kayıt başarılı! Artık giriş yapabilirsiniz." });
+            if (!RequireEmailVerification)
+                return Ok(new { message = "Kayıt başarılı! Artık giriş yapabilirsiniz." });
+
+            try
+            {
+                await SendVerification(user);
+            }
+            catch (Exception)
+            {
+                return Ok(new { requiresVerification = true, message = "Kayıt başarılı ama doğrulama e-postası gönderilemedi. Giriş ekranından yeniden isteyebilirsin." });
+            }
+            return Ok(new { requiresVerification = true, message = "Kayıt başarılı! E-posta adresine bir doğrulama bağlantısı gönderdik." });
         }
 
         [HttpPost("login")]
@@ -67,8 +123,8 @@ namespace Karalevha.API.Controllers
         public async Task<IActionResult> Login(LoginDto dto)
         {
             var loginNormal = dto.UsernameOrEmail.Trim().ToLowerInvariant();
-            
-            var user = await _context.Users.FirstOrDefaultAsync(u => 
+
+            var user = await _context.Users.FirstOrDefaultAsync(u =>
                 u.Email == loginNormal || u.NormalizedUsername == loginNormal);
 
             var hash = user?.PasswordHash ?? DummyHash;
@@ -77,13 +133,87 @@ namespace Karalevha.API.Controllers
             if (user == null || !ok)
                 return Unauthorized(new { message = "Hatalı kullanıcı adı veya şifre." });
 
-            var token = GenerateJwtToken(user);
+            if (user.BannedUntil > DateTime.UtcNow)
+                return StatusCode(403, new { message = $"Hesabın {user.BannedUntil.Value.ToLocalTime():dd.MM.yyyy HH:mm} tarihine kadar askıya alındı.", bannedUntil = user.BannedUntil });
 
-            return Ok(new 
-            { 
-                token, 
-                user = new { user.Id, user.Username, user.Email, user.AvatarSeed, IsAdmin = _current.IsAdminName(user.Username) } 
-            });
+            if (RequireEmailVerification && !user.EmailConfirmed)
+                return StatusCode(403, new { requiresVerification = true, email = user.Email, message = "Devam etmek için e-posta adresini doğrulaman gerekiyor." });
+
+            var previousRole = user.Role;
+            _current.Promote(user);
+            if (user.Role != previousRole) await _context.SaveChangesAsync();
+
+            var token = GenerateJwtToken(user);
+            return Ok(new { token, user = UserDto(user) });
+        }
+
+        // GET: api/auth/me
+        // İstemci açılışta çağırır: rol ve askı durumu oturum boyunca güncel kalsın.
+        [HttpGet("me")]
+        [Authorize]
+        public async Task<IActionResult> Me()
+        {
+            var id = CurrentUser.IdOf(User);
+            var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
+            return user == null ? Unauthorized() : Ok(UserDto(user));
+        }
+
+        public class VerifyEmailDto
+        {
+            public string Email { get; set; } = string.Empty;
+            public string Token { get; set; } = string.Empty;
+        }
+
+        // POST: api/auth/verify-email
+        [HttpPost("verify-email")]
+        [EnableRateLimiting("AuthLimiter")]
+        public async Task<IActionResult> VerifyEmail(VerifyEmailDto dto)
+        {
+            var email = dto.Email.Trim().ToLowerInvariant();
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            if (user == null) return BadRequest(new { message = "Geçersiz bağlantı." });
+            if (user.EmailConfirmed) return Ok(new { message = "E-posta adresin zaten doğrulanmış." });
+
+            var stored = user.EmailVerificationToken;
+            var valid = stored != null && user.EmailVerificationTokenExpiresAt > DateTime.UtcNow &&
+                CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(stored), Encoding.UTF8.GetBytes(dto.Token ?? string.Empty));
+            if (!valid) return BadRequest(new { message = "Bağlantı geçersiz ya da süresi dolmuş." });
+
+            user.EmailConfirmed = true;
+            user.EmailVerificationToken = null;
+            user.EmailVerificationTokenExpiresAt = null;
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "E-posta adresin doğrulandı, giriş yapabilirsin." });
+        }
+
+        public class ResendVerificationDto
+        {
+            public string Email { get; set; } = string.Empty;
+        }
+
+        // POST: api/auth/resend-verification
+        // Adresin kayıtlı olup olmadığı belli olmasın diye her durumda aynı yanıt verilir.
+        [HttpPost("resend-verification")]
+        [EnableRateLimiting("AuthLimiter")]
+        public async Task<IActionResult> ResendVerification(ResendVerificationDto dto)
+        {
+            const string reply = "Bu adres kayıtlıysa doğrulama bağlantısı gönderildi.";
+            var email = dto.Email.Trim().ToLowerInvariant();
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
+            if (user == null || user.EmailConfirmed || !RequireEmailVerification) return Ok(new { message = reply });
+
+            user.EmailVerificationToken = NewToken();
+            user.EmailVerificationTokenExpiresAt = DateTime.UtcNow.AddHours(24);
+            await _context.SaveChangesAsync();
+            try
+            {
+                await SendVerification(user);
+            }
+            catch (Exception)
+            {
+                return StatusCode(502, new { message = "Doğrulama e-postası gönderilemedi, biraz sonra yeniden dene." });
+            }
+            return Ok(new { message = reply });
         }
 
         private string GenerateJwtToken(User user)
@@ -98,7 +228,8 @@ namespace Karalevha.API.Controllers
             var claims = new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new Claim(ClaimTypes.Name, user.Username)
+                new Claim(ClaimTypes.Name, user.Username),
+                new Claim(ClaimTypes.Role, user.Role)
             };
 
             var token = new JwtSecurityToken(

@@ -44,7 +44,7 @@ namespace Karalevha.API.Controllers
         };
 
         // GET: api/obachannels/{obaId}
-        // Açık obalar giriş yapmadan da gezilebilir (salt okunur); gizli obalar üyelik ister.
+        // Açık obalar herkese okunur; yazmak için "Katıl" ile üye olunur. Gizli obalar üyelik ister.
         // Gizli kanallar yalnızca görebilen kişilere listelenir.
         [HttpGet("{obaId:int}")]
         public async Task<IActionResult> GetChannels(int obaId)
@@ -53,15 +53,10 @@ namespace Karalevha.API.Controllers
             var oba = await _context.Obalar.FindAsync(obaId);
             if (oba == null) return NotFound("Oba bulunamadı");
 
-            if (userId == null) {
-                if (oba.IsPrivate) return Unauthorized();
-            } else if (!await _access.IsInsideAsync(oba, userId)) {
-                if (oba.IsPrivate) {
-                    return StatusCode(403, "Bu gizli bir oba, katılmak için şifre girmelisiniz.");
-                }
-                _context.ObaMembers.Add(new ObaMember { ObaId = obaId, UserId = userId.Value, Role = "member" });
-                oba.MemberCount += 1;
-                await _context.SaveChangesAsync();
+            if (oba.IsPrivate && !await _access.IsInsideAsync(oba, userId))
+            {
+                if (userId == null) return Unauthorized();
+                return StatusCode(403, "Bu gizli bir oba, katılmak için şifre girmelisiniz.");
             }
 
             var channels = await _access.VisibleChannels(oba, userId)
