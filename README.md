@@ -88,19 +88,32 @@ geçerek sunulur (gizli obaların dosyalarını yalnızca üyeleri açabilir). K
 - **Bunu bastım**: model penceresinde baskının fotoğrafı ve ayarları paylaşılır.
 - **Beğeni ve yorum**: gönderi, proje ve modellerde. Yorumlarda ve oba mesajlarında `@kullaniciadi` ile birinden bahsedilebilir.
 - **Bildirimler**: üst menüdeki zil (yorum, bahsetme, etkinlik değişikliği, rezervasyon iptali).
-- **Profil** (`/u/kullaniciadi`) ve **genel arama** (üst menü, `/` kısayolu).
+- **Profil** (`/u/kullaniciadi`) ve **genel arama** (üst menü, `/` kısayolu). Profilde tanıtım, ilgi alanları ve takip.
+- **Akış**: gönderilere en fazla 3 etiket, etikete göre süzme, "Takip ettiklerim" ve son 7 günün gündemi.
+  İlgi alanıyla eşleşen yeni gönderiler öne çıkar.
+- **Obalar**: açık obaları herkes okur, yazmak için "Katıl". Üyeler obadan ayrılabilir, kanal açabilir.
 - **Düzenleme/silme**: herkes kendi içeriğini düzenler ve siler; oba kurucusu obasındaki mesajları silebilir.
 
-### Kulüp yöneticileri
+### Roller ve kulüp yöneticileri
 
-Yöneticiler ekipman ekler ve gerektiğinde her içeriği silebilir. Yapılandırmadan belirlenir:
+Üç rol var: **Owner** (kurucu), **Admin** (yönetici) ve **User**. Yöneticiler ekipman ekler, gerektiğinde her içeriği
+siler ve hesapları en fazla 30 gün askıya alır (profildeki "Yönetim" kutusu). Askıdaki hesap okuyabilir ama giriş
+yapamaz ve hiçbir şey paylaşamaz. Owner, profillerden başkalarını yönetici yapabilir.
+
+İlk roller yapılandırmadan gelir ve açılışta veritabanına yazılır:
 
 ```bash
-dotnet user-secrets set "Admins:0" "kullaniciadi"
+dotnet user-secrets set "OwnerUsername" "kullaniciadi"
+dotnet user-secrets set "Admins:0" "baska-kullanici"
 ```
 
-Canlıda ortam değişkeni olarak: `Admins__0`, `Admins__1`, … Değişiklikten sonra yöneticinin bir kez çıkış yapıp
-tekrar girmesi gerekir.
+Canlıda ortam değişkeni olarak: `OwnerUsername`, `Admins__0`, `Admins__1`, … Rol değişikliği hemen geçerli olur.
+
+### E-posta doğrulama (isteğe bağlı)
+
+Varsayılan olarak kapalı; hesaplar kayıt olunca kullanılabilir. Açmak için `Auth__RequireEmailVerification=true` ve
+[Resend](https://resend.com) anahtarı (`Resend__ApiKey`, isteğe bağlı `Resend__FromEmail`) tanımlayın. Geliştirmede
+anahtar yoksa doğrulama bağlantısı API günlüğüne yazılır.
 
 ## 🌐 Canlı Yayına Alma (Ortam Değişkenleri)
 

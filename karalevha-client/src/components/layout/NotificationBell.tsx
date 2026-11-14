@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
-import { api } from '../../services/api';
+import * as signalR from '@microsoft/signalr';
+import { API_URL, api } from '../../services/api';
 import { NotificationItem } from '../../types';
 import { fullDate, timeAgo } from '../../utils/time';
 
-const POLL_MS = 60_000;
+// Yeni bildirimler SignalR ile anında gelir; yoklama yalnızca bağlantı koparsa diye yedek
+const POLL_MS = 5 * 60_000;
 
 /** Üst menüdeki bildirim zili: okunmamış sayısı, açılır liste, hepsini okundu say. */
 export default function NotificationBell() {
@@ -30,6 +32,31 @@ export default function NotificationBell() {
       document.removeEventListener('visibilitychange', refreshCount);
     };
   }, [refreshCount]);
+
+  // Canlı bildirimler
+  useEffect(() => {
+    const connection = new signalR.HubConnectionBuilder()
+      .withUrl(`${API_URL}/notificationhub`, { accessTokenFactory: () => localStorage.getItem('token') ?? '' })
+      .withAutomaticReconnect()
+      // Geliştirmede StrictMode ilk bağlantıyı hemen kapatır; bu ve kopmalar sessiz geçsin (yoklama yedekte)
+      .configureLogging(signalR.LogLevel.None)
+      .build();
+    connection.on('Bildirim', (n: NotificationItem) => {
+      setUnread((c) => c + 1);
+      setItems((prev) => (prev ? [n, ...prev.filter((x) => x.id !== n.id)] : prev));
+    });
+    connection.onreconnected(refreshCount); // kopukken gelenler sayıya eklensin
+    connection.start().catch(() => {});
+    return () => {
+      connection.stop().catch(() => {});
+    };
+  }, [refreshCount]);
+
+  // Okunmamış sayısı sekme başlığında: "(3) KaraLevha"
+  useEffect(() => {
+    const base = document.title.replace(/^\(\d+\+?\) /, '');
+    document.title = unread > 0 ? `(${unread > 9 ? '9+' : unread}) ${base}` : base;
+  }, [unread]);
 
   useEffect(() => {
     if (!open) return;

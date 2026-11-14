@@ -236,7 +236,7 @@ export default function EOba() {
                       )}
                     </span>
                     {oba.isPrivate && <Badge><Lock className="w-3 h-3" aria-hidden="true" />Gizli</Badge>}
-                    {isOwner && <Badge tone="isaret">Kurucu</Badge>}
+                    {isOwner ? <Badge tone="isaret">Kurucu</Badge> : oba.isMember && <Badge>Üyesin</Badge>}
                   </div>
                 </Link>
                 {isOwner && (

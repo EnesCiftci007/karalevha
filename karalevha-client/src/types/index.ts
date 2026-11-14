@@ -4,13 +4,20 @@ export interface User {
   email: string;
   avatarSeed: string;
   isAdmin?: boolean;
+  role?: 'User' | 'Admin' | 'Owner';
+  /** Doluysa hesap bu ana kadar askıda: okuyabilir, yazamaz */
+  bannedUntil?: string | null;
 }
+
+/** Gönderi etiketleri ve ilgi alanları (sunucudaki PostTags.All ile aynı) */
+export const POST_TAGS = ['Yazılım', 'Robotik', '3B Baskı', 'Elektronik', 'El İşi', 'Tasarım', 'Oyun Geliştirme', 'IoT', 'Duyuru'] as const;
 
 export interface Post {
   id: number;
   content: string;
   createdAt: string;
   editedAt?: string | null;
+  tags?: string[];
   user: { id: number; username: string; avatarSeed: string; };
 }
 
@@ -24,6 +31,8 @@ export interface Oba {
   owner: string;
   isPrivate?: boolean;
   memberCount?: number;
+  /** Giriş yapan kişi kurucu ya da üye mi */
+  isMember?: boolean;
   messageCount?: number;
   lastMessageAt?: string | null;
 }
