@@ -8,6 +8,7 @@ import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
 import Skeleton, { SkeletonRows } from '../components/ui/Skeleton';
 import Tabs from '../components/ui/Tabs';
+import { Logo, Mascot, TiltMark } from '../components/brand/Brand';
 
 /**
  * Canlı tasarım kataloğu: bütün ortak parçalar tek ekranda.
@@ -31,7 +32,8 @@ const renkler: [string, string, string][] = [
   ['tebesir', 'bg-tebesir', 'Ana yazı'],
   ['tebesir-soluk', 'bg-tebesir-soluk', 'İkincil yazı'],
   ['tebesir-silik', 'bg-tebesir-silik', 'İpucu, tarih'],
-  ['isaret', 'bg-isaret', 'Tek vurgu'],
+  ['isaret', 'bg-isaret', 'Tek vurgu (dublon)'],
+  ['korsan', 'bg-korsan', 'Yalnızca maskot'],
   ['hata', 'bg-hata', 'Hata'],
   ['basari', 'bg-basari', 'Başarı'],
 ];
@@ -55,6 +57,31 @@ export default function Tasarim() {
         title="Tasarım kataloğu"
         description="Sitenin bütün ortak parçaları. Kurallar DESIGN.md dosyasında."
       />
+
+      <Bolum title="Marka">
+        <div className="flex flex-wrap items-center gap-10">
+          <div className="text-center">
+            <Logo className="w-16 h-16 text-isaret mx-auto" />
+            <p className="mt-2 veri">Logo</p>
+          </div>
+          <div className="text-center">
+            <Mascot className="w-20 h-20 mx-auto" />
+            <p className="mt-2 veri">Mascot</p>
+          </div>
+          <div className="text-center">
+            <span className="inline-block font-korsan text-lg leading-none text-isaret border-2 border-isaret/70 rounded-md px-2 pt-1 pb-0.5 -rotate-3">Baskı Korsanları</span>
+            <p className="mt-3 veri">font-korsan damgası</p>
+          </div>
+          <div className="text-center">
+            <p className="flex items-center gap-2 font-display font-semibold text-lg text-tebesir"><TiltMark className="text-isaret" />Bölüm başlığı</p>
+            <p className="mt-2 veri">TiltMark</p>
+          </div>
+        </div>
+        <p className="mt-6 text-sm text-tebesir-soluk max-w-2xl">
+          Korsan teması hafif tutulur: maskot yalnızca marka anlarında, korsan yazı tipi yalnızca kısa damgalarda,
+          korsan dili yalnızca karşılama metinlerinde. Kurallar DESIGN.md'nin 0. bölümünde.
+        </p>
+      </Bolum>
 
       <Bolum title="Renkler">
         <ul className="grid grid-cols-2 sm:grid-cols-5 gap-4">

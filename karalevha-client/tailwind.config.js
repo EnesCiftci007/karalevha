@@ -17,22 +17,27 @@ export default {
       '2xl': ['40px', { lineHeight: '44px', letterSpacing: '-0.025em' }], // yalnızca ana sayfa başlığı
     },
     extend: {
-      // Karalevha kimliği: mat kara tahta zemini, tebeşir beyazı yazı, tek bir işaret rengi.
+      // Karalevha kimliği: gece denizi tonunda kara tahta, kemik/parşömen yazı, tek vurgu olarak altın
+      // dublon. Korsan moru yalnızca maskot ve marka anlarında kullanılır (DESIGN.md).
       colors: {
         levha: {
-          DEFAULT: '#14181a', // sayfa zemini
-          koyu: '#0e1112',    // çukur alanlar (girdi, kod, önizleme)
-          yuzey: '#1b2023',   // kart, menü, pencere
-          cizgi: '#2a3135',   // kenarlık ve ayırıcı
+          DEFAULT: '#11161a', // sayfa zemini
+          koyu: '#0b0f12',    // çukur alanlar (girdi, kod, önizleme)
+          yuzey: '#192026',   // kart, menü, pencere
+          cizgi: '#283139',   // kenarlık ve ayırıcı
         },
         tebesir: {
-          DEFAULT: '#ece7dc', // ana yazı            (zemine karşı 15:1)
-          soluk: '#a9aaa2',   // ikincil yazı        (7.6:1)
-          silik: '#8b918d',   // ipucu, tarih, sayaç (5.6:1, AA sınırının üstünde)
+          DEFAULT: '#efe7d6', // ana yazı, kemik beyazı (zemine karşı 15:1)
+          soluk: '#b3ab9a',   // ikincil yazı                 (8:1)
+          silik: '#8f8b80',   // ipucu, tarih, sayaç          (5.4:1, AA sınırının üstünde)
         },
         isaret: {
-          DEFAULT: '#f2c230', // tek vurgu rengi: ana buton, etkin sekme, odak çizgisi
-          acik: '#f7d566',
+          DEFAULT: '#e9b545', // dublon altını: tek vurgu rengi (ana buton, etkin sekme, odak çizgisi)
+          acik: '#f3cd72',
+        },
+        korsan: {
+          DEFAULT: '#a447b8', // maskot çerçevesi ve marka anları; metin ya da buton rengi değil
+          koyu: '#7a007a',
         },
         hata: '#f2836f',
         basari: '#8fcf8a',
@@ -41,6 +46,8 @@ export default {
         sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
         display: ['"Bricolage Grotesque Variable"', '"IBM Plex Sans"', 'system-ui', 'sans-serif'],
         mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+        // Yalnızca marka yazısı ve kısa "damga" vurguları için (DESIGN.md)
+        korsan: ['"Pirata One"', '"Bricolage Grotesque Variable"', 'serif'],
       },
       maxWidth: {
         sayfa: '72rem',  // 1152px: tüm sayfaların içerik genişliği

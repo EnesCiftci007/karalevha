@@ -4,8 +4,22 @@ Sitenin her sayfası bu kurallara uyar. Yeni bir sayfa ya da bileşen yazarken �
 sonra canlı kataloğa (`/tasarim` sayfası) bakın. Bir şey yanlış görünüyorsa sayfada değil,
 ortak parçada düzeltin; bütün site birlikte düzelir.
 
-Kimlik: **mat kara tahta zemini, tebeşir beyazı yazı, tek bir sarı işaret rengi.**
-Süs değil düzen öne çıkar. Ölçü alınacak örnekler: Linear, Vercel, GitHub.
+Kimlik: **gece denizi tonunda kara tahta, kemik beyazı yazı, tek vurgu olarak altın dublon; üstüne hafif bir
+korsan teması.** Kulübün baskı tayfası "Baskı Korsanları"dır; maskotu, logodaki eğik çerçevenin içinde alnında
+3B yazıcı olan bir kafatasıdır. Süs değil düzen öne çıkar; korsanlık bir tuz-biber gibi kullanılır, kostüm gibi değil.
+Ölçü alınacak örnekler: Linear, Vercel, GitHub.
+
+## 0. Marka ve korsan teması
+
+- **Eğik çerçeve motifi:** logodaki 24° eğik yuvarlak kare sitenin imzasıdır (`components/brand/Brand.tsx`:
+  `Logo`, `Mascot`, `TiltMark`). Yeni motif icat etme; bunları kullan.
+- **Maskot (`<Mascot>`)** yalnızca marka anlarında: giriş ekranı, 404, alt bilgi, büyük boş durumlar. Her sayfaya koyma.
+- **Korsan moru (`korsan`)** yalnızca maskotun çerçevesinde. Metin, buton ya da vurgu rengi olarak kullanılmaz.
+- **Korsan yazı tipi (`font-korsan`, Pirata One)** yalnızca kısa "damga"larda: ana sayfadaki "Baskı Korsanları"
+  mührü ve 404 rakamı gibi. Başlık, gövde ya da buton metninde kullanılmaz; iki kelimeyi geçmez.
+- **Dil:** bölümler ve butonlarda net Türkçe ("Projeler", "Kaydet"). Korsan dili yalnızca karşılama ve marka
+  anlarında, hafif: "Tayfaya katıl", "Güverteye hoş geldin", "Bu sular haritada yok". Hata ve işlem mesajlarında yok.
+- **Ana sayfa sahnesi:** yazıcı maskotun kafatasını katman katman basar (`components/home/PrintScene.tsx`).
 
 ## 1. Yazı
 
@@ -38,13 +52,14 @@ Yalnızca altı boyut var (`tailwind.config.js` içinde Tailwind'in varsayılanl
 | `levha-cizgi` | Bütün kenarlık ve ayırıcılar |
 | `tebesir` | Ana yazı |
 | `tebesir-soluk` | İkincil yazı (açıklama) |
-| `tebesir-silik` | İpucu, tarih, sayaç. Zemine karşı 5.6:1, okunabilirlik sınırının (4.5:1) üstünde |
-| `isaret` | **Tek vurgu rengi** |
+| `tebesir-silik` | İpucu, tarih, sayaç. Zemine karşı 5.4:1, okunabilirlik sınırının (4.5:1) üstünde |
+| `isaret` | **Tek vurgu rengi** (altın dublon) |
+| `korsan` | Yalnızca maskot çerçevesi |
 | `hata`, `basari` | Yalnızca hata ve başarı mesajları |
 
-- **Sarı yalnızca üç yerde:** ana buton, "şu an buradasın" işareti (etkin menü, seçili öğe), odak çizgisi.
+- **Altın yalnızca üç yerde** (logo ve bölüm başlıklarındaki küçük eğik işaret marka parçası sayılır): ana buton, "şu an buradasın" işareti (etkin menü, seçili öğe), odak çizgisi.
   Bağlantıların üzerine gelince sarıya dönmesi bunun dışında kabul edilen tek istisna. Süs için sarı kullanılmaz.
-- Başka renk (yeşil, mavi, mor, neon) eklenmez. Bölümler renkle değil başlık ve simgeyle ayrılır.
+- Başka renk (yeşil, mavi, neon) eklenmez; mor yalnızca maskotta. Bölümler renkle değil başlık ve simgeyle ayrılır.
 - Gölge yok; ayrım kenarlık ve zemin tonuyla yapılır. Tek istisna açılır pencere (`Modal`).
 
 ## 3. Boşluk ve ölçü

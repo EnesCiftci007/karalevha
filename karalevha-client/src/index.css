@@ -68,10 +68,13 @@
 
   /* Kesim altlığı / kareli defter dokusu; aşağı doğru solarak kaybolur */
   .kareli {
+    /* Deniz haritası ızgarası: ince kareler ve her 5 karede bir belirgin koordinat çizgisi */
     background-image:
-      linear-gradient(to right, rgb(236 231 220 / 0.045) 1px, transparent 1px),
-      linear-gradient(to bottom, rgb(236 231 220 / 0.045) 1px, transparent 1px);
-    background-size: 28px 28px;
+      linear-gradient(to right, rgb(239 231 214 / 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(239 231 214 / 0.07) 1px, transparent 1px),
+      linear-gradient(to right, rgb(239 231 214 / 0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(239 231 214 / 0.035) 1px, transparent 1px);
+    background-size: 140px 140px, 140px 140px, 28px 28px, 28px 28px;
     -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent);
     mask-image: linear-gradient(to bottom, black 35%, transparent);
   }
