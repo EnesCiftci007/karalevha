@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Box, Download, Heart, MessageSquare, Pencil, Trash2, Upload, UploadCloud, X } from 'lucide-react';
 import { api, API_URL } from '../services/api';
@@ -8,8 +8,6 @@ import { fullDate, timeAgo } from '../utils/time';
 import { modelThumbnail } from '../utils/modelThumbnail';
 import { GAME_FORMATS, MODEL_ACCEPT, formatOf, type ModelFormat } from '../utils/loadModel';
 import { formatSize } from '../services/files';
-import ModelPreview from '../components/ModelPreview';
-import Badge from '../components/ui/Badge';
 import EmptyState from '../components/ui/EmptyState';
 import Field from '../components/ui/Field';
 import Modal from '../components/ui/Modal';
@@ -22,6 +20,7 @@ import ItemMenu from '../components/ui/ItemMenu';
 import UserLink from '../components/ui/UserLink';
 import ModelEditModal from '../components/modeller/ModelEditModal';
 import MakesSection from '../components/modeller/MakesSection';
+import ModelViewerPanel from '../components/modeller/ModelViewerPanel';
 import { Comments, LikeButton, useSocialCounts } from '../components/social/Social';
 
 const MAX_UPLOAD = 50 * 1024 * 1024; // Backend sınırıyla aynı (50 MB)
@@ -90,6 +89,7 @@ export default function BaskiIstasyonu() {
   const [filter, setFilter] = useState<Filter>('hepsi');
   const [sort, setSort] = useState<SortKey>('yeni');
   const [preview, setPreview] = useState<PrintModel | null>(null);
+  const closePreview = useCallback(() => setPreview(null), []);
   const [params, setParams] = useSearchParams();
   const [showUpload, setShowUpload] = useState(false);
   const [editing, setEditing] = useState<PrintModel | null>(null);
@@ -326,47 +326,58 @@ export default function BaskiIstasyonu() {
 
       {/* 3B inceleme */}
       {preview && (
-        <Modal title={preview.title} onClose={() => setPreview(null)} wide>
-          <div className="h-[55vh] min-h-[280px]">
-            <ModelPreview url={fileUrlOf(preview)} format={preview.format} />
-          </div>
-          <div className="p-5 flex flex-wrap items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 mb-2">
-                <Badge>{CATEGORY_LABEL[preview.category]}</Badge>
-                <span className="veri">{preview.format.toUpperCase()}</span>
-              </div>
-              {preview.description && <p className="text-sm text-tebesir-soluk whitespace-pre-wrap break-words">{preview.description}</p>}
-              <p className="mt-2 text-xs text-tebesir-silik">
-                <UserLink username={preview.uploader} className="text-tebesir-soluk" /> · {fullDate(preview.uploadedAt)}
-              </p>
-            </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <LikeButton type="model" id={preview.id} counts={social.get(preview.id)} onChange={(p) => social.update(preview.id, p)} />
-              <ItemMenu
-                label="Model seçenekleri"
-                actions={[
-                  ...(user?.id === preview.userId ? [{ label: 'Düzenle', icon: Pencil, onSelect: () => setEditing(preview) }] : []),
-                  ...(user?.id === preview.userId || user?.isAdmin ? [{ label: 'Sil', icon: Trash2, danger: true, onSelect: () => setDeleting(preview) }] : []),
-                ]}
-              />
-              {preview.category === 'baski' && (
-                <Link to={`/atolye?model=${preview.id}`} className="btn-ikincil">Yazıcı ayır</Link>
-              )}
-              <a href={fileUrlOf(preview)} download={downloadName(preview)} className="btn-ana">
+        <ModelViewerPanel
+          title={preview.title}
+          meta={
+            <span className="inline-flex items-center gap-2">
+              <span>{CATEGORY_LABEL[preview.category]}</span>·
+              <UserLink username={preview.uploader} className="text-tebesir-soluk" />·
+              <span>{fullDate(preview.uploadedAt)}</span>
+            </span>
+          }
+          url={fileUrlOf(preview)}
+          format={preview.format}
+          unit={preview.category === 'baski' ? 'mm' : null}
+          onClose={closePreview}
+          actions={
+            <div className="flex flex-col gap-3">
+              <a href={fileUrlOf(preview)} download={downloadName(preview)} className="btn-ana justify-center">
                 <Download className="w-4 h-4" strokeWidth={2.5} />
                 {preview.format.toUpperCase()} indir
               </a>
+              <div className="flex items-center gap-2">
+                <LikeButton type="model" id={preview.id} counts={social.get(preview.id)} onChange={(p) => social.update(preview.id, p)} />
+                {preview.category === 'baski' && (
+                  <Link to={`/atolye?model=${preview.id}`} className="btn-ikincil">Yazıcı ayır</Link>
+                )}
+                <div className="ml-auto">
+                  <ItemMenu
+                    label="Model seçenekleri"
+                    actions={[
+                      ...(user?.id === preview.userId ? [{ label: 'Düzenle', icon: Pencil, onSelect: () => setEditing(preview) }] : []),
+                      ...(user?.id === preview.userId || user?.isAdmin ? [{ label: 'Sil', icon: Trash2, danger: true, onSelect: () => setDeleting(preview) }] : []),
+                    ]}
+                  />
+                </div>
+              </div>
             </div>
+          }
+        >
+          {preview.description && (
+            <section className="px-5 py-4 border-b border-levha-cizgi" aria-label="Açıklama">
+              <p className="text-sm text-tebesir-soluk whitespace-pre-wrap break-words">{preview.description}</p>
+            </section>
+          )}
+          <div className="pt-4">
+            <MakesSection modelId={preview.id} />
           </div>
-          <MakesSection modelId={preview.id} />
           <section className="px-5 pb-5" aria-label="Yorumlar">
             <h3 className="text-sm font-semibold text-tebesir mb-3">
               Yorumlar {social.get(preview.id).comments > 0 && <span className="veri">{social.get(preview.id).comments}</span>}
             </h3>
             <Comments type="model" id={preview.id} ownerId={preview.userId} onCountChange={(n) => social.update(preview.id, { comments: n })} />
           </section>
-        </Modal>
+        </ModelViewerPanel>
       )}
 
       {/* Yükleme */}

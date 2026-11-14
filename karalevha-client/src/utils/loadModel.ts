@@ -19,6 +19,8 @@ export interface LoadedModel {
   object: THREE.Object3D;
   /** Modelin en büyük boyutu (kamera mesafesi için) */
   size: number;
+  /** Genişlik (x), yükseklik (y), derinlik (z): dosyanın kendi biriminde */
+  dimensions: THREE.Vector3;
   /** FBX / GLB içindeki animasyonlar */
   animations: THREE.AnimationClip[];
   /** Kendi malzemesi yoksa (STL, OBJ) bizim malzememiz kullanıldı mı */
@@ -104,7 +106,7 @@ export async function loadModel(url: string, format: ModelFormat, color = '#d8d3
   object.position.sub(new THREE.Vector3(center.x, box.min.y, center.z));
 
   const size = box.getSize(new THREE.Vector3());
-  return { object: wrapper, size: Math.max(size.x, size.y, size.z) || 1, animations, plain };
+  return { object: wrapper, size: Math.max(size.x, size.y, size.z) || 1, dimensions: size, animations, plain };
 }
 
 /** Sahnedeki modelin bütün geometri, malzeme ve dokularını serbest bırakır. */
