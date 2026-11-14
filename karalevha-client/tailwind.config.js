@@ -15,39 +15,51 @@ export default {
       lg: ['20px', { lineHeight: '28px', letterSpacing: '-0.01em' }],    // bölüm başlığı
       xl: ['28px', { lineHeight: '36px', letterSpacing: '-0.02em' }],    // sayfa başlığı
       '2xl': ['40px', { lineHeight: '44px', letterSpacing: '-0.025em' }], // yalnızca ana sayfa başlığı
+      '3xl': ['72px', { lineHeight: '72px' }],                           // yalnızca ana sayfadaki graffiti imzası
+    },
+    // Köşeler: sokak afişi/çıkartma gibi neredeyse keskin
+    borderRadius: {
+      none: '0',
+      sm: '1px',
+      DEFAULT: '2px',
+      md: '2px',
+      lg: '3px',
+      xl: '4px',
+      full: '9999px',
     },
     extend: {
-      // Karalevha kimliği: gece denizi tonunda kara tahta, kemik/parşömen yazı, tek vurgu olarak altın
-      // dublon. Korsan moru yalnızca maskot ve marka anlarında kullanılır (DESIGN.md).
+      // Karalevha kimliği: asfalt/beton zemin, kâğıt beyazı yazı, tek vurgu olarak fosforlu sprey.
+      // Sprey pembesi yalnızca graffiti işaretleri ve maskot için (DESIGN.md).
       colors: {
         levha: {
-          DEFAULT: '#11161a', // sayfa zemini
-          koyu: '#0b0f12',    // çukur alanlar (girdi, kod, önizleme)
-          yuzey: '#192026',   // kart, menü, pencere
-          cizgi: '#283139',   // kenarlık ve ayırıcı
+          DEFAULT: '#121212', // asfalt: sayfa zemini
+          koyu: '#0a0a0a',    // çukur alanlar (girdi, kod, önizleme)
+          yuzey: '#1c1c1c',   // beton: kart, menü, pencere
+          cizgi: '#2e2e2e',   // kenarlık ve ayırıcı
         },
         tebesir: {
-          DEFAULT: '#efe7d6', // ana yazı, kemik beyazı (zemine karşı 15:1)
-          soluk: '#b3ab9a',   // ikincil yazı                 (8:1)
-          silik: '#8f8b80',   // ipucu, tarih, sayaç          (5.4:1, AA sınırının üstünde)
+          DEFAULT: '#ecebe6', // kâğıt beyazı ana yazı (zemine karşı 15:1)
+          soluk: '#a8a7a0',   // ikincil yazı          (8:1)
+          silik: '#878680',   // ipucu, tarih, sayaç   (5:1, AA sınırının üstünde)
         },
         isaret: {
-          DEFAULT: '#e9b545', // dublon altını: tek vurgu rengi (ana buton, etkin sekme, odak çizgisi)
-          acik: '#f3cd72',
+          DEFAULT: '#d4ff3d', // fosforlu sprey: tek vurgu (ana buton, etkin sekme, odak çizgisi)
+          acik: '#e4ff7f',
         },
-        korsan: {
-          DEFAULT: '#a447b8', // maskot çerçevesi ve marka anları; metin ya da buton rengi değil
-          koyu: '#7a007a',
+        sprey: {
+          DEFAULT: '#ff4f9a', // graffiti işaretleri ve maskot; metin ya da buton rengi değil
+          koyu: '#c2185b',
         },
         hata: '#f2836f',
         basari: '#8fcf8a',
       },
       fontFamily: {
         sans: ['"IBM Plex Sans"', 'system-ui', 'sans-serif'],
-        display: ['"Bricolage Grotesque Variable"', '"IBM Plex Sans"', 'system-ui', 'sans-serif'],
+        // Dar, ağır, afiş/tabela havası. Başlıklar büyük harf (index.css)
+        display: ['"Big Shoulders Display Variable"', '"IBM Plex Sans"', 'system-ui', 'sans-serif'],
         mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
-        // Yalnızca marka yazısı ve kısa "damga" vurguları için (DESIGN.md)
-        korsan: ['"Pirata One"', '"Bricolage Grotesque Variable"', 'serif'],
+        // Graffiti imzası: yalnızca KaraLevha yazısı ve 404 gibi tek kelimelik işaretler (DESIGN.md)
+        tag: ['"Sedgwick Ave Display"', 'cursive'],
       },
       maxWidth: {
         sayfa: '72rem',  // 1152px: tüm sayfaların içerik genişliği

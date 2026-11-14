@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 
 const TONES = {
   notr: 'border-levha-cizgi text-tebesir-soluk',
-  isaret: 'border-isaret/40 text-isaret bg-isaret/10',
+  isaret: 'border-transparent text-levha-koyu bg-isaret -rotate-2',
   hata: 'border-hata/40 text-hata bg-hata/10',
   basari: 'border-basari/40 text-basari bg-basari/10',
 } as const;

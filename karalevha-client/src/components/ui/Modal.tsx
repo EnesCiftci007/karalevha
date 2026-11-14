@@ -38,7 +38,7 @@ export default function Modal({ title, onClose, children, wide }: ModalProps) {
         className={`w-full ${wide ? 'sm:max-w-4xl' : 'sm:max-w-lg'} max-h-[92vh] flex flex-col bg-levha-yuzey border border-levha-cizgi rounded-t-xl sm:rounded-xl shadow-2xl`}
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-levha-cizgi shrink-0">
-          <h2 className="font-display font-semibold text-lg text-tebesir truncate">{title}</h2>
+          <h2 className="font-display font-bold text-lg text-tebesir truncate">{title}</h2>
           <button
             type="button"
             onClick={onClose}

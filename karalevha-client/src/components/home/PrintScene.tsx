@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
-// Model: Baskı Korsanları maskotunun kafatası. Bir dilimleyici gibi her katmanın kesitini çıkarıp
+// Model: kulüp maskotunun kafatası. Bir dilimleyici gibi her katmanın kesitini çıkarıp
 // (işaretli uzaklık alanı + marching squares) katman katman "basıyoruz". Göz ve burun boşlukları
 // kesitte delik olarak, dişler çene önünde çentik olarak görünür.
 const LAYERS = 90;
@@ -13,9 +13,9 @@ const EXTENT = 1.25;      // ızgaranın yarı genişliği (model birimi)
 const PRINT_SECONDS = 16; // baştan sona baskı süresi
 const HOLD_SECONDS = 5;   // bitmiş modeli gösterme süresi
 
-const CHALK = '#efe7d6';
-const MARK = '#e9b545';
-const LINE = '#283139';
+const CHALK = '#ecebe6';
+const MARK = '#d4ff3d';
+const LINE = '#2e2e2e';
 
 const sphere = (x: number, y: number, z: number, cx: number, cy: number, cz: number, r: number) =>
   Math.hypot(x - cx, y - cy, z - cz) - r;
@@ -281,7 +281,7 @@ export default function PrintScene() {
         ref={mountRef}
         className="h-[280px] sm:h-[340px] lg:h-[400px] w-full [&>canvas]:block lg:cursor-grab lg:active:cursor-grabbing"
         role="img"
-        aria-label="Baskı Korsanları kafatasının katman katman basıldığı 3B animasyon"
+        aria-label="Bir kafatasının katman katman basıldığı 3B animasyon"
       />
       <figcaption className="veri flex items-center justify-between px-1">
         <span>

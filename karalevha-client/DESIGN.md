@@ -4,26 +4,29 @@ Sitenin her sayfası bu kurallara uyar. Yeni bir sayfa ya da bileşen yazarken �
 sonra canlı kataloğa (`/tasarim` sayfası) bakın. Bir şey yanlış görünüyorsa sayfada değil,
 ortak parçada düzeltin; bütün site birlikte düzelir.
 
-Kimlik: **gece denizi tonunda kara tahta, kemik beyazı yazı, tek vurgu olarak altın dublon; üstüne hafif bir
-korsan teması.** Kulübün baskı tayfası "Baskı Korsanları"dır; maskotu, logodaki eğik çerçevenin içinde alnında
-3B yazıcı olan bir kafatasıdır. Süs değil düzen öne çıkar; korsanlık bir tuz-biber gibi kullanılır, kostüm gibi değil.
-Ölçü alınacak örnekler: Linear, Vercel, GitHub.
+Kimlik: **asfalt ve beton zemin, kâğıt beyazı yazı, tek vurgu olarak fosforlu sprey; sokak afişi ve graffiti
+havası.** Resmî kurum sitesi gibi değil, kulübün duvarı gibi durur. Ama süs değil düzen öne çıkar.
 
-## 0. Marka ve korsan teması
+## 0. Sokak teması ve dil
 
-- **Eğik çerçeve motifi:** logodaki 24° eğik yuvarlak kare sitenin imzasıdır (`components/brand/Brand.tsx`:
-  `Logo`, `Mascot`, `TiltMark`). Yeni motif icat etme; bunları kullan.
-- **Maskot (`<Mascot>`)** yalnızca marka anlarında: giriş ekranı, 404, alt bilgi, büyük boş durumlar. Her sayfaya koyma.
-- **Korsan moru (`korsan`)** yalnızca maskotun çerçevesinde. Metin, buton ya da vurgu rengi olarak kullanılmaz.
-- **Korsan yazı tipi (`font-korsan`, Pirata One)** yalnızca kısa "damga"larda: ana sayfadaki "Baskı Korsanları"
-  mührü ve 404 rakamı gibi. Başlık, gövde ya da buton metninde kullanılmaz; iki kelimeyi geçmez.
-- **Dil:** bölümler ve butonlarda net Türkçe ("Projeler", "Kaydet"). Korsan dili yalnızca karşılama ve marka
-  anlarında, hafif: "Tayfaya katıl", "Güverteye hoş geldin", "Bu sular haritada yok". Hata ve işlem mesajlarında yok.
+- **Yapmacık metin yok.** Slogan, kampanya cümlesi, "dijital buluşma noktası" gibi kalıplar, temalı kelime
+  oyunları kullanılmaz. Metin ne olduğunu düz söyler: "Projeler", "Kayıt ol", "Sayfa bulunamadı".
+- **Graffiti işi az ve gerçek:** `font-tag` (Sedgwick Ave Display) yalnızca KaraLevha imzasında (`<Wordmark>`)
+  ve 404 gibi tek kelimelik işaretlerde. Etkin menü öğesinin altında elle çekilmiş sprey çizgisi (`.sprey-alti`).
+- **Afiş başlıkları:** `font-display` (Big Shoulders Display) dar ve ağırdır, otomatik büyük harf olur. Yalnızca
+  başlıklarda; gövde ve butonlarda değil.
+- **Dokular hafif:** gövdede neredeyse görünmez beton kumlanması, ana sayfa karşılamasında fotokopi yarım tonu
+  (`.kareli`). Parlama (glow), gradyan yazı, neon gölge yok.
+- **Köşeler neredeyse keskin** (2-4 px), afiş ve çıkartma gibi. "Kurucu" gibi önemli rozetler sprey renginde
+  hafif eğik çıkartma olarak durur.
+- **Logo motifi:** logodaki 24° eğik çerçeve (`Logo`, `Mascot`, `TiltMark`). Yeni motif icat etme.
+- **Maskot (`<Mascot>`)** yalnızca giriş ekranı, 404 ve alt bilgide.
+- **Sprey pembesi (`sprey`)** yalnızca maskot çerçevesinde. Metin, buton ya da vurgu rengi değil.
 - **Ana sayfa sahnesi:** yazıcı maskotun kafatasını katman katman basar (`components/home/PrintScene.tsx`).
 
 ## 1. Yazı
 
-Yalnızca altı boyut var (`tailwind.config.js` içinde Tailwind'in varsayılanlarının yerine geçer).
+Yalnızca yedi boyut var (`tailwind.config.js` içinde Tailwind'in varsayılanlarının yerine geçer).
 `text-[13px]` gibi ölçek dışı boyutlar **kullanılmaz**.
 
 | Sınıf | Boyut | Ne için |
@@ -31,15 +34,16 @@ Yalnızca altı boyut var (`tailwind.config.js` içinde Tailwind'in varsayılanl
 | `text-xs` | 12 px | Tarih, sayaç, dosya boyutu, alan yardım metni |
 | `text-sm` | 14 px | İkincil metin, buton, form alanı ve etiketi, menü |
 | `text-base` | 16 px | Gövde metni, liste başlıkları |
-| `text-lg` | 20 px | Bölüm başlığı (`h2`), pencere başlığı |
-| `text-xl` | 28 px | Sayfa başlığı (`h1`) |
-| `text-2xl` | 40 px | Yalnızca ana sayfanın karşılama başlığı |
+| `text-lg` | 20 px | Pencere başlığı, kart içi başlık |
+| `text-xl` | 28 px | Bölüm başlığı (`h2`, `font-display`) |
+| `text-2xl` | 40 px | Sayfa başlığı (`h1`, `font-display`, dar yazı tipi için bir kademe büyük) |
+| `text-3xl` | 72 px | Yalnızca ana sayfadaki graffiti imzası (geniş ekran) |
 
-- **Yazı tipleri:** başlıklar `font-display` (Bricolage Grotesque), metin `font-sans` (IBM Plex Sans),
-  veri `font-mono` (IBM Plex Mono).
+- **Yazı tipleri:** başlıklar `font-display` (Big Shoulders Display, büyük harf), metin `font-sans`
+  (IBM Plex Sans), veri `font-mono` (IBM Plex Mono), imza `font-tag` (Sedgwick Ave Display).
 - **Kalınlık:** 400 metin, 500 vurgu ve etiket, 600 buton ve liste başlığı, 700 yalnızca `font-display` başlıklar.
-- **Büyük harf yok.** `uppercase` ve geniş harf aralığı (`tracking-widest`) kullanılmaz. Cümle düzeni yazılır:
-  "Yeni proje", "YENİ PROJE" değil.
+- **Büyük harf yalnızca başlıklarda** (`font-display` bunu kendisi yapar). Gövde, buton ve etiketlerde cümle
+  düzeni: "Yeni proje", "YENİ PROJE" değil. Geniş harf aralığı (`tracking-widest`) kullanılmaz.
 - **Mono yalnızca veri için:** sayı, boyut, depo adresi, kod. Hazır sınıf: `.veri`. Etiket ya da başlıkta kullanılmaz.
 
 ## 2. Renk
@@ -53,13 +57,13 @@ Yalnızca altı boyut var (`tailwind.config.js` içinde Tailwind'in varsayılanl
 | `tebesir` | Ana yazı |
 | `tebesir-soluk` | İkincil yazı (açıklama) |
 | `tebesir-silik` | İpucu, tarih, sayaç. Zemine karşı 5.4:1, okunabilirlik sınırının (4.5:1) üstünde |
-| `isaret` | **Tek vurgu rengi** (altın dublon) |
-| `korsan` | Yalnızca maskot çerçevesi |
+| `isaret` | **Tek vurgu rengi** (fosforlu sprey) |
+| `sprey` | Yalnızca maskot çerçevesi |
 | `hata`, `basari` | Yalnızca hata ve başarı mesajları |
 
-- **Altın yalnızca üç yerde** (logo ve bölüm başlıklarındaki küçük eğik işaret marka parçası sayılır): ana buton, "şu an buradasın" işareti (etkin menü, seçili öğe), odak çizgisi.
+- **Fosforlu sprey yalnızca üç yerde** (logo ve bölüm başlıklarındaki küçük eğik işaret marka parçası sayılır): ana buton, "şu an buradasın" işareti (etkin menü, seçili öğe), odak çizgisi.
   Bağlantıların üzerine gelince sarıya dönmesi bunun dışında kabul edilen tek istisna. Süs için sarı kullanılmaz.
-- Başka renk (yeşil, mavi, neon) eklenmez; mor yalnızca maskotta. Bölümler renkle değil başlık ve simgeyle ayrılır.
+- Başka renk eklenmez; pembe yalnızca maskotta. Neon parlama, gradyan, gölgeli yazı yok. Bölümler renkle değil başlık ve simgeyle ayrılır.
 - Gölge yok; ayrım kenarlık ve zemin tonuyla yapılır. Tek istisna açılır pencere (`Modal`).
 
 ## 3. Boşluk ve ölçü
@@ -71,7 +75,7 @@ Yalnızca altı boyut var (`tailwind.config.js` içinde Tailwind'in varsayılanl
 - **Okuma genişliği:** uzun metin ve akış `max-w-okuma` (672 px).
 - **Dikey ritim:** sayfa başlığı ile içerik arası 32 px (`PageHeader` sağlar), bölümler arası 48 px,
   bir bölümün içindeki öğeler arası 16 px.
-- **Köşeler:** buton ve form alanı `rounded-md`, kart ve kutu `rounded-lg`, pencere `rounded-xl`, avatar `rounded-full`.
+- **Köşeler:** tema 2-4 px'e sabitlenmiştir: buton ve form alanı `rounded-md`, kart `rounded-lg`, pencere `rounded-xl`, avatar `rounded-full`.
 - **Yükseklik:** buton ve tek satırlık form alanı 36 px (`h-9`). Dokunmatik hedefler en az 36 px.
 
 ## 4. Hareket

@@ -20,14 +20,14 @@ export function Logo({ className = '', title }: { className?: string; title?: st
 }
 
 /**
- * Baskı Korsanları maskotu: logonun eğik çerçevesinde, alnında 3B yazıcı olan kafatası.
+ * Kulüp maskotu: logonun eğik çerçevesinde, alnında 3B yazıcı olan kafatası.
  * Çerçeve ve kafatası `frameClassName` / `skullClassName` ile ayrı renklenebilir.
  */
 export function Mascot({
   className = '',
-  frameClassName = 'text-korsan',
+  frameClassName = 'text-sprey',
   skullClassName = 'text-tebesir',
-  title = 'Baskı Korsanları',
+  title = 'KaraLevha maskotu',
 }: {
   className?: string;
   frameClassName?: string;
@@ -70,4 +70,9 @@ export function TiltMark({ className = '' }: { className?: string }) {
       <rect x="1.5" y="1.5" width="7" height="7" rx="1.5" transform={`rotate(${TILT} 5 5)`} fill="currentColor" />
     </svg>
   );
+}
+
+/** Graffiti imzası olarak KaraLevha yazısı. Yalnızca menü, alt bilgi ve ana sayfada. */
+export function Wordmark({ className = '' }: { className?: string }) {
+  return <span className={`font-tag text-isaret leading-none ${className}`}>KaraLevha</span>;
 }

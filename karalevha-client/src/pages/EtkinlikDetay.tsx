@@ -82,7 +82,7 @@ export default function EtkinlikDetay() {
       {event.description && <p className="text-base leading-relaxed text-tebesir whitespace-pre-wrap break-words mb-10">{event.description}</p>}
 
       <section>
-        <h2 className="font-display font-semibold text-lg text-tebesir mb-4">Katılımcılar <span className="veri text-base">{event.attendeeCount}</span></h2>
+        <h2 className="font-display font-bold text-xl text-tebesir mb-4">Katılımcılar <span className="veri text-base">{event.attendeeCount}</span></h2>
         {event.attendees.length === 0 ? (
           <p className="text-sm text-tebesir-silik">Henüz katılan yok.</p>
         ) : (

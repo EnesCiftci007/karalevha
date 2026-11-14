@@ -344,7 +344,7 @@ export default function Atolye() {
             <section aria-label={`${selected.name} takvimi`}>
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div>
-                  <h2 className="font-display font-semibold text-lg text-tebesir">{selected.name}</h2>
+                  <h2 className="font-display font-bold text-xl text-tebesir">{selected.name}</h2>
                   {selected.description && <p className="text-sm text-tebesir-soluk">{selected.description}</p>}
                 </div>
                 <div className="flex items-center gap-1">
@@ -437,7 +437,7 @@ export default function Atolye() {
           {/* Rezervasyonlarım */}
           {user && (
             <section className="mt-12">
-              <h2 className="font-display font-semibold text-lg text-tebesir mb-4">Rezervasyonlarım</h2>
+              <h2 className="font-display font-bold text-xl text-tebesir mb-4">Rezervasyonlarım</h2>
               {mine.length === 0 ? (
                 <p className="text-sm text-tebesir-silik">Yaklaşan rezervasyonun yok.</p>
               ) : (

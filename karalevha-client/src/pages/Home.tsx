@@ -6,7 +6,7 @@ import { api } from '../services/api';
 import { ClubEvent, Oba, Post, PrintModel, Project } from '../types';
 import { DateBlock, eventTime } from '../components/etkinlik/EventParts';
 import { SkeletonRows } from '../components/ui/Skeleton';
-import { TiltMark } from '../components/brand/Brand';
+import { TiltMark, Wordmark } from '../components/brand/Brand';
 
 // three.js sahnesi ayrı parça olarak, sayfa açıldıktan sonra yüklenir
 const PrintScene = lazy(() => import('../components/home/PrintScene'));
@@ -45,7 +45,7 @@ function Section({ title, to, linkLabel, children }: { title: string; to: string
   return (
     <section>
       <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-levha-cizgi">
-        <h2 className="flex items-center gap-2 font-display font-semibold text-lg text-tebesir">
+        <h2 className="flex items-center gap-2 font-display font-bold text-xl text-tebesir">
           <TiltMark className="text-isaret" />
           {title}
         </h2>
@@ -107,34 +107,25 @@ export default function Home() {
         <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-x-12 gap-y-10 items-center">
 
           <div className="lg:col-span-7">
-            <p className="flex items-center gap-3 mb-4">
-              {/* Korsan damgası: kulübün baskı tayfasının adı, mühür gibi hafif eğik */}
-              <span className="shrink-0 whitespace-nowrap font-korsan text-lg leading-none text-isaret border-2 border-isaret/70 rounded-md px-2 pt-1 pb-0.5 -rotate-3">Baskı Korsanları</span>
-              <span className="text-sm font-medium text-tebesir-soluk">Maker kulübü · çevrimiçi tersane</span>
+            <h1>
+              <Wordmark className="text-2xl sm:text-3xl" />
+              <span className="sr-only"> ana sayfa</span>
+            </h1>
+            <p className="mt-5 text-base text-tebesir max-w-xl">
+              {user ? <>Selam, <span className="font-semibold">{user.username}</span>. </> : null}
+              Maker kulübünün projeleri, 3B modelleri, obaları, atölye takvimi ve etkinlikleri.
             </p>
-            {user ? (
-              <h1 className="font-display font-bold text-xl sm:text-2xl text-tebesir">
-                Tekrar hoş geldin, <span className="text-isaret break-words">{user.username}</span>.
-              </h1>
-            ) : (
-              <h1 className="font-display font-bold text-xl sm:text-2xl text-tebesir">
-                Üreten <span className="text-isaret">tayfanın</span> limanı.
-              </h1>
-            )}
-            <p className="mt-4 text-base text-tebesir-soluk max-w-xl">
-              Projeni paylaş, obanda ders notlarını ve çıkmış soruları bul, yazıcıda yerini ayır, 3B modelini bas.
-              {!user && ' Limanı gezmek serbest; tayfaya katılmak için bir hesap yeter.'}
-            </p>
+            {!user && <p className="mt-1 text-sm text-tebesir-silik">Gezmek için üye olman gerekmiyor.</p>}
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
               <Link
                 to={user ? '/e-oba' : '/auth'}
                 className="btn-ana"
               >
-                {user ? 'Obalara git' : 'Tayfaya katıl'}
+                {user ? 'Obalar' : 'Kayıt ol'}
               </Link>
               <Link to="/projeler" className="btn-sade">
-                Projelere göz at
+                Projeler
                 <ArrowRight className="w-4 h-4" aria-hidden="true" />
               </Link>
             </div>
@@ -167,7 +158,7 @@ export default function Home() {
       {data && data.events.length > 0 && (
         <section className="mt-12">
           <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-levha-cizgi">
-            <h2 className="font-display font-semibold text-lg text-tebesir">Yaklaşan etkinlikler</h2>
+            <h2 className="font-display font-bold text-xl text-tebesir">Yaklaşan etkinlikler</h2>
             <Link to="/etkinlikler" className="inline-flex items-center gap-1 text-sm text-tebesir-soluk hover:text-tebesir transition-colors">
               Tüm etkinlikler
               <ArrowRight className="w-4 h-4" aria-hidden="true" />

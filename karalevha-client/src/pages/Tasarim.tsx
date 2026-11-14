@@ -8,7 +8,7 @@ import Modal from '../components/ui/Modal';
 import PageHeader from '../components/ui/PageHeader';
 import Skeleton, { SkeletonRows } from '../components/ui/Skeleton';
 import Tabs from '../components/ui/Tabs';
-import { Logo, Mascot, TiltMark } from '../components/brand/Brand';
+import { Logo, Mascot, TiltMark, Wordmark } from '../components/brand/Brand';
 
 /**
  * Canlı tasarım kataloğu: bütün ortak parçalar tek ekranda.
@@ -18,7 +18,7 @@ import { Logo, Mascot, TiltMark } from '../components/brand/Brand';
 function Bolum({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className="py-12 border-t border-levha-cizgi first:border-t-0 first:pt-0">
-      <h2 className="font-display font-semibold text-lg text-tebesir mb-6">{title}</h2>
+      <h2 className="font-display font-bold text-xl text-tebesir mb-6">{title}</h2>
       {children}
     </section>
   );
@@ -32,16 +32,17 @@ const renkler: [string, string, string][] = [
   ['tebesir', 'bg-tebesir', 'Ana yazı'],
   ['tebesir-soluk', 'bg-tebesir-soluk', 'İkincil yazı'],
   ['tebesir-silik', 'bg-tebesir-silik', 'İpucu, tarih'],
-  ['isaret', 'bg-isaret', 'Tek vurgu (dublon)'],
-  ['korsan', 'bg-korsan', 'Yalnızca maskot'],
+  ['isaret', 'bg-isaret', 'Tek vurgu (sprey)'],
+  ['sprey', 'bg-sprey', 'Graffiti işareti, maskot'],
   ['hata', 'bg-hata', 'Hata'],
   ['basari', 'bg-basari', 'Başarı'],
 ];
 
 const yazilar: [string, string, string][] = [
-  ['text-2xl', 'font-display font-bold text-2xl', 'Ana sayfa başlığı · 40'],
-  ['text-xl', 'font-display font-bold text-xl', 'Sayfa başlığı · 28'],
-  ['text-lg', 'font-display font-semibold text-lg', 'Bölüm başlığı · 20'],
+  ['text-3xl', 'font-tag text-3xl text-isaret', 'KaraLevha'],
+  ['text-2xl', 'font-display font-extrabold text-2xl', 'Sayfa başlığı · 40'],
+  ['text-xl', 'font-display font-bold text-xl', 'Bölüm başlığı · 28'],
+  ['text-lg', 'font-display font-bold text-lg', 'Pencere başlığı · 20'],
   ['text-base', 'text-base', 'Gövde metni, liste başlığı · 16'],
   ['text-sm', 'text-sm text-tebesir-soluk', 'İkincil metin, buton, form · 14'],
   ['text-xs', 'text-xs text-tebesir-silik', 'Tarih, sayaç, yardım metni · 12'],
@@ -69,17 +70,16 @@ export default function Tasarim() {
             <p className="mt-2 veri">Mascot</p>
           </div>
           <div className="text-center">
-            <span className="inline-block font-korsan text-lg leading-none text-isaret border-2 border-isaret/70 rounded-md px-2 pt-1 pb-0.5 -rotate-3">Baskı Korsanları</span>
-            <p className="mt-3 veri">font-korsan damgası</p>
+            <Wordmark className="text-2xl" />
+            <p className="mt-3 veri">Wordmark (font-tag)</p>
           </div>
           <div className="text-center">
-            <p className="flex items-center gap-2 font-display font-semibold text-lg text-tebesir"><TiltMark className="text-isaret" />Bölüm başlığı</p>
+            <p className="flex items-center gap-2 font-display font-bold text-xl text-tebesir"><TiltMark className="text-isaret" />Bölüm başlığı</p>
             <p className="mt-2 veri">TiltMark</p>
           </div>
         </div>
         <p className="mt-6 text-sm text-tebesir-soluk max-w-2xl">
-          Korsan teması hafif tutulur: maskot yalnızca marka anlarında, korsan yazı tipi yalnızca kısa damgalarda,
-          korsan dili yalnızca karşılama metinlerinde. Kurallar DESIGN.md'nin 0. bölümünde.
+          Graffiti yazı tipi yalnızca KaraLevha imzasında ve 404 gibi tek kelimelik işaretlerde. Kurallar DESIGN.md'nin 0. bölümünde.
         </p>
       </Bolum>
 

@@ -5,6 +5,14 @@
 @layer base {
   body {
     @apply bg-levha text-tebesir font-sans text-base antialiased;
+    /* Beton dokusu: çok hafif kumlanma; okunurluğu etkilemez */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+  /* Başlık yazı tipi tabela/afiş gibi büyük harf kullanır (Türkçe büyük harf için <html lang="tr">) */
+  .font-display {
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
   }
 
   /* Klavyeyle gezenler için her yerde aynı, görünür odak çizgisi */
@@ -66,16 +74,22 @@
     @apply block mb-1.5 text-sm font-medium text-tebesir;
   }
 
-  /* Kesim altlığı / kareli defter dokusu; aşağı doğru solarak kaybolur */
+  /* Fotokopi/afiş yarım tonu: nokta deseni, aşağı doğru solar */
   .kareli {
-    /* Deniz haritası ızgarası: ince kareler ve her 5 karede bir belirgin koordinat çizgisi */
-    background-image:
-      linear-gradient(to right, rgb(239 231 214 / 0.07) 1px, transparent 1px),
-      linear-gradient(to bottom, rgb(239 231 214 / 0.07) 1px, transparent 1px),
-      linear-gradient(to right, rgb(239 231 214 / 0.035) 1px, transparent 1px),
-      linear-gradient(to bottom, rgb(239 231 214 / 0.035) 1px, transparent 1px);
-    background-size: 140px 140px, 140px 140px, 28px 28px, 28px 28px;
-    -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent);
-    mask-image: linear-gradient(to bottom, black 35%, transparent);
+    background-image: radial-gradient(rgb(236 235 230 / 0.09) 1px, transparent 1.4px);
+    background-size: 9px 9px;
+    -webkit-mask-image: linear-gradient(to bottom, black 30%, transparent);
+    mask-image: linear-gradient(to bottom, black 30%, transparent);
+  }
+
+  /* Etkin menü öğesinin altındaki elle çekilmiş sprey çizgisi */
+  .sprey-alti::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    bottom: -13px;
+    height: 7px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 8' preserveAspectRatio='none'%3E%3Cpath d='M2 5.5c14-3 26-2.5 38-1.5s27 1.6 40-1.2c6-1.2 11-1 18 .4' fill='none' stroke='%23d4ff3d' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
   }
 }
