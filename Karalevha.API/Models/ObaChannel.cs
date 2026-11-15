@@ -14,7 +14,7 @@ namespace Karalevha.API.Models
 
         [Required]
         [MaxLength(20)]
-        public string Type { get; set; } = "text"; // "text" veya "voice"
+        public string Type { get; set; } = "text"; // Yalnızca metin kanalı var (ses kanalları kaldırıldı)
 
         [Required]
         [MaxLength(50)]
