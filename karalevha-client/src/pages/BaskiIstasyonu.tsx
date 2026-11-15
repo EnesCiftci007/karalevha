@@ -15,6 +15,7 @@ import PageHeader from '../components/ui/PageHeader';
 import Skeleton from '../components/ui/Skeleton';
 import Tabs from '../components/ui/Tabs';
 import ListToolbar from '../components/ui/ListToolbar';
+import { useMine } from '../components/ui/useMine';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import ItemMenu from '../components/ui/ItemMenu';
 import UserLink from '../components/ui/UserLink';
@@ -88,6 +89,7 @@ export default function BaskiIstasyonu() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<Filter>('hepsi');
   const [sort, setSort] = useState<SortKey>('yeni');
+  const [mine, setMine] = useMine();
   const [preview, setPreview] = useState<PrintModel | null>(null);
   const closePreview = useCallback(() => setPreview(null), []);
   const [params, setParams] = useSearchParams();
@@ -126,7 +128,12 @@ export default function BaskiIstasyonu() {
     if (!id || !models) return;
     const found = models.find((m) => m.id === id);
     if (found) setPreview(found);
-    setParams({}, { replace: true });
+    // Yalnızca ?model= silinir; ?kimin=benim gibi süzgeçler kalsın
+    setParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('model');
+      return next;
+    }, { replace: true });
   }, [models, params, setParams]);
 
   const social = useSocialCounts('model', (models ?? []).map((m) => m.id));
@@ -136,6 +143,7 @@ export default function BaskiIstasyonu() {
     const list = (models ?? []).filter(
       (m) =>
         (filter === 'hepsi' || m.category === filter) &&
+        (!mine || m.userId === user?.id) &&
         (!q ||
           m.title.toLocaleLowerCase('tr').includes(q) ||
           (m.description ?? '').toLocaleLowerCase('tr').includes(q) ||
@@ -147,7 +155,7 @@ export default function BaskiIstasyonu() {
       if (sort === 'begeni') return social.get(b.id).likes - social.get(a.id).likes || newest(a, b);
       return newest(a, b);
     });
-  }, [models, query, filter, sort, social]);
+  }, [models, query, filter, sort, social, mine, user]);
 
   const count = (c: Category) => (models ?? []).filter((m) => m.category === c).length;
 
@@ -234,6 +242,7 @@ export default function BaskiIstasyonu() {
           { value: 'ad', label: 'Ada göre (A–Z)' },
         ]}
         count={models && models.length > 0 ? { shown: visible.length, total: filter === 'hepsi' ? models.length : count(filter), unit: 'model' } : undefined}
+        mine={user ? { active: mine, onChange: setMine } : undefined}
         leading={
           <div className="sm:w-72 shrink-0">
             <Tabs

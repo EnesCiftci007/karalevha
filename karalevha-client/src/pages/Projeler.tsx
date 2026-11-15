@@ -8,6 +8,7 @@ import { fullDate, timeAgo } from '../utils/time';
 import ProjectFormModal from '../components/projeler/ProjectFormModal';
 import PageHeader from '../components/ui/PageHeader';
 import ListToolbar from '../components/ui/ListToolbar';
+import { useMine } from '../components/ui/useMine';
 import { useSocialCounts } from '../components/social/Social';
 
 type SortKey = 'yeni' | 'begeni' | 'yorum' | 'ad';
@@ -27,6 +28,7 @@ export default function Projeler() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortKey>('yeni');
+  const [mine, setMine] = useMine();
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
@@ -49,10 +51,10 @@ export default function Projeler() {
     const q = query.trim().toLocaleLowerCase('tr');
     const list = (projects ?? []).filter(
       (p) =>
-        !q ||
+        (!mine || p.owner === user?.username) && (!q ||
         p.title.toLocaleLowerCase('tr').includes(q) ||
         (p.description ?? '').toLocaleLowerCase('tr').includes(q) ||
-        p.owner.toLocaleLowerCase('tr').includes(q)
+        p.owner.toLocaleLowerCase('tr').includes(q))
     );
     const newest = (a: Project, b: Project) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     return [...list].sort((a, b) => {
@@ -61,7 +63,7 @@ export default function Projeler() {
       if (sort === 'yorum') return social.get(b.id).comments - social.get(a.id).comments || newest(a, b);
       return newest(a, b);
     });
-  }, [projects, query, sort, social]);
+  }, [projects, query, sort, social, mine, user]);
 
 
   return (
@@ -95,6 +97,7 @@ export default function Projeler() {
           { value: 'ad', label: 'Ada göre (A–Z)' },
         ]}
         count={projects && projects.length > 0 ? { shown: visible.length, total: projects.length, unit: 'proje' } : undefined}
+        mine={user ? { active: mine, onChange: setMine } : undefined}
       />
 
       {/* Liste */}

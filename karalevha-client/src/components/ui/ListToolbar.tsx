@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Search } from 'lucide-react';
+import { Search, UserRound } from 'lucide-react';
 
 interface ListToolbarProps<S extends string> {
   id: string;
@@ -13,12 +13,15 @@ interface ListToolbarProps<S extends string> {
   count?: { shown: number; total: number; unit: string };
   /** Arama kutusunun soluna konan ek denetim (ör. kategori sekmeleri) */
   leading?: ReactNode;
+  /** "Benimkiler" süzgeci (yalnızca giriş yapılmışsa verilir) */
+  mine?: { active: boolean; onChange: (on: boolean) => void };
 }
 
 /** Liste sayfalarının ortak üst çubuğu: arama, sıralama ve sonuç sayısı. */
 export default function ListToolbar<S extends string>({
-  id, query, onQuery, placeholder, sort, onSort, sortOptions, count, leading,
+  id, query, onQuery, placeholder, sort, onSort, sortOptions, count, leading, mine,
 }: ListToolbarProps<S>) {
+  const narrowed = !!query.trim() || !!mine?.active;
   return (
     <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
       {leading}
@@ -28,9 +31,22 @@ export default function ListToolbar<S extends string>({
         <input id={id} type="search" value={query} onChange={(e) => onQuery(e.target.value)} placeholder={placeholder} className="girdi pl-9" />
       </div>
       <div className="flex items-center gap-3 sm:ml-auto">
+        {mine && (
+          <button
+            type="button"
+            onClick={() => mine.onChange(!mine.active)}
+            aria-pressed={mine.active}
+            className={`inline-flex items-center gap-1.5 h-10 px-3 rounded border text-sm whitespace-nowrap transition-colors ${
+              mine.active ? 'border-isaret text-isaret bg-isaret/10' : 'border-levha-cizgi text-tebesir-soluk hover:border-tebesir-silik hover:text-tebesir'
+            }`}
+          >
+            <UserRound className="w-4 h-4" aria-hidden="true" />
+            Benimkiler
+          </button>
+        )}
         {count && (
           <span className="veri whitespace-nowrap" aria-live="polite">
-            {query.trim() ? `${count.shown} / ${count.total}` : count.total} {count.unit}
+            {narrowed ? `${count.shown} / ${count.total}` : count.total} {count.unit}
           </span>
         )}
         {sortOptions && onSort && sort && (

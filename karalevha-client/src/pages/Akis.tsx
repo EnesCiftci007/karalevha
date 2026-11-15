@@ -63,7 +63,8 @@ export default function Akis() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
   const tagFilter = params.get('etiket');
-  const scope = params.get('kapsam') === 'takip' && user ? 'takip' : 'hepsi';
+  const scopeParam = params.get('kapsam');
+  const scope: 'hepsi' | 'takip' | 'benim' = user && (scopeParam === 'takip' || scopeParam === 'benim') ? scopeParam : 'hepsi';
   const [trending, setTrending] = useState<{ tag: string; count: number }[]>([]);
   const [tags, setTags] = useState<string[]>([]);
   const [posts, setPosts] = useState<Post[] | null>(null);
@@ -76,10 +77,10 @@ export default function Akis() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Süzgeç adreste durur: /akis?etiket=Robotik&kapsam=takip (paylaşılabilir, geri tuşu çalışır)
-  const setFilter = (next: { etiket?: string | null; kapsam?: 'hepsi' | 'takip' }) => {
+  const setFilter = (next: { etiket?: string | null; kapsam?: 'hepsi' | 'takip' | 'benim' }) => {
     const p = new URLSearchParams(params);
     if (next.etiket !== undefined) (next.etiket ? p.set('etiket', next.etiket) : p.delete('etiket'));
-    if (next.kapsam !== undefined) (next.kapsam === 'takip' ? p.set('kapsam', 'takip') : p.delete('kapsam'));
+    if (next.kapsam !== undefined) (next.kapsam !== 'hepsi' ? p.set('kapsam', next.kapsam) : p.delete('kapsam'));
     setParams(p);
     window.scrollTo({ top: 0 });
   };
@@ -93,7 +94,7 @@ export default function Akis() {
     if (tagFilter) q.set('etiket', tagFilter);
     if (scope === 'takip') q.set('kapsam', 'takip');
     api<Post[]>(`/api/posts${q.size ? `?${q}` : ''}`)
-      .then((data) => !cancelled && setPosts(data))
+      .then((data) => !cancelled && setPosts(scope === 'benim' ? data.filter((p) => p.user?.id === user?.id) : data))
       .catch(() => {
         if (cancelled) return;
         setPosts([]);
@@ -102,7 +103,7 @@ export default function Akis() {
     return () => {
       cancelled = true;
     };
-  }, [tagFilter, scope]);
+  }, [tagFilter, scope, user]);
 
   useEffect(() => {
     api<Oba[]>('/api/obalar').then(setObalar).catch(() => {});
@@ -212,12 +213,12 @@ export default function Akis() {
           {/* Süzgeç */}
           <div className="flex flex-wrap items-center gap-3 pt-5 pb-1">
             {user && (
-              <div className="w-64 max-w-full">
+              <div className="w-80 max-w-full">
               <Tabs
                 label="Akış"
                 value={scope}
                 onChange={(v) => setFilter({ kapsam: v })}
-                options={[{ value: 'hepsi', label: 'Herkes' }, { value: 'takip', label: 'Takip ettiklerim' }]}
+                options={[{ value: 'hepsi', label: 'Herkes' }, { value: 'takip', label: 'Takip ettiklerim' }, { value: 'benim', label: 'Benim' }]}
               />
               </div>
             )}
@@ -255,7 +256,9 @@ export default function Akis() {
                 ? 'Akış yüklenemedi. Sayfayı yenilemeyi dene.'
                 : tagFilter
                   ? `#${tagFilter} etiketiyle henüz gönderi yok.`
-                  : scope === 'takip'
+                  : scope === 'benim'
+                    ? 'Henüz bir şey paylaşmadın.'
+                    : scope === 'takip'
                     ? 'Takip ettiğin kimse henüz paylaşım yapmadı. Profillerden kişileri takip edebilirsin.'
                     : 'Akış henüz sessiz. İlk paylaşımı sen yap.'}
             </p>

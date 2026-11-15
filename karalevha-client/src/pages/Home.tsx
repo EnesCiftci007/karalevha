@@ -1,232 +1,144 @@
-import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, Box, FolderGit2, MessagesSquare, Newspaper, type LucideIcon } from 'lucide-react';
+import { ArrowUpRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
 import { ClubEvent, Oba, Post, PrintModel, Project } from '../types';
-import { DateBlock, eventTime } from '../components/etkinlik/EventParts';
-import { SkeletonRows } from '../components/ui/Skeleton';
-import { TiltMark, Wordmark } from '../components/brand/Brand';
+import CommunityPulse from '../components/home/CommunityPulse';
+import ClubNotes, { pickNote, rememberNote } from '../components/home/ClubNotes';
 
 // three.js sahnesi ayrı parça olarak, sayfa açıldıktan sonra yüklenir
 const PrintScene = lazy(() => import('../components/home/PrintScene'));
 
-interface HomeData {
-  projects: Project[];
-  posts: Post[];
-  obalar: Oba[];
-  models: PrintModel[];
-  events: ClubEvent[];
+/*
+ * Yükseklik bütçesi: üst menü + sahne kartı + rakamlar + footer tek ekrana sığar (sayfa kaymaz).
+ * Kartın dışında kalan her şey yaklaşık 25rem; kart ekranın geri kalanını alır.
+ */
+// Telefonda footer iki satıra kırılır, bu yüzden orada daha çok yer ayrılır
+const SCENE_HEIGHT = 'h-[calc(100dvh-40.5rem)] sm:h-[calc(100dvh-29.75rem)] min-h-[180px] sm:min-h-[200px] max-h-[560px]';
+
+/** Başlığın altındaki elle çekilmiş sprey çizgisi (menüdeki etkin sekmenin çizgisiyle aynı) */
+function SprayUnderline() {
+  return (
+    <svg viewBox="0 0 100 8" preserveAspectRatio="none" className="absolute left-0 -bottom-2 w-full h-2.5 text-isaret" aria-hidden="true">
+      <path d="M2 5.5c14-3 26-2.5 38-1.5s27 1.6 40-1.2c6-1.2 11-1 18 .4" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
 }
 
-const relative = new Intl.RelativeTimeFormat('tr', { numeric: 'auto' });
-
-/** "3 gün önce", "dün" gibi kısa zaman ifadesi. */
-function timeAgo(iso: string): string {
-  const seconds = (new Date(iso).getTime() - Date.now()) / 1000;
-  const steps: [Intl.RelativeTimeFormatUnit, number][] = [
-    ['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60],
-  ];
-  for (const [unit, size] of steps) {
-    if (Math.abs(seconds) >= size) return relative.format(Math.round(seconds / size), unit);
-  }
-  return 'az önce';
-}
-
-async function loadList<T>(path: string): Promise<T[]> {
+async function list<T>(path: string): Promise<T[] | null> {
   try {
     return await api<T[]>(path);
   } catch {
-    return []; // bir bölüm yüklenemezse ana sayfanın geri kalanı yine görünsün
+    return null;
   }
 }
 
-function Section({ title, to, linkLabel, children }: { title: string; to: string; linkLabel: string; children: ReactNode }) {
-  return (
-    <section>
-      <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-levha-cizgi">
-        <h2 className="flex items-center gap-2 font-display font-semibold text-lg text-tebesir">
-          <TiltMark className="text-isaret" />
-          {title}
-        </h2>
-        <Link to={to} className="inline-flex items-center gap-1 text-sm text-tebesir-soluk hover:text-tebesir transition-colors">
-          {linkLabel}
-          <ArrowRight className="w-4 h-4" aria-hidden="true" />
-        </Link>
-      </div>
-      {children}
-    </section>
-  );
+interface Lists {
+  projects: Project[] | null;
+  models: PrintModel[] | null;
+  obalar: Oba[] | null;
+  posts: Post[] | null;
+  /** Yaklaşan ilk etkinlik (yoksa null) */
+  event: ClubEvent | null;
 }
 
-function Empty({ text, to, action }: { text: string; to: string; action: string }) {
-  return (
-    <p className="text-sm text-tebesir-silik py-6">
-      {text}{' '}
-      <Link to={to} className="text-tebesir-soluk underline underline-offset-4 decoration-levha-cizgi hover:text-tebesir hover:decoration-tebesir-silik transition-colors">
-        {action}
-      </Link>
-    </p>
-  );
-}
-
-
+/**
+ * Ana sayfa: bir vitrin. Katman katman baskı yapan 3B sahnenin içinde başlık ve düğmeler,
+ * altında kulübün rakamları. Kişiye özel listeler profilde, bölümler üst menüde.
+ */
 export default function Home() {
   const { user } = useAuth();
-  const [data, setData] = useState<HomeData | null>(null);
+  const [lists, setLists] = useState<Lists | null>(null);
+  // Her gelişte bir not; sahne o notun modelini basar
+  const [note] = useState(pickNote);
+  useEffect(() => rememberNote(note), [note]);
 
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      loadList<Project>('/api/projects'),
-      loadList<Post>('/api/posts'),
-      loadList<Oba>('/api/obalar'),
-      loadList<PrintModel>('/api/printmodels'),
-      loadList<ClubEvent>('/api/etkinlik?take=3'),
-    ]).then(([projects, posts, obalar, models, events]) => {
-      if (!cancelled) setData({ projects, posts, obalar, models, events });
-    });
+      list<Project>('/api/projects'),
+      list<PrintModel>('/api/printmodels'),
+      list<Oba>('/api/obalar'),
+      list<Post>('/api/posts'),
+      list<ClubEvent>('/api/etkinlik?take=1'),
+    ]).then(([projects, models, obalar, posts, events]) =>
+      !cancelled && setLists({ projects, models, obalar, posts, event: events?.[0] ?? null })
+    );
     return () => {
       cancelled = true;
     };
-  }, []);
+    // Giriş/çıkışta "senin" sayıları değişir (obalardaki üyelik bilgisi kişiye göre gelir)
+  }, [user?.id]);
 
-  const areas: { to: string; icon: LucideIcon; title: string; text: string; count?: number; unit: string }[] = [
-    { to: '/projeler', icon: FolderGit2, title: 'Projeler', text: 'Kulüpte geliştirilen açık kaynak işler', count: data?.projects.length, unit: 'proje' },
-    { to: '/e-oba', icon: MessagesSquare, title: 'E-Oba', text: 'Sohbet, ders notları ve çıkmış sorular', count: data?.obalar.length, unit: 'oba' },
-    { to: '/baski-istasyonu', icon: Box, title: '3B Modeller', text: 'Baskı parçaları ve oyun modelleri', count: data?.models.length, unit: 'model' },
-    { to: '/akis', icon: Newspaper, title: 'Akış', text: 'Duyurular ve kısa paylaşımlar', count: data?.posts.length, unit: 'paylaşım' },
-  ];
+  // Giriş yapan kişiye kendi sayıları ve kendi içeriğine süzülmüş sayfalar; misafire kulübün toplamı
+  const mineOnly = <T,>(items: T[] | null | undefined, isMine: (t: T) => boolean) =>
+    items ? (user ? items.filter(isMine).length : items.length) : undefined;
+  const stats = [
+    { label: user ? 'projen' : 'proje', value: mineOnly(lists?.projects, (p) => p.owner === user?.username), to: '/projeler' },
+    { label: user ? 'modelin' : 'model', value: mineOnly(lists?.models, (m) => m.userId === user?.id), to: '/baski-istasyonu' },
+    { label: user ? 'oban' : 'oba', value: mineOnly(lists?.obalar, (o) => !!o.isMember || o.owner === user?.username), to: '/e-oba' },
+    { label: user ? 'paylaşımın' : 'paylaşım', value: mineOnly(lists?.posts, (p) => p.user?.id === user?.id), to: '/akis' },
+  ].map((s) => ({ ...s, to: user ? `${s.to}?${s.to === '/akis' ? 'kapsam' : 'kimin'}=benim` : s.to }));
 
   return (
     <div>
-
-      {/* Karşılama: solda metin, sağda bölümler. Geniş ekranda sağ taraf boş kalmasın. */}
-      <header className="relative -mx-4 sm:-mx-6 -mt-8 px-4 sm:px-6 pt-8 pb-12">
-        <div className="kareli absolute inset-0 pointer-events-none" aria-hidden="true" />
-        <div className="relative grid grid-cols-1 lg:grid-cols-12 gap-x-12 gap-y-10 items-center">
-
-          <div className="lg:col-span-7">
-            <h1>
-              <Wordmark className="text-2xl" />
-              <span className="sr-only"> ana sayfa</span>
-            </h1>
-            <p className="mt-5 text-base text-tebesir max-w-xl">
-              {user ? <>Selam, <span className="font-semibold">{user.username}</span>. </> : null}
-              Maker kulübünün projeleri, 3B modelleri, obaları, atölye takvimi ve etkinlikleri.
-            </p>
-            {!user && <p className="mt-1 text-sm text-tebesir-silik">Gezmek için üye olman gerekmiyor.</p>}
-
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <Link
-                to={user ? '/e-oba' : '/auth'}
-                className="btn-ana"
-              >
-                {user ? 'Obalar' : 'Kayıt ol'}
-              </Link>
-              <Link to="/projeler" className="btn-sade">
-                Projeler
-                <ArrowRight className="w-4 h-4" aria-hidden="true" />
-              </Link>
+      <section className="relative" aria-label="KaraLevha">
+        <div className="kareli absolute -inset-3 pointer-events-none rounded-lg" aria-hidden="true" />
+        <div className="relative kart bg-levha-koyu/70 px-3 pt-3 pb-2 overflow-hidden">
+          {/* Başlık ve düğmeler sahnenin üstünde; arkadaki sahne fareyle çevrilebilir kalsın diye yalnızca kendileri tıklanır */}
+          <header className="absolute inset-x-0 top-0 z-10 flex flex-wrap items-start justify-between gap-4 p-5 sm:p-6 pointer-events-none">
+            <div className="space-y-10">
+              <h1 className="relative inline-block font-display font-bold text-2xl text-tebesir">
+                KaraLevha
+                <SprayUnderline />
+              </h1>
+              {/* Kulüp notları: sahne sağa kaydığında solda kalan boşlukta (geniş ekran) */}
+              <div className="hidden lg:block">
+                <ClubNotes note={note} />
+              </div>
             </div>
-          </div>
+            <div className="flex flex-wrap items-center gap-3 pointer-events-auto">
+              {user ? (
+                <>
+                  <Link to="/atolye" className="btn-ikincil">Yazıcı ayır</Link>
+                  <Link to="/e-oba" className="btn-ana">Obalara git</Link>
+                </>
+              ) : (
+                <>
+                  <Link to="/projeler" className="btn-ikincil">Projelere bak</Link>
+                  <Link to="/auth" className="btn-ana">Kayıt ol</Link>
+                </>
+              )}
+            </div>
+          </header>
 
-          {/* 3B sahne */}
-          <div className="lg:col-span-5 min-h-[300px] sm:min-h-[360px] lg:min-h-[420px]">
-            <Suspense fallback={null}>
-              <PrintScene />
-            </Suspense>
-          </div>
+          <Suspense fallback={<div className={SCENE_HEIGHT} />}>
+            <PrintScene className={SCENE_HEIGHT} shiftRight={0.17} model={note.model} />
+          </Suspense>
         </div>
-      </header>
+      </section>
 
-      {/* Bölümler */}
-      <nav aria-label="Bölümler" className="grid grid-cols-2 lg:grid-cols-4 gap-px bg-levha-cizgi border border-levha-cizgi rounded-lg overflow-hidden">
-        {areas.map(({ to, icon: Icon, title, text, count, unit }) => (
-          <Link key={to} to={to} className="group bg-levha hover:bg-levha-yuzey transition-colors p-4 flex flex-col">
-            <div className="flex items-center justify-between mb-3">
-              <Icon className="w-5 h-5 text-tebesir-silik group-hover:text-tebesir transition-colors" strokeWidth={1.75} aria-hidden="true" />
-              <span className="veri">{count === undefined ? '—' : `${count} ${unit}`}</span>
-            </div>
-            <span className="text-base font-semibold text-tebesir">{title}</span>
-            <span className="mt-0.5 text-sm text-tebesir-soluk hidden sm:block">{text}</span>
+      {/* Rakamlar: tıklayınca ilgili sayfa (giriş yapılmışsa kişinin kendi içeriğine süzülmüş) */}
+      <nav aria-label={user ? 'Senin içeriğin' : 'Kulübün rakamları'} className="mt-8 grid grid-cols-4 divide-x divide-levha-cizgi border-y border-levha-cizgi">
+        {stats.map(({ label, value, to }) => (
+          <Link key={label} to={to} className="group relative py-4 px-4 flex flex-col hover:bg-white/[0.03] focus-visible:bg-white/[0.03] transition-colors">
+            {/* Üzerine gelince sağ üstte beliren ok */}
+            <ArrowUpRight
+              className="absolute top-3 right-3 w-4 h-4 text-isaret opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-200"
+              aria-hidden="true"
+            />
+            <span className="font-display font-bold text-xl text-tebesir tabular-nums group-hover:text-isaret transition-colors">{value ?? '—'}</span>
+            <span className="etiket mt-0.5 group-hover:text-tebesir-soluk transition-colors">{label}</span>
+            {/* Alttaki ince çizgi limon yeşiline döner */}
+            <span className="absolute inset-x-0 -bottom-px h-0.5 bg-transparent group-hover:bg-isaret group-focus-visible:bg-isaret transition-colors" aria-hidden="true" />
           </Link>
         ))}
       </nav>
 
-      {/* Yaklaşan etkinlikler: yalnızca varsa görünür */}
-      {data && data.events.length > 0 && (
-        <section className="mt-12">
-          <div className="flex items-baseline justify-between mb-4 pb-3 border-b border-levha-cizgi">
-            <h2 className="font-display font-semibold text-lg text-tebesir">Yaklaşan etkinlikler</h2>
-            <Link to="/etkinlikler" className="inline-flex items-center gap-1 text-sm text-tebesir-soluk hover:text-tebesir transition-colors">
-              Tüm etkinlikler
-              <ArrowRight className="w-4 h-4" aria-hidden="true" />
-            </Link>
-          </div>
-          <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {data.events.map((e) => (
-              <li key={e.id}>
-                <Link to={`/etkinlikler/${e.id}`} className="kart p-4 flex gap-4 h-full hover:border-tebesir-silik transition-colors">
-                  <DateBlock iso={e.startsAt} />
-                  <span className="min-w-0">
-                    <span className="block text-base font-semibold text-tebesir line-clamp-2">{e.title}</span>
-                    <span className="block mt-1 veri">{eventTime(e)}{e.location ? ` · ${e.location}` : ''}</span>
-                    <span className="block mt-1 text-xs text-tebesir-silik">{e.attendeeCount} katılımcı</span>
-                  </span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-
-      <div className="mt-12 grid grid-cols-1 lg:grid-cols-12 gap-12">
-
-        {/* Son projeler */}
-        <div className="lg:col-span-7">
-          <Section title="Son projeler" to="/projeler" linkLabel="Tüm projeler">
-            {!data ? <SkeletonRows rows={3} /> : data.projects.length === 0 ? (
-              <Empty text="Henüz paylaşılmış proje yok." to="/projeler" action="İlkini sen ekle" />
-            ) : (
-              <ul className="divide-y divide-levha-cizgi">
-                {data.projects.slice(0, 4).map((p) => (
-                  <li key={p.id}>
-                    <Link to={`/projeler/${p.id}`} className="group block py-4">
-                      <div className="flex items-baseline justify-between gap-4">
-                        <h3 className="text-base font-medium text-tebesir group-hover:underline underline-offset-4 truncate">{p.title}</h3>
-                        <span className="text-xs text-tebesir-silik shrink-0">{timeAgo(p.createdAt)}</span>
-                      </div>
-                      {p.description && <p className="mt-1 text-sm text-tebesir-soluk line-clamp-2">{p.description}</p>}
-                      <p className="mt-2 text-xs text-tebesir-silik">{p.owner}</p>
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Section>
-        </div>
-
-        {/* Akıştan */}
-        <div className="lg:col-span-5">
-          <Section title="Akıştan" to="/akis" linkLabel="Akışa git">
-            {!data ? <SkeletonRows rows={3} /> : data.posts.length === 0 ? (
-              <Empty text="Akış henüz sessiz." to="/akis" action="Bir şey yaz" />
-            ) : (
-              <ul className="divide-y divide-levha-cizgi">
-                {data.posts.slice(0, 4).map((post) => (
-                  <li key={post.id} className="py-4">
-                    <p className="text-sm text-tebesir leading-relaxed line-clamp-3 whitespace-pre-line break-words">{post.content}</p>
-                    <p className="mt-2 text-xs text-tebesir-silik">
-                      {post.user?.username ?? 'Bilinmeyen'} · {timeAgo(post.createdAt)}
-                    </p>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Section>
-        </div>
-      </div>
+      {/* Topluluk nabzı: yaklaşan etkinlik ve en son paylaşım */}
+      {/* Veri geldiyse etkinlik ya vardır ya da yoktur (null); undefined yalnızca yüklenirken */}
+      <CommunityPulse event={lists ? lists.event ?? null : undefined} projects={lists?.projects} posts={lists?.posts} />
     </div>
   );
 }
