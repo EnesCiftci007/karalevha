@@ -13,6 +13,7 @@ import PageHeader from '../components/ui/PageHeader';
 import Skeleton from '../components/ui/Skeleton';
 import ItemMenu from '../components/ui/ItemMenu';
 import ListToolbar from '../components/ui/ListToolbar';
+import { useMine } from '../components/ui/useMine';
 import { fullDate, timeAgo } from '../utils/time';
 
 type SortKey = 'aktif' | 'uye' | 'ad';
@@ -23,6 +24,7 @@ export default function EOba() {
   const [loadFailed, setLoadFailed] = useState(false);
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortKey>('aktif');
+  const [mine, setMine] = useMine();
 
   // Oba kurma
   const [showCreate, setShowCreate] = useState(false);
@@ -62,13 +64,15 @@ export default function EOba() {
   const visible = useMemo(() => {
     const q = query.trim().toLocaleLowerCase('tr');
     const list = (obalar ?? []).filter(
-      (o) => !q || o.name.toLocaleLowerCase('tr').includes(q) || (o.description ?? '').toLocaleLowerCase('tr').includes(q)
+      (o) =>
+        (!mine || o.isMember || o.owner === user?.username) &&
+        (!q || o.name.toLocaleLowerCase('tr').includes(q) || (o.description ?? '').toLocaleLowerCase('tr').includes(q))
     );
     // "aktif": sunucunun sırası (son mesaj ya da kuruluş zamanı, en yeni üstte)
     if (sort === 'uye') return [...list].sort((a, b) => (b.memberCount ?? 1) - (a.memberCount ?? 1));
     if (sort === 'ad') return [...list].sort((a, b) => a.name.localeCompare(b.name, 'tr'));
     return list;
-  }, [obalar, query, sort]);
+  }, [obalar, query, sort, mine, user]);
 
   const closeCreate = () => {
     if (saving) return;
@@ -181,6 +185,7 @@ export default function EOba() {
             { value: 'ad', label: 'Ada göre (A–Z)' },
           ]}
           count={{ shown: visible.length, total: obalar.length, unit: 'oba' }}
+          mine={user ? { active: mine, onChange: setMine } : undefined}
         />
       )}
 
