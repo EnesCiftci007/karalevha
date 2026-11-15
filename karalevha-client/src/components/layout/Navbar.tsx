@@ -63,7 +63,8 @@ function SearchBox({ onDone }: { onDone?: () => void }) {
   );
 }
 
-export default function Navbar() {
+/** fluid: içerik kenardan kenara (oba sohbeti gibi tam ekran sayfalarda hizalı dursun) */
+export default function Navbar({ fluid = false }: { fluid?: boolean }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -75,7 +76,7 @@ export default function Navbar() {
 
   return (
     <header className="sticky top-0 z-20 shrink-0 bg-levha/95 backdrop-blur border-b border-levha-cizgi">
-      <div className="max-w-sayfa mx-auto h-16 px-4 sm:px-6 flex items-center gap-4">
+      <div className={`${fluid ? '' : 'max-w-sayfa mx-auto'} h-16 px-4 sm:px-6 flex items-center gap-4`}>
 
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2.5 shrink-0" aria-label="KaraLevha ana sayfa">

@@ -3,6 +3,38 @@
 @tailwind utilities;
 
 @layer base {
+  /* Koyu tema: tarayıcının kendi parçaları (kaydırma çubuğu, tarih seçici, seçim kutuları) da koyu çizilsin */
+  html {
+    color-scheme: dark;
+    scrollbar-color: #3a3a37 transparent; /* Firefox ve yeni Chromium: başparmak, yol */
+    /* Kaydırma çubuğunun yeri her zaman ayrılır: kısa ve uzun sayfalar arasında geçerken içerik yana kaymaz.
+       both-edges aynı boşluğu sola da bırakır, site ekranın tam ortasında kalır. */
+    scrollbar-gutter: stable both-edges;
+  }
+  /* Kendi içinde kayan tam ekran sayfalar (oba sohbeti): sayfanın kaydırması yok, boşluk da gerekmez */
+  html.tam-ekran {
+    scrollbar-gutter: auto;
+  }
+
+  /* Eski Chromium/Edge/Safari: ince, sitenin çizgi rengiyle uyumlu çubuk */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #3a3a37;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #55554f;
+  }
+
   body {
     @apply bg-levha text-tebesir font-sans text-base antialiased;
     /* Beton dokusu: çok hafif kumlanma; okunurluğu etkilemez */

@@ -3,7 +3,7 @@ import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import * as signalR from '@microsoft/signalr';
 import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Hash, Volume2, Send, ChevronLeft, MessageSquare, Lock, Menu, X, Paperclip, FolderOpen, Trash2, Plus, Pencil, LogOut } from 'lucide-react';
+import { Hash, Send, ChevronLeft, MessageSquare, Lock, Menu, X, Paperclip, FolderOpen, Trash2, Plus, Pencil, LogOut } from 'lucide-react';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import UserLink from '../components/ui/UserLink';
 import Avatar from '../components/ui/Avatar';
@@ -369,8 +369,8 @@ export default function ObaDetay() {
     (acc[ch.category] ??= []).push(ch);
     return acc;
   }, {} as Record<string, Channel[]>);
-  // Yeni kanal yalnızca metin bölümlerine eklenir (ses kanalları henüz çalışmıyor)
-  const textCategories = Object.keys(channelGroups).filter((c) => channelGroups[c].some((ch) => ch.type === 'text'));
+  // Yeni kanal var olan bölümlerden birine ya da yeni bir bölüme eklenir
+  const textCategories = Object.keys(channelGroups);
 
   // Aynı kişinin 5 dakika içindeki ardışık mesajları tek başlık altında toplanır
   const startsGroup = (idx: number) => {
@@ -381,12 +381,13 @@ export default function ObaDetay() {
       new Date(cur.createdAt).getTime() - new Date(prev.createdAt).getTime() > 5 * 60 * 1000;
   };
 
-  const shell = 'h-[calc(100dvh-8rem)] min-h-[480px]';
+  // Sayfa iskeleti (MainLayout) obayı üst menünün altındaki alanın tamamına yayar; burada yalnızca o alanı doldururuz
+  const shell = 'h-full';
 
   if (loading) {
     return (
-      <div className={`${shell} kart flex overflow-hidden`} role="status" aria-label="Yükleniyor">
-        <div className="hidden md:block w-60 border-r border-levha-cizgi p-4 space-y-3">
+      <div className={`${shell} flex overflow-hidden`} role="status" aria-label="Yükleniyor">
+        <div className="hidden md:block w-64 lg:w-72 border-r border-levha-cizgi p-4 space-y-3">
           <Skeleton className="h-5 w-32" />
           <Skeleton className="h-4 w-40" />
           <Skeleton className="h-4 w-36" />
@@ -402,7 +403,7 @@ export default function ObaDetay() {
 
   if (needsLogin || needsPassword) {
     return (
-      <div className={`${shell} flex items-center justify-center`}>
+      <div className={`${shell} flex items-center justify-center px-4`}>
         <div className="w-full max-w-sm kart p-6">
           <Lock className="w-6 h-6 mb-4 text-tebesir-silik" strokeWidth={1.75} aria-hidden="true" />
           <h1 className="font-display font-bold text-lg text-tebesir">{obaName ?? 'Gizli oba'}</h1>
@@ -436,7 +437,7 @@ export default function ObaDetay() {
   }
 
   return (
-    <div className={`${shell} kart flex overflow-hidden relative`}>
+    <div className={`${shell} flex overflow-hidden relative`}>
 
       {/* Mobilde kanal listesi açıkken arka plan */}
       {isSidebarOpen && (
@@ -445,7 +446,7 @@ export default function ObaDetay() {
 
       {/* KANALLAR */}
       <aside
-        className={`absolute inset-y-0 left-0 z-40 w-64 md:w-60 bg-levha-yuzey md:bg-levha border-r border-levha-cizgi flex flex-col shrink-0 transition-transform md:relative md:translate-x-0 ${
+        className={`absolute inset-y-0 left-0 z-40 w-72 md:w-64 lg:w-72 bg-levha-yuzey md:bg-levha-koyu/60 border-r border-levha-cizgi flex flex-col shrink-0 transition-transform md:relative md:translate-x-0 ${
           isSidebarOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
         aria-label="Kanallar"
@@ -483,7 +484,7 @@ export default function ObaDetay() {
               <ul className="space-y-0.5">
                 {list.map((channel) => {
                   const active = activeChannel?.id === channel.id;
-                  const Icon = channel.type === 'voice' ? Volume2 : channel.isPrivate ? Lock : Hash;
+                  const Icon = channel.isPrivate ? Lock : Hash;
                   return (
                     <li key={channel.id}>
                       <button
@@ -569,7 +570,7 @@ export default function ObaDetay() {
               </span>
             )}
           </span>
-          {activeChannel?.canManage && activeChannel.type === 'text' && (
+          {activeChannel?.canManage && (
             <ItemMenu
               label="Kanal seçenekleri"
               actions={[

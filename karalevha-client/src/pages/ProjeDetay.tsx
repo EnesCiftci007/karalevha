@@ -1,8 +1,8 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
 
 const CodeViewer = lazy(() => import('../components/kod/CodeViewer'));
-import { useNavigate, useParams } from 'react-router-dom';
-import { ExternalLink, FolderGit2, Pencil, Trash2 } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ChevronLeft, FolderGit2, Pencil, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import ItemMenu from '../components/ui/ItemMenu';
@@ -52,10 +52,9 @@ export default function ProjeDetay() {
   if (!project) {
     return (
       <div role="status" aria-label="Yükleniyor">
-        <Skeleton className="h-4 w-20 mb-4" />
-        <Skeleton className="h-8 w-72 mb-3" />
-        <Skeleton className="h-4 w-full max-w-xl mb-8" />
-        <Skeleton className="h-[60vh]" />
+        <Skeleton className="h-6 w-72 mb-2" />
+        <Skeleton className="h-4 w-96 max-w-full mb-4" />
+        <Skeleton className="h-[calc(100dvh-12rem)] min-h-[480px]" />
       </div>
     );
   }
@@ -64,36 +63,37 @@ export default function ProjeDetay() {
 
   return (
     <div>
-      <PageHeader
-        title={project.title}
-        description={project.description}
-        back={back}
-        action={
-          <div className="flex items-center gap-2">
-            <LikeButton type="project" id={project.id} counts={social.get(project.id)} onChange={(p) => social.update(project.id, p)} />
-            <a href={project.repoUrl} target="_blank" rel="noopener noreferrer" className="btn-ikincil">
-              Depoyu aç
-              <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
-            </a>
-            <ItemMenu
-              label="Proje seçenekleri"
-              actions={[
-                ...(isOwner ? [{ label: 'Düzenle', icon: Pencil, onSelect: () => setEditing(true) }] : []),
-                ...(isOwner || user?.isAdmin ? [{ label: 'Sil', icon: Trash2, danger: true, onSelect: () => setConfirmDelete(true) }] : []),
-              ]}
-            />
-          </div>
-        }
-      />
-
-      <p className="-mt-4 mb-8 text-sm text-tebesir-silik">
-        <UserLink username={project.owner} className="text-tebesir-soluk" /> ·{' '}
-        <time dateTime={project.createdAt} title={fullDate(project.createdAt)}>{timeAgo(project.createdAt)} eklendi</time> ·{' '}
-        <span className="veri">{project.repoUrl.replace(/^https?:\/\/(www\.)?/, '')}</span>
-      </p>
+      {/* Sıkı başlık: kod görüntüleyici ilk ekranda tam görünsün */}
+      <header className="flex items-center gap-x-4 h-8 mb-2">
+        <div className="min-w-0 flex-1 flex items-baseline gap-2">
+          <Link to={back.to} className="shrink-0 self-center inline-flex items-center gap-0.5 text-sm text-tebesir-silik hover:text-tebesir" aria-label="Projelere dön">
+            <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+            <span className="hidden sm:inline">{back.label}</span>
+          </Link>
+          <span className="text-tebesir-silik" aria-hidden="true">/</span>
+          <h1 className="shrink-0 max-w-[50%] font-display font-bold text-lg text-tebesir truncate" title={project.title}>{project.title}</h1>
+          <p className="min-w-0 truncate text-sm text-tebesir-silik">
+            {project.description && project.description.trim() !== project.title && (
+              <><span className="text-tebesir-soluk" title={project.description}>{project.description.trim()}</span> · </>
+            )}
+            <UserLink username={project.owner} className="text-tebesir-soluk" /> ·{' '}
+            <time dateTime={project.createdAt} title={fullDate(project.createdAt)}>{timeAgo(project.createdAt)}</time>
+          </p>
+        </div>
+        <div className="flex items-center gap-1 shrink-0">
+          <LikeButton type="project" id={project.id} counts={social.get(project.id)} onChange={(p) => social.update(project.id, p)} />
+          <ItemMenu
+            label="Proje seçenekleri"
+            actions={[
+              ...(isOwner ? [{ label: 'Düzenle', icon: Pencil, onSelect: () => setEditing(true) }] : []),
+              ...(isOwner || user?.isAdmin ? [{ label: 'Sil', icon: Trash2, danger: true, onSelect: () => setConfirmDelete(true) }] : []),
+            ]}
+          />
+        </div>
+      </header>
 
       {/* Kod: depoyu sitenin kendi görüntüleyicisiyle göster (renklendirme kütüphanesi bu sayfada yüklenir) */}
-      <Suspense fallback={<Skeleton className="h-[60vh]" />}>
+      <Suspense fallback={<Skeleton className="h-[calc(100dvh-12rem)] min-h-[480px]" />}>
         <CodeViewer projectId={project.id} />
       </Suspense>
 
