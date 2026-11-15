@@ -88,8 +88,7 @@ namespace Karalevha.API.Controllers
                 new ObaChannel { Name = "genel", Type = "text", Category = "BİLGİ", ObaId = oba.Id },
                 new ObaChannel { Name = "kurallar", Type = "text", Category = "BİLGİ", ObaId = oba.Id },
                 new ObaChannel { Name = "sohbet", Type = "text", Category = "METİN KANALLARI", ObaId = oba.Id },
-                new ObaChannel { Name = "projeler", Type = "text", Category = "METİN KANALLARI", ObaId = oba.Id },
-                new ObaChannel { Name = "Genel Ses", Type = "voice", Category = "SES KANALLARI", ObaId = oba.Id }
+                new ObaChannel { Name = "projeler", Type = "text", Category = "METİN KANALLARI", ObaId = oba.Id }
             };
             _context.ObaChannels.AddRange(defaultChannels);
             await _context.SaveChangesAsync();

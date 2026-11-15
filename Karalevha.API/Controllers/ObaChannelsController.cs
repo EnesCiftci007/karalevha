@@ -239,7 +239,6 @@ namespace Karalevha.API.Controllers
             var channel = await _context.ObaChannels.Include(c => c.Oba).FirstOrDefaultAsync(c => c.Id == channelId);
             if (channel?.Oba == null) return NotFound(new { message = "Kanal bulunamadı" });
             if (!ObaAccess.CanManage(channel, userId)) return StatusCode(403, new { message = "Bu kanalı yalnızca açan kişi ya da oba kurucusu düzenleyebilir." });
-            if (channel.Type != "text") return BadRequest(new { message = "Ses kanalları düzenlenemez." });
 
             var (error, name, category) = await Validate(dto, channel.ObaId, channel.Id);
             if (error != null) return BadRequest(new { message = error });
@@ -271,7 +270,7 @@ namespace Karalevha.API.Controllers
         }
 
         // DELETE: api/obachannels/kanal/{channelId}
-        // Kanalı açan kişi ya da oba kurucusu. Obanın son metin kanalı silinemez.
+        // Kanalı açan kişi ya da oba kurucusu. Obanın son kanalı silinemez.
         [HttpDelete("kanal/{channelId:int}")]
         [Authorize]
         public async Task<IActionResult> DeleteChannel(int channelId)
@@ -280,8 +279,8 @@ namespace Karalevha.API.Controllers
             if (channel?.Oba == null) return NotFound(new { message = "Kanal bulunamadı" });
             if (!ObaAccess.CanManage(channel, UserId)) return StatusCode(403, new { message = "Bu kanalı yalnızca açan kişi ya da oba kurucusu silebilir." });
 
-            var textChannels = await _context.ObaChannels.CountAsync(c => c.ObaId == channel.ObaId && c.Type == "text");
-            if (channel.Type == "text" && textChannels <= 1) return BadRequest(new { message = "Obanın son metin kanalı silinemez." });
+            if (await _context.ObaChannels.CountAsync(c => c.ObaId == channel.ObaId) <= 1)
+                return BadRequest(new { message = "Obanın son kanalı silinemez." });
 
             var messages = await _context.ObaMessages.Where(m => m.ChannelId == channelId).ToListAsync();
             var stored = messages.Where(m => m.FileStoredName != null).Select(m => m.FileStoredName!).ToList();
