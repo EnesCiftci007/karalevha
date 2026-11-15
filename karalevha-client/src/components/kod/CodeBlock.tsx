@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { PrismLight as SyntaxHighlighter } from 'react-syntax-highlighter';
 import arduino from 'react-syntax-highlighter/dist/esm/languages/prism/arduino';
 import bash from 'react-syntax-highlighter/dist/esm/languages/prism/bash';
@@ -98,30 +98,53 @@ interface CodeBlockProps {
   /** Vurgulanan satır (1 tabanlı) */
   line?: number | null;
   onLineClick?: (line: number) => void;
+  /** Uzun satırlar alta kaysın (yatay kaydırma yerine) */
+  wrap?: boolean;
 }
 
+// Satır numarası sütununun genişliği; kayan satırların devamı bu kadar içeriden başlar
+const GUTTER = '4.75em';
+
 /** Satır numaralı, renklendirilmiş kod. Satır numarasına tıklayınca o satırın bağlantısı oluşur. */
-export default function CodeBlock({ code, language, line, onLineClick }: CodeBlockProps) {
+export default function CodeBlock({ code, language, line, onLineClick, wrap = false }: CodeBlockProps) {
   const ref = useRef<HTMLDivElement>(null);
 
-  // Bağlantıyla gelinen satırı görünür yap
+  // Bağlantıyla gelinen satırı ortala. scrollIntoView sayfayı da kaydırırdı; yalnızca kodu taşıyan bölme kayar.
   useEffect(() => {
-    if (!line) return;
-    ref.current?.querySelector(`[data-satir="${line}"]`)?.scrollIntoView({ block: 'center' });
+    if (!line || !ref.current) return;
+    const row = ref.current.querySelector<HTMLElement>(`[data-satir="${line}"]`);
+    const box = ref.current.closest<HTMLElement>('[data-kod-kaydirma]');
+    if (!row) return;
+    if (!box) return row.scrollIntoView({ block: 'center' });
+    const offset = row.getBoundingClientRect().top - box.getBoundingClientRect().top + box.scrollTop;
+    box.scrollTo({ top: offset - box.clientHeight / 2 });
   }, [line, code]);
 
+  // Kaydırmasızken her satır en uzun satır kadar geniş olsun: vurgu ve seçili satır şeridi sağa kadar uzansın
+  const style = useMemo(
+    () => ({
+      ...THEME,
+      'code[class*="language-"]': { ...THEME['code[class*="language-"]'], display: 'block', minWidth: '100%', width: wrap ? 'auto' : 'max-content', whiteSpace: wrap ? 'pre-wrap' : 'pre' },
+    }),
+    [wrap]
+  );
+
   return (
-    <div ref={ref} className="overflow-x-auto">
+    <div ref={ref}>
       <SyntaxHighlighter
         language={language ?? 'text'}
-        style={THEME}
+        style={style}
         showLineNumbers
         wrapLines
+        wrapLongLines={wrap}
         useInlineStyles
-        lineNumberStyle={{ minWidth: '3.5em', paddingRight: '1.25em', textAlign: 'right', color: '#5c5b57', userSelect: 'none' }}
+        lineNumberStyle={{ minWidth: '3.5em', paddingRight: '1.25em', textAlign: 'right', color: '#5c5b57', userSelect: 'none', textIndent: 0 }}
         lineProps={(n: number) => ({
           'data-satir': n,
           className: `kod-satir${n === line ? ' kod-satir-secili' : ''}`,
+          // Kayan satırın devamı numaranın altına değil, kodun hizasına gelsin. Kütüphane kaydırmada satırı
+          // flex yapıyor; o zaman kod parçaları alta geçemiyor, bu yüzden normal blok ve asılı girinti kullanılır.
+          style: wrap ? { display: 'block', paddingLeft: GUTTER, textIndent: `-${GUTTER}`, overflowWrap: 'anywhere' } : undefined,
           onClick: (e: React.MouseEvent) => {
             // Yalnızca satır numarasına tıklama bağlantı üretir; kod seçimi bozulmasın
             if ((e.target as HTMLElement).classList.contains('linenumber')) onLineClick?.(n);

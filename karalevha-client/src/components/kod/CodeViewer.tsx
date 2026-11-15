@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Box, Check, ChevronRight, Code2, Copy, Download, ExternalLink, File, FileCode, FileText, Folder, FolderOpen,
-  GitBranch, GitFork, Image as ImageIcon, PanelLeft, Search, Star, X,
+  GitBranch, GitFork, Image as ImageIcon, PanelLeft, Search, Star, WrapText, X,
 } from 'lucide-react';
 import { api, API_URL } from '../../services/api';
 import { formatSize } from '../../services/files';
@@ -143,6 +143,45 @@ function TreeView({
 
 /* ------------------------------------------------------------------ Görüntüleyici */
 
+/** Ölçüm yapılana kadar (ilk çizim) kullanılan yükseklik */
+const PANEL_HEIGHT = 'h-[calc(100dvh-12rem)] min-h-[480px]';
+const MIN_PANEL = 480;
+const NAVBAR = 64; // üst menü (h-16), yapışkan
+const GAP = 32; // panonun altındaki boşluk (beğenilen görünümden ölçüldü)
+
+/**
+ * Pano, sayfa en üstteyken ekranda kalan alanın tamamını kaplar: açılışta alt kenarı ekranın altına oturur,
+ * sayfayı kaydırmadan bütün pano görünür. Kalan alan çok azsa (kısa ekran) üst menü altındaki alan kadar olur.
+ */
+function usePanelHeight(ref: React.RefObject<HTMLElement | null>, ready: boolean) {
+  const [height, setHeight] = useState<number | null>(null);
+  useEffect(() => {
+    if (!ready) return;
+    const measure = () => {
+      const el = ref.current;
+      if (!el) return;
+      // clientHeight: görünür alan (yakınlaştırmada ve yatay çubuk varken innerHeight'tan doğru)
+      const viewport = document.documentElement.clientHeight;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      const fits = viewport - top - GAP;
+      const next = fits >= MIN_PANEL ? fits : Math.max(MIN_PANEL, viewport - NAVBAR - 2 * GAP);
+      setHeight((prev) => (prev !== null && Math.abs(prev - next) < 1 ? prev : Math.floor(next)));
+    };
+    measure();
+    // Üstteki her şey sayfanın gövdesinde; gövdenin boyu değişince panonun yeri de değişmiş olabilir.
+    // Kendi yüksekliğimizi değiştirmemiz de gövdeyi değiştirir ama yer aynı kaldığı için sonuç sabit kalır.
+    const observer = new ResizeObserver(measure);
+    observer.observe(document.body);
+    document.fonts?.ready.then(measure);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, [ref, ready]);
+  return height;
+}
+
 export default function CodeViewer({ projectId }: { projectId: number }) {
   const [params, setParams] = useSearchParams();
   const selected = params.get('dosya') ?? '';
@@ -159,7 +198,18 @@ export default function CodeViewer({ projectId }: { projectId: number }) {
   const [modelUrl, setModelUrl] = useState<string | null>(null);
   const [showSource, setShowSource] = useState(false);
   const [copied, setCopied] = useState(false);
-  const viewerTop = useRef<HTMLDivElement>(null);
+  // Uzun satırları kaydır: tercih tarayıcıda kalır
+  const [wrap, setWrap] = useState(() => localStorage.getItem('kod-satir-kaydir') === '1');
+  // İçerik bölmesi kendi içinde kayar; dosya değişince yalnızca o başa döner, sayfa yerinden oynamaz
+  const contentRef = useRef<HTMLDivElement>(null);
+  const sectionRef = useRef<HTMLElement>(null);
+  const panelHeight = usePanelHeight(sectionRef, !!info);
+
+  const toggleWrap = () =>
+    setWrap((v) => {
+      localStorage.setItem('kod-satir-kaydir', v ? '0' : '1');
+      return !v;
+    });
 
   const rawUrl = useCallback(
     (path: string) => `${API_URL}/api/projects/${projectId}/kod/ham?yol=${encodeURIComponent(path)}`,
@@ -242,7 +292,7 @@ export default function CodeViewer({ projectId }: { projectId: number }) {
   const select = (path: string) => {
     setParams({ dosya: path }, { replace: false });
     setTreeVisible(false);
-    viewerTop.current?.scrollIntoView({ block: 'nearest' });
+    contentRef.current?.scrollTo({ top: 0, left: 0 });
   };
 
   const toggle = (path: string) =>
@@ -274,9 +324,9 @@ export default function CodeViewer({ projectId }: { projectId: number }) {
   }
   if (!info) {
     return (
-      <div className="kart overflow-hidden" role="status" aria-label="Depo yükleniyor">
+      <div className={`kart overflow-hidden ${PANEL_HEIGHT}`} role="status" aria-label="Depo yükleniyor">
         <div className="h-12 border-b border-levha-cizgi" />
-        <div className="grid lg:grid-cols-[260px_1fr] min-h-[420px]">
+        <div className="grid lg:grid-cols-[280px_1fr] h-full">
           <div className="hidden lg:block border-r border-levha-cizgi p-3 space-y-2">
             {Array.from({ length: 8 }, (_, i) => <Skeleton key={i} className="h-4" />)}
           </div>
@@ -296,10 +346,15 @@ export default function CodeViewer({ projectId }: { projectId: number }) {
   const dirChildren = (currentDir === '' ? tree : findNode(tree, currentDir)?.children) ?? [];
 
   return (
-        <section className="kart" aria-label="Kod">
+    // Ekran yüksekliğinde sabit pano: ağaç ve içerik kendi içinde kayar, sayfa boyu dosyaya göre değişmez
+    <section
+      ref={sectionRef}
+      className={`kart overflow-hidden flex flex-col ${panelHeight ? '' : PANEL_HEIGHT}`}
+      style={panelHeight ? { height: panelHeight } : undefined}
+      aria-label="Kod"
+    >
       {/* Depo başlığı */}
-      {/* Kutu bilerek overflow-hidden değil: soldaki ağaç yapışkan (sticky) kalabilsin */}
-      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 border-b border-levha-cizgi bg-levha-yuzey/60 rounded-t-lg">
+      <header className="shrink-0 flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-3 border-b border-levha-cizgi bg-levha-yuzey/60">
         <button type="button" onClick={() => setTreeVisible((v) => !v)} className="lg:hidden btn-sade h-8 px-2" aria-expanded={treeVisible} aria-label="Dosya ağacını göster">
           <PanelLeft className="w-4 h-4" />
         </button>
@@ -315,17 +370,17 @@ export default function CodeViewer({ projectId }: { projectId: number }) {
         </a>
       </header>
 
-      <div className="grid lg:grid-cols-[260px_minmax(0,1fr)]">
-        {/* Ağaç */}
-        <aside className={`${treeVisible ? 'block' : 'hidden'} lg:block border-b lg:border-b-0 lg:border-r border-levha-cizgi lg:sticky lg:top-16 lg:self-start`} aria-label="Depo dosyaları">
-          <div className="p-2 border-b border-levha-cizgi">
+      <div className="flex-1 min-h-0 flex flex-col lg:grid lg:grid-cols-[280px_minmax(0,1fr)]">
+        {/* Ağaç: dar ekranda içeriğin yerine açılır, genişte solda sabit */}
+        <aside className={`${treeVisible ? 'flex' : 'hidden'} lg:flex flex-col flex-1 lg:flex-none min-h-0 lg:border-r border-levha-cizgi bg-levha-koyu/40`} aria-label="Depo dosyaları">
+          <div className="shrink-0 p-2 border-b border-levha-cizgi">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-tebesir-silik pointer-events-none" aria-hidden="true" />
               <label htmlFor="kod-dosya-ara" className="sr-only">Dosya ara</label>
               <input id="kod-dosya-ara" type="search" value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Dosya ara" className="girdi h-8 pl-8 text-sm" />
             </div>
           </div>
-          <div className="max-h-[32rem] lg:max-h-[calc(100vh-9rem)] overflow-y-auto py-1">
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-1">
             {q ? (
               matches.length === 0 ? (
                 <p className="px-3 py-4 text-sm text-tebesir-silik">Eşleşen dosya yok.</p>
@@ -354,9 +409,9 @@ export default function CodeViewer({ projectId }: { projectId: number }) {
         </aside>
 
         {/* İçerik */}
-        <div ref={viewerTop} className="min-w-0 scroll-mt-24">
+        <div className={`${treeVisible ? 'hidden' : 'flex'} lg:flex flex-col flex-1 min-w-0 min-h-0`}>
           {/* Yol ve eylemler */}
-          <div className="flex flex-wrap items-center gap-2 px-4 py-1.5 min-h-11 border-b border-levha-cizgi">
+          <div className="shrink-0 flex flex-wrap items-center gap-2 px-4 py-1.5 min-h-11 border-b border-levha-cizgi">
             <nav aria-label="Konum" className="flex items-center gap-1 min-w-0 text-sm font-mono">
               <button type="button" onClick={() => setParams({})} className="text-tebesir-soluk hover:text-isaret shrink-0">{info.name.split('/').pop()}</button>
               {crumbs.map((seg, i) => {
@@ -382,6 +437,18 @@ export default function CodeViewer({ projectId }: { projectId: number }) {
                     {showSource ? 'Önizleme' : 'Kaynak'}
                   </button>
                 )}
+                {file?.kind === 'text' && (viewKindOf(showingFile) !== 'markdown' || showSource) && (
+                  <button
+                    type="button"
+                    onClick={toggleWrap}
+                    className={`btn-sade h-8 px-2 ${wrap ? 'text-isaret' : ''}`}
+                    aria-pressed={wrap}
+                    title={wrap ? 'Uzun satırları kaydırma' : 'Uzun satırları kaydır'}
+                    aria-label="Uzun satırları kaydır"
+                  >
+                    <WrapText className="w-4 h-4" />
+                  </button>
+                )}
                 {file?.kind === 'text' && (
                   <button type="button" onClick={copy} className="btn-sade h-8 px-2" title="Kopyala" aria-label="Dosya içeriğini kopyala">
                     {copied ? <Check className="w-4 h-4 text-isaret" /> : <Copy className="w-4 h-4" />}
@@ -400,6 +467,7 @@ export default function CodeViewer({ projectId }: { projectId: number }) {
             )}
           </div>
 
+          <div ref={contentRef} data-kod-kaydirma className="flex-1 min-h-0 overflow-auto overscroll-contain">
           {/* Klasör içeriği */}
           {/* Geniş ekranda soldaki ağaç aynı listeyi gösterir; README varsa liste yalnızca dar ekranda */}
           {!showingFile && (
@@ -443,11 +511,13 @@ export default function CodeViewer({ projectId }: { projectId: number }) {
                 onOpen={select}
                 onLineClick={(n) => setParams({ dosya: target, satir: String(n) }, { replace: true })}
                 webUrl={webUrlOf(target)}
+                wrap={wrap}
               />
             </div>
           ) : (
             !showingFile && dirChildren.length === 0 && <p className="px-4 py-8 text-sm text-tebesir-silik">Bu klasör boş.</p>
           )}
+          </div>
         </div>
       </div>
     </section>
@@ -463,7 +533,7 @@ function findNode(nodes: TreeNode[], path: string): TreeNode | null {
 }
 
 function FileBody({
-  path, file, error, modelUrl, showSource, line, rawUrl, exists, onOpen, onLineClick, webUrl,
+  path, file, error, modelUrl, showSource, line, rawUrl, exists, onOpen, onLineClick, webUrl, wrap,
 }: {
   path: string;
   file: FileResult | null;
@@ -476,6 +546,7 @@ function FileBody({
   onOpen: (p: string) => void;
   onLineClick: (n: number) => void;
   webUrl: string;
+  wrap: boolean;
 }) {
   const kind = viewKindOf(path);
 
@@ -491,11 +562,11 @@ function FileBody({
 
   if (kind === 'model') {
     return modelUrl ? (
-      <div className="h-[60vh] min-h-[320px]">
+      <div className="h-full min-h-[320px]">
         <ModelPreview url={modelUrl} format={formatOf(path)!} />
       </div>
     ) : (
-      <div className="h-[60vh] min-h-[320px] bg-levha-koyu" role="status" aria-label="Model yükleniyor" />
+      <div className="h-full min-h-[320px] bg-levha-koyu" role="status" aria-label="Model yükleniyor" />
     );
   }
 
@@ -527,5 +598,5 @@ function FileBody({
     );
   }
 
-  return <CodeBlock code={file.content} language={languageOf(path)} line={line} onLineClick={onLineClick} />;
+  return <CodeBlock code={file.content} language={languageOf(path)} line={line} onLineClick={onLineClick} wrap={wrap} />;
 }
