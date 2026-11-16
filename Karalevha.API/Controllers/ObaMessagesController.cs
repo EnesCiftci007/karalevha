@@ -73,7 +73,7 @@ namespace Karalevha.API.Controllers
             var channelId = message.ChannelId;
             _context.ObaMessages.Remove(message);
             await _context.SaveChangesAsync();
-            _storage.Delete(stored);
+            await _storage.DeleteAsync(stored);
 
             _ = _hubContext.Clients.Group(channelId.ToString()).SendAsync("MessageDeleted", messageId);
             return Ok(new { success = true });
@@ -203,12 +203,8 @@ namespace Karalevha.API.Controllers
             if (!access.CanWrite) return StatusCode(403, new { message = "Bu obaya dosya gönderme yetkiniz yok." });
 
             var storedName = ObaFileStorage.NewStoredName(originalName);
-            var path = _storage.PathFor(storedName);
-
-            await using (var stream = new FileStream(path, FileMode.CreateNew))
-            {
-                await file.CopyToAsync(stream);
-            }
+            await using (var upload = file.OpenReadStream())
+                await _storage.SaveAsync(storedName, upload, _storage.ContentTypeFor(originalName));
 
             var message = new ObaMessage
             {
@@ -230,7 +226,7 @@ namespace Karalevha.API.Controllers
             }
             catch
             {
-                _storage.Delete(storedName); // DB'ye yazılamadıysa diskte çöp bırakma
+                await _storage.DeleteAsync(storedName); // DB'ye yazılamadıysa depoda çöp bırakma
                 throw;
             }
 
@@ -250,17 +246,17 @@ namespace Karalevha.API.Controllers
             if (access.Channel == null) return NotFound();
             if (!access.CanRead) return CurrentUserId == null ? Unauthorized() : StatusCode(403);
 
-            var path = _storage.PathFor(message.FileStoredName);
-            if (!System.IO.File.Exists(path)) return NotFound();
+            var stored = await _storage.OpenAsync(message.FileStoredName, HttpContext.RequestAborted);
+            if (stored == null) return NotFound();
 
             // Tarayıcı içerik türünü tahmin etmesin ve dosyayı API kökeninde sayfa olarak açmasın;
             // önizlemeyi istemci kendi tarafında (blob) yapıyor.
             Response.Headers["X-Content-Type-Options"] = "nosniff";
-            return PhysicalFile(
-                path,
+            return File(
+                stored.Content,
                 message.FileContentType ?? "application/octet-stream",
                 message.FileName ?? "dosya",
-                enableRangeProcessing: true);
+                enableRangeProcessing: stored.Content.CanSeek);
         }
 
         private object Broadcast(ObaMessage message, int userId)

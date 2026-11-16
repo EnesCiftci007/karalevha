@@ -42,6 +42,8 @@ builder.Services.AddControllers(options => options.Filters.Add<Karalevha.API.Fil
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();
 builder.Services.AddSingleton<ObaFileStorage>();
+// Yüklenen dosyaların deposu: yerel disk ya da S3 uyumlu (Cloudflare R2). Bkz. Services/FileStore.cs
+builder.Services.AddFileStore(builder.Configuration);
 builder.Services.AddSingleton<CurrentUser>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<ObaAccess>();
@@ -142,6 +144,10 @@ builder.Services.AddRateLimiter(options =>
 
 var app = builder.Build();
 
+// Tek seferlik: eski yerel dosyaları yapılandırılmış depoya (ör. R2) kopyala ve çık
+if (args.Contains("--depoya-aktar"))
+    return await FileStoreSetup.CopyLocalToStoreAsync(app.Services);
+
 // YAYINDA (PRODUCTION) VERİTABANI MIGRATION'LARINI OTOMATİK UYGULA
 using (var scope = app.Services.CreateScope())
 {
@@ -163,34 +169,19 @@ app.UseExceptionHandler("/error");
 app.UseHttpsRedirection();
 app.UseCors("AllowReact");
 
-var provider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
-// 3B model biçimleri: varsayılan tabloda olmayanlar statik olarak sunulmaz, bu yüzden açıkça eklenir
-foreach (var ext in new[] { ".stl", ".obj", ".fbx", ".3mf" })
-    provider.Mappings[ext] = "application/octet-stream";
-provider.Mappings[".glb"] = "model/gltf-binary";
-// Proje dosyaları (CAD, devre, kod): görsel ve PDF kendi türüyle, kod düz metin, gerisi indirme olarak
-foreach (var ext in Karalevha.API.Services.ProjectFileTypes.All)
-    provider.Mappings[ext] = Karalevha.API.Services.ProjectFileTypes.ContentTypeOf(ext);
-app.UseStaticFiles(new StaticFileOptions
-{
-    ContentTypeProvider = provider,
-    // Kullanıcı dosyası doğrudan açılırsa (ör. SVG) içindeki betik çalışmasın, tür tahmin edilmesin
-    OnPrepareResponse = ctx =>
-    {
-        if (!ctx.Context.Request.Path.StartsWithSegments("/uploads")) return;
-        ctx.Context.Response.Headers["X-Content-Type-Options"] = "nosniff";
-        ctx.Context.Response.Headers["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'";
-    }
-});
+// Yüklenen dosyalar diskte değil depoda (IFileStore): /uploads/... adresleri UploadsEndpoint'ten sunulur.
+// wwwroot'ta başka statik dosya yok, statik dosya sunucusu gerekmiyor.
 
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();
+app.MapUploads();
 app.MapHub<Karalevha.API.Hubs.ChatHub>("/chathub");
 app.MapHub<Karalevha.API.Hubs.NotificationHub>("/notificationhub");
 app.MapHealthChecks("/health");
 app.Map("/error", () => Results.Problem("Beklenmeyen bir hata oluştu.")).AllowAnonymous();
 
 app.Run();
+return 0;

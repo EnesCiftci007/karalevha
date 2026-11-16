@@ -24,19 +24,18 @@ namespace Karalevha.API.Controllers
         };
 
         private readonly AppDbContext _context;
-        private readonly IWebHostEnvironment _env;
+        private readonly IFileStore _store;
         private readonly CurrentUser _current;
         private readonly NotificationService _notifications;
 
-        public MakesController(AppDbContext context, IWebHostEnvironment env, CurrentUser current, NotificationService notifications)
+        public MakesController(AppDbContext context, IFileStore store, CurrentUser current, NotificationService notifications)
         {
             _context = context;
-            _env = env;
+            _store = store;
             _current = current;
             _notifications = notifications;
         }
 
-        private string WebRoot => _env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
 
         // GET: api/bastim/model/{modelId}
         [HttpGet("model/{modelId:int}")]
@@ -80,11 +79,9 @@ namespace Karalevha.API.Controllers
             if (settings?.Length > 300) return BadRequest(new { message = "Ayarlar en fazla 300 karakter olabilir." });
 
             var fileName = $"{Guid.NewGuid()}{ext}";
-            var folder = Path.Combine(WebRoot, "uploads", "makes");
-            Directory.CreateDirectory(folder);
-            var path = Path.Combine(folder, fileName);
-            await using (var stream = new FileStream(path, FileMode.CreateNew))
-                await photo.CopyToAsync(stream);
+            var key = $"uploads/makes/{fileName}";
+            await using (var upload = photo.OpenReadStream())
+                await _store.SaveAsync(key, upload, ext == ".png" ? "image/png" : ext == ".webp" ? "image/webp" : "image/jpeg");
 
             var make = new PrintMake
             {
@@ -103,7 +100,7 @@ namespace Karalevha.API.Controllers
             }
             catch
             {
-                System.IO.File.Delete(path);
+                await _store.DeleteAsync(key);
                 throw;
             }
 
@@ -122,10 +119,7 @@ namespace Karalevha.API.Controllers
             _context.PrintMakes.Remove(make);
             await _context.SaveChangesAsync();
 
-            var uploads = Path.GetFullPath(Path.Combine(WebRoot, "uploads"));
-            var file = Path.GetFullPath(Path.Combine(WebRoot, make.PhotoPath.TrimStart('/')));
-            if (file.StartsWith(uploads + Path.DirectorySeparatorChar) && System.IO.File.Exists(file))
-                System.IO.File.Delete(file);
+            await UploadFiles.DeleteAsync(_store, new[] { make.PhotoPath });
 
             return Ok(new { success = true });
         }
