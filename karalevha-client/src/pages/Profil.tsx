@@ -168,7 +168,7 @@ export default function Profil() {
               <ul className="kart divide-y divide-levha-cizgi">
                 {profile.models.map((m) => (
                   <li key={m.id}>
-                    <Link to={`/baski-istasyonu?model=${m.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-levha-yuzey/50 transition-colors">
+                    <Link to={`/model/${m.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-levha-yuzey/50 transition-colors">
                       <Box className="w-4 h-4 text-tebesir-silik" aria-hidden="true" />
                       <span className="flex-1 min-w-0 text-sm font-medium text-tebesir truncate">{m.title}</span>
                       <Badge>{m.category === 'oyun' ? 'Oyun' : 'Baskı'}</Badge>
@@ -185,7 +185,7 @@ export default function Profil() {
               <ul className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                 {profile.makes.map((m) => (
                   <li key={m.id} className="kart overflow-hidden">
-                    <Link to={`/baski-istasyonu?model=${m.printModelId}`}>
+                    <Link to={`/model/${m.printModelId}`}>
                       <img src={`${API_URL}${m.photoPath}`} alt={m.modelTitle} loading="lazy" className="w-full aspect-square object-cover" />
                       <p className="px-3 py-2 text-sm text-tebesir truncate">{m.modelTitle}</p>
                     </Link>

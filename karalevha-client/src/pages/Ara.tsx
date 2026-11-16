@@ -88,7 +88,7 @@ export default function Ara() {
         <div className="space-y-8">
           <Group title="Kişiler" icon={UserRound} term={q} rows={results.users.map((u) => ({ to: `/u/${encodeURIComponent(u.username)}`, title: u.username }))} />
           <Group title="Projeler" icon={FolderGit2} term={q} rows={results.projects.map((p) => ({ to: `/projeler/${p.id}`, title: p.title, meta: p.owner }))} />
-          <Group title="3B modeller" icon={Box} term={q} rows={results.models.map((m) => ({ to: `/baski-istasyonu?model=${m.id}`, title: m.title, meta: `${m.category === 'oyun' ? 'Oyun' : 'Baskı'} · ${m.uploader}` }))} />
+          <Group title="3B modeller" icon={Box} term={q} rows={results.models.map((m) => ({ to: `/model/${m.id}`, title: m.title, meta: `${m.category === 'oyun' ? 'Oyun' : 'Baskı'} · ${m.uploader}` }))} />
           <Group
             title="Obalar"
             icon={MessagesSquare}

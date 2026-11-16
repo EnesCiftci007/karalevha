@@ -29,6 +29,11 @@ namespace Karalevha.API.Models
 
         public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
 
+        /// <summary>Modelin ait olduğu proje. 3B modeller artık projelerin "Modeller" bölümünde durur.</summary>
+        public int? ProjectId { get; set; }
+        [ForeignKey("ProjectId")]
+        public Project? Project { get; set; }
+
         [Required]
         public int UserId { get; set; }
         

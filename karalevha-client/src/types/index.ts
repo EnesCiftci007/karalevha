@@ -30,6 +30,8 @@ export interface Oba {
   createdAt: string;
   owner: string;
   isPrivate?: boolean;
+  /** Listede görünmez, yalnızca davetle girilir */
+  isUnlisted?: boolean;
   memberCount?: number;
   /** Giriş yapan kişi kurucu ya da üye mi */
   isMember?: boolean;
@@ -47,17 +49,77 @@ export interface PrintModel {
   uploadedAt: string;
   userId: number;
   uploader: string;
+  /** Modelin ait olduğu proje */
+  projectId?: number | null;
+  projectTitle?: string | null;
 }
 
 export interface Project {
   id: number;
   title: string;
   description: string;
+  /** Boşsa projenin yazılım deposu yok (yalnızca donanım/tasarım) */
   repoUrl: string;
   stars: number;
   forks: number;
   createdAt: string;
   owner: string;
+  userId?: number;
+  modelCount?: number;
+  fileCount?: number;
+  drawingCount?: number;
+  electronicsCount?: number;
+  codeFileCount?: number;
+  /** Dal: robotik, elektronik, yazilim, tasarim, diger */
+  category?: string;
+  /** Listede önizleme olarak gösterilen ilk 3B model */
+  cover?: { id: number; fileUrl: string; fileName: string } | null;
+}
+
+/** Projenin çizim ve belgeleri (şema, teknik çizim, PCB, fotoğraf, PDF) */
+export interface ProjectFile {
+  id: number;
+  title: string;
+  fileName: string;
+  fileUrl: string;
+  contentType: string;
+  /** Bölüm: cizim (mekanik/CAD), elektronik, kod */
+  kind?: 'cizim' | 'elektronik' | 'kod';
+  size: number;
+  uploadedAt: string;
+  userId: number;
+  uploader: string;
+}
+
+export interface MarketService {
+  id: 'cnc' | 'lazer' | 'baski' | 'pcb';
+  name: string;
+  description: string;
+  materials: string[];
+  extensions: string[];
+  hint: string;
+}
+
+export type MarketStatus = 'alindi' | 'fiyatlandi' | 'onaylandi' | 'uretimde' | 'hazir' | 'teslim' | 'iptal';
+
+export interface MarketOrder {
+  id: number;
+  service: MarketService['id'];
+  serviceName: string;
+  material: string;
+  quantity: number;
+  dimensions?: string | null;
+  note?: string | null;
+  fileName: string;
+  fileSize: number;
+  status: MarketStatus;
+  statusLabel: string;
+  price?: number | null;
+  staffNote?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  userId: number;
+  username: string;
 }
 
 export interface Equipment {

@@ -11,6 +11,20 @@ export function formatOf(fileName: string): ModelFormat | null {
   return (MODEL_FORMATS as readonly string[]).includes(ext ?? '') ? (ext as ModelFormat) : null;
 }
 
+/**
+ * CAD biçimleri: Modeller bölümüne yüklenmez (Çizimler/CAD'de durur) ama sitede 3B görüntülenir.
+ * Okuyucu OpenCascade (occt-import-js, WebAssembly) ve yalnızca bu dosyalar açılınca iner.
+ */
+export const CAD_FORMATS = ['step', 'stp', 'iges', 'igs'] as const;
+export type CadFormat = (typeof CAD_FORMATS)[number];
+/** Görüntüleyicinin açabildiği her biçim */
+export type ViewFormat = ModelFormat | CadFormat;
+
+export function cadFormatOf(fileName: string): CadFormat | null {
+  const ext = fileName.split('.').pop()?.toLowerCase();
+  return (CAD_FORMATS as readonly string[]).includes(ext ?? '') ? (ext as CadFormat) : null;
+}
+
 /** Oyun motorlarının biçimleri; yüklerken kategori önerisi için. */
 export const GAME_FORMATS: ModelFormat[] = ['fbx', 'glb'];
 
@@ -34,7 +48,7 @@ const plainMaterial = (color: string) =>
  * Bir model dosyasını biçimine göre yükler. Yükleyiciler gerektiğinde ayrı parça olarak
  * indirilir; STL sayfası FBX kodunu, FBX sayfası glTF kodunu taşımaz.
  */
-export async function loadModel(url: string, format: ModelFormat, color = '#d8d3c6'): Promise<LoadedModel> {
+export async function loadModel(url: string, format: ViewFormat, color = '#d8d3c6'): Promise<LoadedModel> {
   let object: THREE.Object3D;
   let animations: THREE.AnimationClip[] = [];
   let plain = false;
@@ -42,6 +56,16 @@ export async function loadModel(url: string, format: ModelFormat, color = '#d8d3
   let zUp = false;
 
   switch (format) {
+    case 'step':
+    case 'stp':
+    case 'iges':
+    case 'igs': {
+      const { loadCad } = await import('./loadCad');
+      object = await loadCad(url, format === 'step' || format === 'stp' ? 'step' : 'iges', color);
+      // CAD programlarında yukarı yön Z
+      zUp = true;
+      break;
+    }
     case 'stl': {
       const { STLLoader } = await import('three/examples/jsm/loaders/STLLoader.js');
       const geometry = await new STLLoader().loadAsync(url);

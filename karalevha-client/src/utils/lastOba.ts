@@ -48,6 +48,17 @@ export function forgetOba(userId: number | null | undefined, obaId: number) {
   write(userId, saved);
 }
 
+/**
+ * Kişi obadan çıkıp oba listesine döndü (geri oku, "Obalara dön" ya da üst menü): artık hiçbir obada
+ * değil, E-Oba bağlantısı listeyi açsın. Obaların son kanalları hatırlanmaya devam eder.
+ */
+export function leaveOba(userId: number | null | undefined) {
+  const saved = read(userId);
+  if (saved.last === null) return;
+  saved.last = null;
+  write(userId, saved);
+}
+
 /** Bu obada en son açık kanal */
 export function lastChannelOf(userId: number | null | undefined, obaId: number): number | null {
   return read(userId).channels[String(obaId)] ?? null;

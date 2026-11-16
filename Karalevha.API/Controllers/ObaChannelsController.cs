@@ -55,6 +55,8 @@ namespace Karalevha.API.Controllers
 
             if (oba.IsPrivate && !await _access.IsInsideAsync(oba, userId))
             {
+                // Görünmeyen oba: varlığını da belli etme, davet olmadan girilmez
+                if (oba.IsUnlisted) return NotFound("Oba bulunamadı");
                 if (userId == null) return Unauthorized();
                 return StatusCode(403, "Bu gizli bir oba, katılmak için şifre girmelisiniz.");
             }

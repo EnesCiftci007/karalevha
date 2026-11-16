@@ -9,7 +9,9 @@ import { NotFound } from './pages/NotFound';
 const EOba = lazy(() => import('./pages/EOba'));
 const ObaDetay = lazy(() => import('./pages/ObaDetay'));
 const Akis = lazy(() => import('./pages/Akis'));
-const BaskiIstasyonu = lazy(() => import('./pages/BaskiIstasyonu'));
+const Market = lazy(() => import('./pages/Market'));
+const ModelYonlendir = lazy(() => import('./pages/ModelYonlendir'));
+const ObaDavet = lazy(() => import('./pages/ObaDavet'));
 const Auth = lazy(() => import('./pages/Auth'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const Projeler = lazy(() => import('./pages/Projeler'));
@@ -37,7 +39,11 @@ function App() {
             <Route path="akis" element={page(<Akis />)} />
             <Route path="e-oba" element={page(<EOba />)} />
             <Route path="e-oba/:id" element={page(<ObaDetay />)} />
-            <Route path="baski-istasyonu" element={page(<BaskiIstasyonu />)} />
+            <Route path="e-oba/davet/:kod" element={page(<ObaDavet />)} />
+            <Route path="market" element={page(<Market />)} />
+            {/* Modeller projelere taşındı: eski bağlantılar modelin projesine gider */}
+            <Route path="model/:id" element={page(<ModelYonlendir />)} />
+            <Route path="baski-istasyonu" element={page(<ModelYonlendir />)} />
             <Route path="projeler" element={page(<Projeler />)} />
             <Route path="projeler/:id" element={page(<ProjeDetay />)} />
             <Route path="atolye" element={page(<Atolye />)} />

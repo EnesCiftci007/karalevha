@@ -3,7 +3,8 @@ import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import * as signalR from '@microsoft/signalr';
 import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Hash, Send, ChevronLeft, MessageSquare, Lock, Menu, X, Paperclip, FolderOpen, Trash2, Plus, Pencil, LogOut } from 'lucide-react';
+import { Hash, Send, ChevronLeft, MessageSquare, Lock, Menu, X, Paperclip, FolderOpen, Trash2, Plus, Pencil, LogOut, Link2 } from 'lucide-react';
+import InviteModal from '../components/oba/InviteModal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import UserLink from '../components/ui/UserLink';
 import Avatar from '../components/ui/Avatar';
@@ -59,6 +60,7 @@ export default function ObaDetay() {
   const [isMember, setIsMember] = useState(false);
   const [joining, setJoining] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
+  const [showInvite, setShowInvite] = useState(false);
   const navigate = useNavigate();
   const [toDelete, setToDelete] = useState<Message | null>(null);
   const [, setSearchParams] = useSearchParams();
@@ -472,6 +474,9 @@ export default function ObaDetay() {
           {isMember && user && user.username !== obaOwner && (
             <ItemMenu label="Oba seçenekleri" actions={[{ label: 'Obadan ayrıl', icon: LogOut, danger: true, onSelect: () => setConfirmLeave(true) }]} />
           )}
+          {user && obaOwner && user.username === obaOwner && (
+            <ItemMenu label="Oba seçenekleri" actions={[{ label: 'Davet bağlantısı', icon: Link2, onSelect: () => setShowInvite(true) }]} />
+          )}
           <button onClick={() => setIsSidebarOpen(false)} className="md:hidden p-1.5 rounded-md text-tebesir-silik hover:text-tebesir" aria-label="Kanal listesini kapat">
             <X className="w-4 h-4" />
           </button>
@@ -797,6 +802,7 @@ export default function ObaDetay() {
         </ConfirmDialog>
       )}
 
+      {showInvite && id && <InviteModal obaId={id} onClose={() => setShowInvite(false)} />}
       {confirmLeave && (
         <ConfirmDialog
           title={`${obaName ?? 'Obadan'} ayrılınsın mı?`}

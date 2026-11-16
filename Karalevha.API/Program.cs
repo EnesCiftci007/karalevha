@@ -111,6 +111,15 @@ builder.Services.AddRateLimiter(options =>
             }));
 
     // Gizli oba şifresi denemeleri: kişi başına dakikada 5
+    // Proje parçaları (model, çizim, devre, kod): proje kurulurken birkaç dosya art arda yüklenir
+    options.AddPolicy("PartUploadLimiter", ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "anon",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 20
+            }));
     options.AddPolicy("JoinLimiter", ctx =>
         RateLimitPartition.GetFixedWindowLimiter(
             ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
@@ -159,9 +168,19 @@ var provider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProv
 foreach (var ext in new[] { ".stl", ".obj", ".fbx", ".3mf" })
     provider.Mappings[ext] = "application/octet-stream";
 provider.Mappings[".glb"] = "model/gltf-binary";
+// Proje dosyaları (CAD, devre, kod): görsel ve PDF kendi türüyle, kod düz metin, gerisi indirme olarak
+foreach (var ext in Karalevha.API.Services.ProjectFileTypes.All)
+    provider.Mappings[ext] = Karalevha.API.Services.ProjectFileTypes.ContentTypeOf(ext);
 app.UseStaticFiles(new StaticFileOptions
 {
-    ContentTypeProvider = provider
+    ContentTypeProvider = provider,
+    // Kullanıcı dosyası doğrudan açılırsa (ör. SVG) içindeki betik çalışmasın, tür tahmin edilmesin
+    OnPrepareResponse = ctx =>
+    {
+        if (!ctx.Context.Request.Path.StartsWithSegments("/uploads")) return;
+        ctx.Context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        ctx.Context.Response.Headers["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'";
+    }
 });
 
 app.UseAuthentication();

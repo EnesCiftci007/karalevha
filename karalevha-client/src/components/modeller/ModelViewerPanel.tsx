@@ -1,14 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Grid3x3, PanelRightClose, PanelRightOpen, RefreshCw, RotateCcw, Shapes, X } from 'lucide-react';
 import ModelPreview, { type ModelStats } from '../ModelPreview';
-import type { ModelFormat } from '../../utils/loadModel';
+import type { ViewFormat } from '../../utils/loadModel';
 
 interface ModelViewerPanelProps {
   title: string;
   /** Başlığın altındaki satır (kategori, biçim, yükleyen) */
   meta: ReactNode;
   url: string;
-  format: ModelFormat;
+  format: ViewFormat;
   /** Baskı modellerinde ölçüler milimetre kabul edilir */
   unit?: 'mm' | null;
   /** Panelin üstündeki düğmeler (beğeni, indir…) */
