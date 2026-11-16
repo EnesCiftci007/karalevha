@@ -76,7 +76,7 @@ namespace Karalevha.API.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }
 
-    /// <summary>Beğeni. TargetType: "post", "project", "model".</summary>
+    /// <summary>Beğeni. TargetType: "post", "project", "model", "comment".</summary>
     public class Like
     {
         [Key]
@@ -112,6 +112,9 @@ namespace Karalevha.API.Models
         [Required]
         [MaxLength(1000)]
         public string Content { get; set; } = string.Empty;
+
+        /// <summary>Yanıtsa ana yorum. Tek seviye: yanıta yanıt da ana yoruma bağlanır.</summary>
+        public int? ParentId { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     }

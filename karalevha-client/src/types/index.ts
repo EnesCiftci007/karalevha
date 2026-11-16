@@ -113,6 +113,10 @@ export interface CommentItem {
   createdAt: string;
   userId: number;
   username: string;
+  /** Yanıtsa ana yorum (tek seviye) */
+  parentId?: number | null;
+  likes: number;
+  liked: boolean;
 }
 
 export interface SocialCounts {

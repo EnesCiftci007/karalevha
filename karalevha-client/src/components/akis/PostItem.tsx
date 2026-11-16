@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
+import { Link } from 'react-router-dom';
 import { Pencil, Trash2 } from 'lucide-react';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -8,11 +9,30 @@ import Avatar from '../ui/Avatar';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import ItemMenu from '../ui/ItemMenu';
 import UserLink from '../ui/UserLink';
+import { HASHTAG, normalizeTag } from '../../utils/hashtags';
 
 const MAX_LENGTH = 1000;
 const URL_PATTERN = /(https?:\/\/[^\s<]+[^\s<.,;:!?)\]'"])/g;
 
-/** Gönderi metnindeki bağlantıları tıklanabilir yapar; geri kalanı düz metin olarak kalır. */
+/** Düz metindeki #etiketleri Akış süzgecine giden bağlantılara çevirir (X'teki gibi) */
+function withHashtags(text: string, keyPrefix: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  let last = 0;
+  for (const m of text.matchAll(HASHTAG)) {
+    const start = m.index ?? 0;
+    if (start > last) out.push(text.slice(last, start));
+    out.push(
+      <Link key={`${keyPrefix}-${start}`} to={`/akis?etiket=${encodeURIComponent(normalizeTag(m[1]))}`} className="text-isaret hover:underline underline-offset-2">
+        {m[0]}
+      </Link>
+    );
+    last = start + m[0].length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+/** Gönderi metnindeki bağlantıları ve #etiketleri tıklanabilir yapar; geri kalanı düz metin olarak kalır. */
 export function PostText({ text }: { text: string }) {
   return (
     <p className="text-base leading-relaxed text-tebesir whitespace-pre-wrap break-words">
@@ -22,7 +42,7 @@ export function PostText({ text }: { text: string }) {
             {part.replace(/^https?:\/\//, '')}
           </a>
         ) : (
-          part
+          withHashtags(part, String(i))
         )
       )}
     </p>

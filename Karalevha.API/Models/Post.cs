@@ -20,7 +20,7 @@ namespace Karalevha.API.Models
 
         public DateTime? EditedAt { get; set; }
 
-        /// <summary>En fazla 3 etiket (PostTags.All içinden)</summary>
+        /// <summary>Metindeki #etiketler (küçük harf, en fazla 5)</summary>
         public List<string> Tags { get; set; } = new();
 
         // Foreign Key
