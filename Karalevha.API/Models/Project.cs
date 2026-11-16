@@ -17,7 +17,12 @@ namespace Karalevha.API.Models
         [MaxLength(1000)]
         public string Description { get; set; } = string.Empty;
 
-        public string RepoUrl { get; set; } = string.Empty; // GitHub linki
+        /// <summary>GitHub/GitLab deposu. İsteğe bağlı: yalnızca donanım ya da tasarım olan projelerde boş.</summary>
+        public string RepoUrl { get; set; } = string.Empty;
+
+        /// <summary>Projenin dalı: robotik, elektronik, yazilim, tasarim (3B tasarım), diger. Projeler sayfası buna göre süzülür.</summary>
+        [MaxLength(20)]
+        public string Category { get; set; } = "diger";
 
         public int Stars { get; set; } = 0;
         public int Forks { get; set; } = 0;

@@ -94,9 +94,18 @@ namespace Karalevha.API.Controllers
             return Ok(new { success = true });
         }
 
-        // GET: api/printmodels?category=oyun
+        // GET: api/printmodels/{id}   — tek model (eski /baski-istasyonu?model= bağlantılarını projeye yönlendirmek için)
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetModel(int id)
+        {
+            var model = await _context.PrintModels.AsNoTracking().Where(m => m.Id == id)
+                .Select(m => new { m.Id, m.Title, m.ProjectId }).FirstOrDefaultAsync();
+            return model == null ? NotFound(new { message = "Model bulunamadı." }) : Ok(model);
+        }
+
+        // GET: api/printmodels?projectId=3&category=oyun
         [HttpGet]
-        public async Task<IActionResult> GetModels([FromQuery] int skip = 0, [FromQuery] int take = 50, [FromQuery] string? category = null)
+        public async Task<IActionResult> GetModels([FromQuery] int skip = 0, [FromQuery] int take = 50, [FromQuery] string? category = null, [FromQuery] int? projectId = null)
         {
             skip = Math.Max(skip, 0);
             take = Math.Clamp(take, 1, 100);
@@ -104,6 +113,8 @@ namespace Karalevha.API.Controllers
             var query = _context.PrintModels.AsNoTracking();
             if (!string.IsNullOrEmpty(category) && Categories.Contains(category))
                 query = query.Where(m => m.Category == category);
+            if (projectId != null)
+                query = query.Where(m => m.ProjectId == projectId);
 
             var models = await query
                 .OrderByDescending(m => m.UploadedAt)
@@ -120,7 +131,9 @@ namespace Karalevha.API.Controllers
                     m.Category,
                     m.UploadedAt,
                     m.UserId,
-                    Uploader = m.User!.Username
+                    Uploader = m.User!.Username,
+                    m.ProjectId,
+                    ProjectTitle = m.Project != null ? m.Project.Title : null,
                 })
                 .ToListAsync();
 
@@ -135,18 +148,26 @@ namespace Karalevha.API.Controllers
                 Format = Path.GetExtension(m.FileName).TrimStart('.').ToLowerInvariant(),
                 m.UploadedAt,
                 m.UserId,
-                m.Uploader
+                m.Uploader,
+                m.ProjectId,
+                m.ProjectTitle,
             }));
         }
 
         // POST: api/printmodels
         [HttpPost]
         [Authorize]
-        [EnableRateLimiting("UploadLimiter")]
+        [EnableRateLimiting("PartUploadLimiter")]
         [RequestSizeLimit(MaxFileSize + 1_000_000)]
         [RequestFormLimits(MultipartBodyLengthLimit = MaxFileSize + 1_000_000)]
-        public async Task<IActionResult> UploadModel([FromForm] string title, [FromForm] string? description, [FromForm] string? category, IFormFile file)
+        public async Task<IActionResult> UploadModel([FromForm] string title, [FromForm] string? description, [FromForm] string? category, [FromForm] int? projectId, IFormFile file)
         {
+            // Modeller projelerin içinde durur: proje zorunlu ve yalnızca sahibi ekler
+            if (projectId == null) return BadRequest(new { message = "Model bir projeye eklenmeli." });
+            var project = await _context.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.Id == projectId);
+            if (project == null) return NotFound(new { message = "Proje bulunamadı." });
+            if (CurrentUser.IdOf(User) != project.UserId) return StatusCode(403, new { message = "Bu projeye yalnızca sahibi model ekleyebilir." });
+
             if (file == null || file.Length == 0)
                 return BadRequest(new { message = "Lütfen bir model dosyası seçin." });
 
@@ -192,6 +213,7 @@ namespace Karalevha.API.Controllers
                 FileName = safeFileName,
                 Category = category,
                 UserId = userId,
+                ProjectId = projectId,
                 UploadedAt = DateTime.UtcNow
             };
 
@@ -210,7 +232,7 @@ namespace Karalevha.API.Controllers
                 throw;
             }
 
-            return Ok(new { message = "Model yüklendi." });
+            return Ok(new { message = "Model yüklendi.", printModel.Id });
         }
     }
 }

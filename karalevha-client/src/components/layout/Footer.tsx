@@ -4,7 +4,7 @@ import { Logo, Mascot, Wordmark } from '../brand/Brand';
 const links = [
   { to: '/akis', label: 'Akış' },
   { to: '/projeler', label: 'Projeler' },
-  { to: '/baski-istasyonu', label: '3B Modeller' },
+  { to: '/market', label: 'Market' },
   { to: '/e-oba', label: 'E-Oba' },
   { to: '/atolye', label: 'Atölye' },
   { to: '/etkinlikler', label: 'Etkinlikler' },

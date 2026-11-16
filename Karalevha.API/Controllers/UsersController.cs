@@ -184,6 +184,7 @@ namespace Karalevha.API.Controllers
                 .OrderByDescending(m => m.UploadedAt).Take(take)
                 .Select(m => new { m.Id, m.Title, m.Category, Uploader = m.User!.Username }).ToListAsync();
             var obalar = await _context.Obalar.AsNoTracking()
+                .Where(o => !o.IsUnlisted) // görünmeyen obalar aramada çıkmaz
                 .Where(o => EF.Functions.ILike(o.Name, pattern, "\\") || (!o.IsPrivate && o.Description != null && EF.Functions.ILike(o.Description, pattern, "\\")))
                 .OrderByDescending(o => o.MemberCount).Take(take)
                 .Select(o => new { o.Id, o.Name, o.IsPrivate, o.MemberCount }).ToListAsync();

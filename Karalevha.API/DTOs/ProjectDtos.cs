@@ -12,8 +12,12 @@ namespace Karalevha.API.DTOs
         [MaxLength(1000)]
         public string Description { get; set; } = string.Empty;
 
-        [Required]
-        [Url]
-        public string RepoUrl { get; set; } = string.Empty;
+        /// <summary>İsteğe bağlı GitHub/GitLab deposu</summary>
+        [MaxLength(300)]
+        public string? RepoUrl { get; set; }
+
+        /// <summary>Projenin dalı (ProjectCategories.All)</summary>
+        [MaxLength(20)]
+        public string? Category { get; set; }
     }
 }

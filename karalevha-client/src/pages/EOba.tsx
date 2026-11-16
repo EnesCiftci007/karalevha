@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Lock, MessageSquare, MessagesSquare, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { EyeOff, Lock, MessageSquare, MessagesSquare, Pencil, Plus, Trash2, Users } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Oba } from '../types';
@@ -15,6 +15,7 @@ import ItemMenu from '../components/ui/ItemMenu';
 import ListToolbar from '../components/ui/ListToolbar';
 import { useMine } from '../components/ui/useMine';
 import { fullDate, timeAgo } from '../utils/time';
+import { leaveOba } from '../utils/lastOba';
 
 type SortKey = 'aktif' | 'uye' | 'ad';
 
@@ -26,11 +27,18 @@ export default function EOba() {
   const [sort, setSort] = useState<SortKey>('aktif');
   const [mine, setMine] = useMine();
 
+  // Oba listesine gelindiyse kişi obadan çıkmıştır: E-Oba bir dahaki sefere son obayı değil listeyi açsın
+  useEffect(() => {
+    leaveOba(user?.id);
+  }, [user?.id]);
+
   // Oba kurma
   const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [isPrivate, setIsPrivate] = useState(false);
+  // Görünürlük: herkese açık / gizli (listede, şifreyle) / davetli (listede yok, bağlantıyla)
+  const [visibility, setVisibility] = useState<'acik' | 'gizli' | 'davetli'>('acik');
+  const isPrivate = visibility === 'gizli';
   const [joinPassword, setJoinPassword] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
@@ -96,14 +104,15 @@ export default function EOba() {
         body: JSON.stringify({
           name: name.trim(),
           description: description.trim(),
-          isPrivate,
+          isPrivate: visibility !== 'acik',
+          isUnlisted: visibility === 'davetli',
           joinPassword: isPrivate ? joinPassword.trim() : null,
         }),
       });
       setObalar((prev) => [created, ...(prev ?? [])]);
       setName('');
       setDescription('');
-      setIsPrivate(false);
+      setVisibility('acik');
       setJoinPassword('');
       setShowCreate(false);
     } catch (err) {
@@ -240,7 +249,11 @@ export default function EOba() {
                         'Henüz mesaj yok'
                       )}
                     </span>
-                    {oba.isPrivate && <Badge><Lock className="w-3 h-3" aria-hidden="true" />Gizli</Badge>}
+                    {oba.isUnlisted ? (
+                      <Badge><EyeOff className="w-3 h-3" aria-hidden="true" />Davetli</Badge>
+                    ) : (
+                      oba.isPrivate && <Badge><Lock className="w-3 h-3" aria-hidden="true" />Gizli</Badge>
+                    )}
                     {isOwner ? <Badge tone="isaret">Kurucu</Badge> : oba.isMember && <Badge>Üyesin</Badge>}
                   </div>
                 </Link>
@@ -271,13 +284,25 @@ export default function EOba() {
             <Field id="oba-aciklama" label="Açıklama" note="isteğe bağlı">
               <textarea id="oba-aciklama" rows={3} maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Bu oba ne için?" className="girdi resize-y" />
             </Field>
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input type="checkbox" checked={isPrivate} onChange={(e) => setIsPrivate(e.target.checked)} className="mt-0.5 w-4 h-4 accent-isaret" />
-              <span>
-                <span className="block text-sm font-medium text-tebesir">Gizli oba</span>
-                <span className="block text-xs text-tebesir-silik">İçeriği yalnızca şifreyle katılan üyeler görür.</span>
-              </span>
-            </label>
+            <fieldset className="space-y-2">
+              <legend className="mb-2 text-sm font-medium text-tebesir">Görünürlük</legend>
+              {([
+                ['acik', 'Herkese açık', 'Listede görünür, herkes okur ve katılır.'],
+                ['gizli', 'Gizli, listede görünür', 'Listede görünür; içeriği yalnızca şifreyle katılan üyeler görür.'],
+                ['davetli', 'Gizli, listede görünmez', 'Listede ve aramada çıkmaz; yalnızca davet bağlantısıyla katılınır.'],
+              ] as const).map(([value, label, note]) => (
+                <label key={value} className={`flex items-start gap-3 cursor-pointer rounded-md border px-3 py-2.5 transition-colors ${visibility === value ? 'border-isaret/60 bg-isaret/5' : 'border-levha-cizgi hover:border-tebesir-silik'}`}>
+                  <input type="radio" name="oba-gorunurluk" value={value} checked={visibility === value} onChange={() => setVisibility(value)} className="mt-0.5 w-4 h-4 accent-isaret" />
+                  <span>
+                    <span className="block text-sm font-medium text-tebesir">{label}</span>
+                    <span className="block text-xs text-tebesir-silik">{note}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            {visibility === 'davetli' && (
+              <p className="text-xs text-tebesir-silik">Kurduktan sonra davet bağlantısını obanın menüsünden alırsın.</p>
+            )}
             {isPrivate && (
               <Field id="oba-sifre" label="Katılım şifresi" hint="Bu şifreyi katılmasını istediğin kişilerle paylaş.">
                 <input id="oba-sifre" type="text" maxLength={100} value={joinPassword} onChange={(e) => setJoinPassword(e.target.value)} className="girdi" />

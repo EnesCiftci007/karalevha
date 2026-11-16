@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Loader2 } from 'lucide-react';
-import { disposeObject, loadModel, type ModelFormat } from '../utils/loadModel';
+import { disposeObject, loadModel, type ViewFormat } from '../utils/loadModel';
 
 /** Yüklenen modelin özeti (panelde gösterilir) */
 export interface ModelStats {
@@ -14,7 +14,7 @@ export interface ModelStats {
 
 interface ModelPreviewProps {
   url: string;
-  format: ModelFormat;
+  format: ViewFormat;
   /** Kendi malzemesi olmayan modellerin (STL, OBJ) rengi */
   color?: string;
   autoRotate?: boolean;

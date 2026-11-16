@@ -77,7 +77,7 @@ export default function Home() {
     items ? (user ? items.filter(isMine).length : items.length) : undefined;
   const stats = [
     { label: user ? 'projen' : 'proje', value: mineOnly(lists?.projects, (p) => p.owner === user?.username), to: '/projeler' },
-    { label: user ? 'modelin' : 'model', value: mineOnly(lists?.models, (m) => m.userId === user?.id), to: '/baski-istasyonu' },
+    { label: user ? 'modelin' : 'model', value: mineOnly(lists?.models, (m) => m.userId === user?.id), to: '/projeler' },
     { label: user ? 'oban' : 'oba', value: mineOnly(lists?.obalar, (o) => !!o.isMember || o.owner === user?.username), to: '/e-oba' },
     { label: user ? 'paylaşımın' : 'paylaşım', value: mineOnly(lists?.posts, (p) => p.user?.id === user?.id), to: '/akis' },
   ].map((s) => ({ ...s, to: user ? `${s.to}?${s.to === '/akis' ? 'kapsam' : 'kimin'}=benim` : s.to }));

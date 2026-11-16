@@ -19,6 +19,8 @@ namespace Karalevha.API.Data
         public DbSet<ObaMember> ObaMembers { get; set; }
         public DbSet<ObaChannelMember> ObaChannelMembers { get; set; }
         public DbSet<UserFollow> UserFollows { get; set; }
+        public DbSet<ProjectFile> ProjectFiles { get; set; }
+        public DbSet<MarketOrder> MarketOrders { get; set; }
         public DbSet<Equipment> Equipment { get; set; }
         public DbSet<Reservation> Reservations { get; set; }
         public DbSet<ClubEvent> Events { get; set; }
@@ -56,6 +58,14 @@ namespace Karalevha.API.Data
             modelBuilder.Entity<Like>().HasIndex(l => new { l.TargetType, l.TargetId, l.UserId }).IsUnique();
             modelBuilder.Entity<Comment>().HasIndex(c => new { c.TargetType, c.TargetId, c.CreatedAt });
             modelBuilder.Entity<Comment>().HasIndex(c => c.ParentId);
+
+            // Proje silinince modelleri ve dosyaları da silinir (diskteki dosyaları controller siler)
+            modelBuilder.Entity<PrintModel>().HasOne(m => m.Project).WithMany().HasForeignKey(m => m.ProjectId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ProjectFile>().HasOne(f => f.Project).WithMany().HasForeignKey(f => f.ProjectId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ProjectFile>().HasIndex(f => f.ProjectId);
+            modelBuilder.Entity<MarketOrder>().HasIndex(o => new { o.UserId, o.CreatedAt });
+            modelBuilder.Entity<MarketOrder>().HasIndex(o => o.Status);
+            modelBuilder.Entity<Oba>().HasIndex(o => o.InviteCode).IsUnique();
 
             // Bir kişi bir obaya bir kez üye olur; bir kişiyi bir kez takip eder
             modelBuilder.Entity<ObaMember>().HasIndex(m => new { m.ObaId, m.UserId }).IsUnique();

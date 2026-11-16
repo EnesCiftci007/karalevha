@@ -32,6 +32,8 @@ namespace Karalevha.API.Controllers
             // döner, mesaj içeriği değil.
             var obalar = await _context.Obalar
                 .AsNoTracking()
+                // Listede görünmeyen obalar yalnızca kurucusuna ve üyelerine listelenir
+                .Where(o => !o.IsUnlisted || (me != null && (o.OwnerId == me || _context.ObaMembers.Any(m => m.ObaId == o.Id && m.UserId == me))))
                 .Select(o => new
                 {
                     o.Id,
@@ -41,6 +43,7 @@ namespace Karalevha.API.Controllers
                     o.Color,
                     o.MemberCount,
                     o.IsPrivate,
+                    o.IsUnlisted,
                     o.CreatedAt,
                     Owner = o.Owner!.Username,
                     IsMember = me != null && (o.OwnerId == me || _context.ObaMembers.Any(m => m.ObaId == o.Id && m.UserId == me)),
@@ -73,9 +76,12 @@ namespace Karalevha.API.Controllers
                 Description = dto.Description,
                 Color = dto.Color,
                 AvatarSeed = seed,
-                OwnerId = userId, IsPrivate = dto.IsPrivate,
+                OwnerId = userId, IsPrivate = dto.IsPrivate || dto.IsUnlisted,
+                IsUnlisted = dto.IsUnlisted,
+                // Görünmeyen obanın davet bağlantısı baştan hazır; şifresi yoktur
+                InviteCode = dto.IsUnlisted ? NewInviteCode() : null,
                 // Katılım şifresi düz metin değil, BCrypt özeti olarak saklanır
-                JoinPassword = dto.IsPrivate && !string.IsNullOrWhiteSpace(dto.JoinPassword)
+                JoinPassword = dto.IsPrivate && !dto.IsUnlisted && !string.IsNullOrWhiteSpace(dto.JoinPassword)
                     ? BCrypt.Net.BCrypt.HashPassword(dto.JoinPassword.Trim())
                     : null,
                 CreatedAt = DateTime.UtcNow
@@ -102,9 +108,78 @@ namespace Karalevha.API.Controllers
                 oba.Description,
                 oba.AvatarSeed,
                 oba.Color,
-                oba.MemberCount, oba.IsPrivate,
+                oba.MemberCount, oba.IsPrivate, oba.IsUnlisted,
                 Owner = username
             });
+        }
+
+        private static string NewInviteCode() =>
+            Convert.ToBase64String(System.Security.Cryptography.RandomNumberGenerator.GetBytes(16))
+                .Replace('+', '-').Replace('/', '_').TrimEnd('=');
+
+        // GET: api/obalar/{id}/davet   — kurucu: davet bağlantısının kodu (yoksa oluşturulur)
+        [HttpGet("{id:int}/davet")]
+        [Authorize]
+        public async Task<IActionResult> GetInvite(int id)
+        {
+            var oba = await _context.Obalar.FindAsync(id);
+            if (oba == null) return NotFound(new { message = "Oba bulunamadı" });
+            if (CurrentUser.IdOf(User) != oba.OwnerId) return StatusCode(403, new { message = "Davet bağlantısını yalnızca kurucu görür." });
+            if (oba.InviteCode == null)
+            {
+                oba.InviteCode = NewInviteCode();
+                await _context.SaveChangesAsync();
+            }
+            return Ok(new { code = oba.InviteCode });
+        }
+
+        // POST: api/obalar/{id}/davet/yenile   — kurucu: yeni kod, eski bağlantı geçersiz
+        [HttpPost("{id:int}/davet/yenile")]
+        [Authorize]
+        public async Task<IActionResult> RenewInvite(int id)
+        {
+            var oba = await _context.Obalar.FindAsync(id);
+            if (oba == null) return NotFound(new { message = "Oba bulunamadı" });
+            if (CurrentUser.IdOf(User) != oba.OwnerId) return StatusCode(403, new { message = "Davet bağlantısını yalnızca kurucu yeniler." });
+            oba.InviteCode = NewInviteCode();
+            await _context.SaveChangesAsync();
+            return Ok(new { code = oba.InviteCode });
+        }
+
+        // GET: api/obalar/davet/{code}   — davet önizlemesi (giriş yapmadan da)
+        [HttpGet("davet/{code}")]
+        [EnableRateLimiting("JoinLimiter")]
+        public async Task<IActionResult> InvitePreview(string code)
+        {
+            var me = CurrentUser.IdOf(User);
+            var oba = await _context.Obalar.AsNoTracking().Where(o => o.InviteCode == code)
+                .Select(o => new
+                {
+                    o.Id, o.Name, o.Description, o.MemberCount, o.IsUnlisted,
+                    Owner = o.Owner!.Username,
+                    IsMember = me != null && (o.OwnerId == me || _context.ObaMembers.Any(m => m.ObaId == o.Id && m.UserId == me)),
+                })
+                .FirstOrDefaultAsync();
+            return oba == null ? NotFound(new { message = "Bu davet bağlantısı geçersiz ya da yenilenmiş." }) : Ok(oba);
+        }
+
+        // POST: api/obalar/davet/{code}/katil   — davetle katıl (şifre gerekmez)
+        [HttpPost("davet/{code}/katil")]
+        [Authorize]
+        [EnableRateLimiting("JoinLimiter")]
+        public async Task<IActionResult> JoinByInvite(string code)
+        {
+            var userId = CurrentUser.IdOf(User)!.Value;
+            var oba = await _context.Obalar.FirstOrDefaultAsync(o => o.InviteCode == code);
+            if (oba == null) return NotFound(new { message = "Bu davet bağlantısı geçersiz ya da yenilenmiş." });
+
+            if (oba.OwnerId != userId && !await _context.ObaMembers.AnyAsync(m => m.ObaId == oba.Id && m.UserId == userId))
+            {
+                _context.ObaMembers.Add(new ObaMember { ObaId = oba.Id, UserId = userId, Role = "member" });
+                oba.MemberCount += 1;
+                await _context.SaveChangesAsync();
+            }
+            return Ok(new { id = oba.Id });
         }
 
         public class JoinObaDto {
@@ -127,6 +202,9 @@ namespace Karalevha.API.Controllers
             var existingMember = await _context.ObaMembers.FirstOrDefaultAsync(m => m.ObaId == id && m.UserId == userId);
             if (existingMember != null) return Ok(new { success = true });
 
+            if (oba.IsUnlisted) {
+                return StatusCode(403, new { message = "Bu obaya yalnızca davet bağlantısıyla katılınır." });
+            }
             if (oba.IsPrivate) {
                 if (string.IsNullOrEmpty(oba.JoinPassword) || !CheckJoinPassword(oba, dto.Password?.Trim() ?? string.Empty)) {
                     return BadRequest(new { message = "Şifre yanlış." });
@@ -205,7 +283,7 @@ namespace Karalevha.API.Controllers
             oba.Name = name;
             oba.Description = description;
             await _context.SaveChangesAsync();
-            return Ok(new { oba.Id, oba.Name, oba.Description, oba.AvatarSeed, oba.Color, oba.MemberCount, oba.IsPrivate, Owner = oba.Owner!.Username });
+            return Ok(new { oba.Id, oba.Name, oba.Description, oba.AvatarSeed, oba.Color, oba.MemberCount, oba.IsPrivate, oba.IsUnlisted, Owner = oba.Owner!.Username });
         }
 
         // DELETE: api/obalar/{id}

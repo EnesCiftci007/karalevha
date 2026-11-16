@@ -95,7 +95,7 @@ namespace Karalevha.API.Controllers
                 Settings = settings
             };
             _context.PrintMakes.Add(make);
-            _notifications.Add(model.UserId, userId, $"{CurrentUser.NameOf(User)} \"{model.Title}\" modelini bastı ve fotoğrafını paylaştı.", $"/baski-istasyonu?model={modelId}");
+            _notifications.Add(model.UserId, userId, $"{CurrentUser.NameOf(User)} \"{model.Title}\" modelini bastı ve fotoğrafını paylaştı.", $"/model/{modelId}");
 
             try
             {

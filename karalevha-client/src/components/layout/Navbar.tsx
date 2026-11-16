@@ -10,7 +10,7 @@ const menuItems = [
   { name: 'Ana sayfa', path: '/', end: true },
   { name: 'Akış', path: '/akis' },
   { name: 'Projeler', path: '/projeler' },
-  { name: '3B Modeller', path: '/baski-istasyonu' },
+  { name: 'Market', path: '/market' },
   { name: 'E-Oba', path: '/e-oba' },
   { name: 'Atölye', path: '/atolye' },
   { name: 'Etkinlikler', path: '/etkinlikler' },

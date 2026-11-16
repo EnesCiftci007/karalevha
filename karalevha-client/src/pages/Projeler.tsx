@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ExternalLink, FolderGit2, Heart, MessageSquare, Plus } from 'lucide-react';
-import { api } from '../services/api';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Box, CircuitBoard, Code2, FolderGit2, Heart, MessageSquare, PenTool, Plus } from 'lucide-react';
+import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Project } from '../types';
 import { fullDate, timeAgo } from '../utils/time';
@@ -10,6 +10,9 @@ import PageHeader from '../components/ui/PageHeader';
 import ListToolbar from '../components/ui/ListToolbar';
 import { useMine } from '../components/ui/useMine';
 import { useSocialCounts } from '../components/social/Social';
+import ModelThumbnail from '../components/proje/ModelThumbnail';
+import { formatOf } from '../utils/loadModel';
+import { PROJECT_CATEGORIES, categoryOf } from '../utils/projectCategories';
 
 type SortKey = 'yeni' | 'begeni' | 'yorum' | 'ad';
 
@@ -22,6 +25,15 @@ function repoHost(url: string): string {
   }
 }
 
+/** "https://github.com/kulup/robot" -> "kulup/robot" */
+function repoPath(url: string): string {
+  try {
+    return new URL(url).pathname.replace(/^\/|\.git$|\/$/g, '') || url;
+  } catch {
+    return url;
+  }
+}
+
 export default function Projeler() {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[] | null>(null);
@@ -29,6 +41,16 @@ export default function Projeler() {
   const [query, setQuery] = useState('');
   const [sort, setSort] = useState<SortKey>('yeni');
   const [mine, setMine] = useMine();
+  // Dal süzgeci adreste (?dal=robotik), paylaşılabilsin
+  const [params, setParams] = useSearchParams();
+  const dal = PROJECT_CATEGORIES.some((c) => c.id === params.get('dal')) ? params.get('dal') : null;
+  const setDal = (id: string | null) =>
+    setParams((p) => {
+      const n = new URLSearchParams(p);
+      if (id) n.set('dal', id);
+      else n.delete('dal');
+      return n;
+    }, { replace: true });
   const [showModal, setShowModal] = useState(false);
 
   useEffect(() => {
@@ -51,7 +73,7 @@ export default function Projeler() {
     const q = query.trim().toLocaleLowerCase('tr');
     const list = (projects ?? []).filter(
       (p) =>
-        (!mine || p.owner === user?.username) && (!q ||
+        (!mine || p.owner === user?.username) && (!dal || categoryOf(p.category).id === dal) && (!q ||
         p.title.toLocaleLowerCase('tr').includes(q) ||
         (p.description ?? '').toLocaleLowerCase('tr').includes(q) ||
         p.owner.toLocaleLowerCase('tr').includes(q))
@@ -63,14 +85,15 @@ export default function Projeler() {
       if (sort === 'yorum') return social.get(b.id).comments - social.get(a.id).comments || newest(a, b);
       return newest(a, b);
     });
-  }, [projects, query, sort, social, mine, user]);
+  }, [projects, query, sort, social, mine, user, dal]);
+  const countOf = (id: string) => (projects ?? []).filter((p) => categoryOf(p.category).id === id).length;
 
 
   return (
     <div className="pb-16">
       <PageHeader
         title="Projeler"
-        description="Kulüpte geliştirilen yazılım ve donanım projeleri. Kodu incele, katkı ver."
+        description="Kulüpte geliştirilen projeler: kodu, 3B modelleri ve çizimleri bir arada."
         action={
           user ? (
             <button type="button" onClick={() => setShowModal(true)} className="btn-ana">
@@ -100,6 +123,27 @@ export default function Projeler() {
         mine={user ? { active: mine, onChange: setMine } : undefined}
       />
 
+      {/* Dallar */}
+      <nav className="flex flex-wrap items-center gap-2 mb-5" aria-label="Proje dalları">
+        {[{ id: null as string | null, label: 'Tümü', count: projects?.length }, ...PROJECT_CATEGORIES.map((c) => ({ id: c.id as string | null, label: c.label, count: countOf(c.id), icon: c.icon }))].map((c) => {
+          const active = dal === c.id;
+          const Icon = 'icon' in c ? c.icon : null;
+          return (
+            <button
+              key={c.id ?? 'hepsi'}
+              type="button"
+              onClick={() => setDal(c.id)}
+              aria-pressed={active}
+              className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-md border text-sm transition-colors ${active ? 'border-isaret/60 bg-isaret/10 text-tebesir' : 'border-levha-cizgi text-tebesir-soluk hover:border-tebesir-silik hover:text-tebesir'}`}
+            >
+              {Icon && <Icon className="w-4 h-4" aria-hidden="true" />}
+              {c.label}
+              {c.count !== undefined && <span className={`veri ${active ? 'text-isaret' : ''}`}>{c.count}</span>}
+            </button>
+          );
+        })}
+      </nav>
+
       {/* Liste */}
       {projects === null ? (
         <div className="rounded-lg border border-levha-cizgi divide-y divide-levha-cizgi" aria-hidden="true">
@@ -118,59 +162,90 @@ export default function Projeler() {
               ? 'Projeler yüklenemedi. Sayfayı yenilemeyi dene.'
               : projects.length === 0
                 ? 'Henüz paylaşılmış proje yok.'
-                : `"${query.trim()}" için sonuç bulunamadı.`}
+                : query.trim()
+                  ? `"${query.trim()}" için sonuç bulunamadı.`
+                  : 'Bu dalda henüz proje yok.'}
           </p>
           {!loadFailed && projects.length === 0 && user && (
             <button type="button" onClick={() => setShowModal(true)} className="btn-ikincil mt-4">İlk projeyi ekle</button>
           )}
         </div>
       ) : (
-        <>
-          <ul className="kart divide-y divide-levha-cizgi">
-            {visible.map((project) => {
-              const counts = social.get(project.id);
-              return (
-                <li key={project.id} className="relative group">
-                  <Link to={`/projeler/${project.id}`} className="flex items-start gap-3 px-4 py-3.5 pr-14 hover:bg-levha-yuzey/50 transition-colors">
-                    <FolderGit2 className="w-4 h-4 mt-1 shrink-0 text-tebesir-silik group-hover:text-isaret transition-colors" strokeWidth={1.75} aria-hidden="true" />
-                    <span className="min-w-0 flex-1">
-                      <span className="flex items-baseline gap-x-3 gap-y-0.5 flex-wrap">
-                        <span className="text-base font-semibold text-tebesir">{project.title}</span>
-                        <span className="text-xs text-tebesir-silik">
-                          {project.owner} · <time dateTime={project.createdAt} title={fullDate(project.createdAt)}>{timeAgo(project.createdAt)}</time>
-                        </span>
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {visible.map((project) => {
+            const counts = social.get(project.id);
+            const dal = categoryOf(project.category);
+            const coverFormat = project.cover ? formatOf(project.cover.fileName) : null;
+            return (
+              <li key={project.id}>
+                <Link to={`/projeler/${project.id}`} className="kart group flex flex-col h-full overflow-hidden hover:border-tebesir-silik transition-colors">
+                  {/* Önizleme: modeli varsa modelin küçük resmi, yalnızca kodsa depo */}
+                  {project.cover && coverFormat ? (
+                    <ModelThumbnail url={`${API_URL}${project.cover.fileUrl}`} format={coverFormat} />
+                  ) : (
+                    <div className="relative aspect-[4/3] bg-levha-koyu overflow-hidden">
+                      <div className="kareli absolute inset-0" aria-hidden="true" />
+                      <div className="relative h-full flex flex-col justify-center gap-2 px-6 font-mono text-xs text-tebesir-silik">
+                        <Code2 className="w-6 h-6 mb-1 text-levha-cizgi group-hover:text-isaret transition-colors" strokeWidth={1.5} aria-hidden="true" />
+                        {project.repoUrl ? (
+                          <>
+                            <span className="text-tebesir-soluk truncate">{repoPath(project.repoUrl)}</span>
+                            <span>{repoHost(project.repoUrl)}</span>
+                          </>
+                        ) : (
+                          <span>henüz kod, model ya da çizim yok</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex-1 flex flex-col px-4 py-3 border-t border-levha-cizgi">
+                    <span className="flex items-center gap-2">
+                      <span className="flex-1 min-w-0 font-semibold text-tebesir truncate group-hover:text-isaret transition-colors">{project.title}</span>
+                      <span className="inline-flex items-center gap-1 shrink-0 text-xs text-tebesir-silik" title={`Dal: ${dal.label}`}>
+                        <dal.icon className="w-3.5 h-3.5" aria-hidden="true" />{dal.label}
                       </span>
-                      {project.description && <span className="block mt-0.5 text-sm text-tebesir-soluk line-clamp-1">{project.description}</span>}
-                      <span className="mt-1.5 flex items-center gap-4 text-xs text-tebesir-silik">
+                    </span>
+                    {project.description && project.description.trim() !== project.title && (
+                      <span className="mt-0.5 text-sm text-tebesir-soluk line-clamp-2">{project.description}</span>
+                    )}
+                    <span className="mt-auto pt-3 flex items-center gap-3 text-xs text-tebesir-silik">
+                      <span className="min-w-0 truncate">
+                        {project.owner} · <time dateTime={project.createdAt} title={fullDate(project.createdAt)}>{timeAgo(project.createdAt)}</time>
+                      </span>
+                      <span className="ml-auto flex items-center gap-3 shrink-0">
+                        {/* Projenin parçaları */}
+                        {(project.repoUrl || !!project.codeFileCount) && <span title="Kod"><Code2 className="w-3.5 h-3.5" aria-hidden="true" /><span className="sr-only">kod</span></span>}
+                        {!!project.modelCount && (
+                          <span className="inline-flex items-center gap-1" title={`${project.modelCount} 3B model`}>
+                            <Box className="w-3.5 h-3.5" aria-hidden="true" /><span className="veri">{project.modelCount}</span>
+                          </span>
+                        )}
+                        {!!project.drawingCount && (
+                          <span className="inline-flex items-center gap-1" title={`${project.drawingCount} çizim`}>
+                            <PenTool className="w-3.5 h-3.5" aria-hidden="true" /><span className="veri">{project.drawingCount}</span>
+                          </span>
+                        )}
+                        {!!project.electronicsCount && (
+                          <span className="inline-flex items-center gap-1" title={`${project.electronicsCount} devre dosyası`}>
+                            <CircuitBoard className="w-3.5 h-3.5" aria-hidden="true" /><span className="veri">{project.electronicsCount}</span>
+                          </span>
+                        )}
                         <span className={`inline-flex items-center gap-1 ${counts.liked ? 'text-isaret' : ''}`} title="Beğeni">
                           <Heart className={`w-3.5 h-3.5 ${counts.liked ? 'fill-isaret' : ''}`} aria-hidden="true" />
-                          <span className={`veri ${counts.liked ? "text-isaret" : ""}`}>{counts.likes}</span>
-                          <span className="sr-only">beğeni</span>
+                          <span className="veri">{counts.likes}</span>
                         </span>
                         <span className="inline-flex items-center gap-1" title="Yorum">
                           <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
                           <span className="veri">{counts.comments}</span>
-                          <span className="sr-only">yorum</span>
                         </span>
-                        <span className="veri">{repoHost(project.repoUrl)}</span>
                       </span>
                     </span>
-                  </Link>
-                  <a
-                    href={project.repoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="absolute top-3 right-3 p-2 rounded-md text-tebesir-silik hover:text-tebesir hover:bg-levha-yuzey transition-colors"
-                    title={`Depoyu aç: ${project.repoUrl}`}
-                    aria-label={`${project.title} deposunu yeni sekmede aç`}
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        </>
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
       {/* Yeni proje */}

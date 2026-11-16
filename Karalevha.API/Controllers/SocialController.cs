@@ -44,7 +44,7 @@ namespace Karalevha.API.Controllers
                     return project == null ? null : (project.UserId, $"\"{project.Title}\" projen", $"/projeler/{id}");
                 case "model":
                     var model = await _context.PrintModels.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id);
-                    return model == null ? null : (model.UserId, $"\"{model.Title}\" modelin", $"/baski-istasyonu?model={id}");
+                    return model == null ? null : (model.UserId, $"\"{model.Title}\" modelin", $"/model/{id}");
                 case "comment":
                     // Yorumun bağlantısı, yorumun yapıldığı içeriğin adresi
                     var comment = await _context.Comments.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
