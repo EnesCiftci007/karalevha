@@ -33,7 +33,7 @@ namespace Karalevha.API.Controllers
                 User = new { p.User!.Id, p.User.Username, p.User.AvatarSeed }
             });
 
-        private const int MaxTags = 3;
+        private const int MaxTags = 5;
 
         // GET: api/posts?etiket=Robotik&kapsam=takip
         // Giriş yapan kişinin ilgi alanlarıyla eşleşen son 7 günün gönderileri öne çıkar; geri kalanı yeniden eskiye.
@@ -46,8 +46,8 @@ namespace Karalevha.API.Controllers
 
             if (!string.IsNullOrWhiteSpace(etiket))
             {
-                var tag = PostTags.Clean(new[] { etiket }, 1).FirstOrDefault();
-                if (tag == null) return Ok(Array.Empty<object>());
+                var tag = PostTags.Normalize(etiket);
+                if (tag.Length < 2) return Ok(Array.Empty<object>());
                 query = query.Where(p => p.Tags.Contains(tag));
             }
 
@@ -58,8 +58,9 @@ namespace Karalevha.API.Controllers
                 query = query.Where(p => p.UserId == me || followed.Contains(p.UserId));
             }
 
-            var interests = me == null ? new List<string>()
-                : await _context.Users.Where(u => u.Id == me).Select(u => u.Interests).FirstOrDefaultAsync() ?? new List<string>();
+            var interests = (me == null ? new List<string>()
+                : await _context.Users.Where(u => u.Id == me).Select(u => u.Interests).FirstOrDefaultAsync() ?? new List<string>())
+                .Select(PostTags.Normalize).ToList(); // "3B Baskı" ilgi alanı "#3bbaskı" etiketine denk
             var boostSince = DateTime.UtcNow.AddDays(-7);
             var boost = interests.Count > 0;
 
@@ -71,23 +72,26 @@ namespace Karalevha.API.Controllers
         }
 
         // GET: api/posts/etiketler
-        // Gündem: her etiketin son 7 gündeki gönderi sayısı (çoktan aza), sonra hiç kullanılmamışlar.
+        // Gündem: son 7 günde en çok kullanılan 12 etiket. O hafta hiç yoksa tüm zamanların en çokları.
         [HttpGet("etiketler")]
         public async Task<IActionResult> GetTags()
         {
-            var since = DateTime.UtcNow.AddDays(-7);
-            var recent = await _context.Posts.AsNoTracking()
-                .Where(p => p.CreatedAt >= since)
-                .SelectMany(p => p.Tags)
-                .GroupBy(t => t)
-                .Select(g => new { Tag = g.Key, Count = g.Count() })
-                .ToListAsync();
-            var counts = recent.ToDictionary(r => r.Tag, r => r.Count);
-            return Ok(PostTags.All
-                .Select(t => new { tag = t, count = counts.GetValueOrDefault(t) })
-                .OrderByDescending(t => t.count)
-                .ThenBy(t => Array.IndexOf(PostTags.All, t.tag)));
+            async Task<List<TagCount>> top(DateTime? since) =>
+                await _context.Posts.AsNoTracking()
+                    .Where(p => since == null || p.CreatedAt >= since)
+                    .SelectMany(p => p.Tags)
+                    .GroupBy(t => t)
+                    .OrderByDescending(g => g.Count()).ThenBy(g => g.Key)
+                    .Take(12)
+                    .Select(g => new TagCount(g.Key, g.Count()))
+                    .ToListAsync();
+
+            var week = await top(DateTime.UtcNow.AddDays(-7));
+            var list = week.Count > 0 ? week : await top(null);
+            return Ok(new { recent = week.Count > 0, tags = list.Select(t => new { tag = t.Tag, count = t.Count }) });
         }
+
+        private record TagCount(string Tag, int Count);
 
         // POST: api/posts
         [HttpPost]
@@ -100,7 +104,7 @@ namespace Karalevha.API.Controllers
             var content = dto.Content.Trim();
             if (content.Length == 0) return BadRequest(new { message = "Gönderi boş olamaz." });
 
-            var post = new Post { Content = content, Tags = PostTags.Clean(dto.Tags, MaxTags), UserId = userId.Value, CreatedAt = DateTime.UtcNow };
+            var post = new Post { Content = content, Tags = PostTags.FromContent(content, MaxTags), UserId = userId.Value, CreatedAt = DateTime.UtcNow };
             _context.Posts.Add(post);
             await _context.SaveChangesAsync();
 
@@ -122,7 +126,7 @@ namespace Karalevha.API.Controllers
             if (content.Length == 0) return BadRequest(new { message = "Gönderi boş olamaz." });
 
             post.Content = content;
-            if (dto.Tags != null) post.Tags = PostTags.Clean(dto.Tags, MaxTags);
+            post.Tags = PostTags.FromContent(content, MaxTags); // metin değişince etiketler de yeniden okunur
             post.EditedAt = DateTime.UtcNow;
             await _context.SaveChangesAsync();
 

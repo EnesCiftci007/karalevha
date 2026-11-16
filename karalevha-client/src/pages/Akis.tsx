@@ -1,17 +1,25 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Lock, Users, X } from 'lucide-react';
+import { Lock, Users } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Oba, POST_TAGS, Post } from '../types';
+import { Oba, Post } from '../types';
+import { extractTags, normalizeTag } from '../utils/hashtags';
+import FeedFilter, { DEFAULT_FILTER, type FeedFilterValue, type Period, type Scope, type SortKey } from '../components/akis/FeedFilter';
 import Avatar from '../components/ui/Avatar';
 import PageHeader from '../components/ui/PageHeader';
 import PostItem from '../components/akis/PostItem';
 import { Comments, CommentToggle, LikeButton, useSocialCounts } from '../components/social/Social';
-import Tabs from '../components/ui/Tabs';
 import { SocialCounts } from '../types';
 
-const MAX_TAGS = 3;
+/** Zaman filtresinin başlangıcı (yerel saatle: bugün gece yarısı, haftanın pazartesisi, ayın biri) */
+function periodStart(period: Period): number {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  if (period === 'hafta') d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  if (period === 'ay') d.setDate(1);
+  return period === 'tum' ? 0 : d.getTime();
+}
 
 /** Etiket düğmesi: seçili olunca işaret rengi */
 function TagChip({ tag, active, onClick, count }: { tag: string; active?: boolean; onClick: () => void; count?: number }) {
@@ -30,19 +38,10 @@ function TagChip({ tag, active, onClick, count }: { tag: string; active?: boolea
   );
 }
 
-function PostFooter({ post, counts, onChange, onTag }: { post: Post; counts: SocialCounts; onChange: (patch: Partial<SocialCounts>) => void; onTag: (tag: string) => void }) {
+function PostFooter({ post, counts, onChange }: { post: Post; counts: SocialCounts; onChange: (patch: Partial<SocialCounts>) => void }) {
   const [open, setOpen] = useState(() => window.location.hash === `#gonderi-${post.id}`);
   return (
     <div className="mt-2">
-      {post.tags && post.tags.length > 0 && (
-        <div className="flex flex-wrap gap-x-3 gap-y-1 mb-2">
-          {post.tags.map((t) => (
-            <button key={t} type="button" onClick={() => onTag(t)} className="text-sm text-isaret/90 hover:text-isaret hover:underline underline-offset-4">
-              #{t}
-            </button>
-          ))}
-        </div>
-      )}
       <div className="flex items-center gap-2">
         <LikeButton type="post" id={post.id} counts={counts} onChange={onChange} />
         <CommentToggle count={counts.comments} open={open} onClick={() => setOpen((v) => !v)} />
@@ -62,11 +61,18 @@ const PAGE = 20; // bir seferde gösterilen gönderi sayısı
 export default function Akis() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
-  const tagFilter = params.get('etiket');
+  // Filtre adreste durur: /akis?etiket=arduino&kapsam=takip&sirala=begeni&zaman=hafta (paylaşılabilir, geri tuşu çalışır)
+  const rawTag = params.get('etiket');
+  const tagFilter = rawTag ? normalizeTag(rawTag) : null;
   const scopeParam = params.get('kapsam');
-  const scope: 'hepsi' | 'takip' | 'benim' = user && (scopeParam === 'takip' || scopeParam === 'benim') ? scopeParam : 'hepsi';
+  const scope: Scope = user && (scopeParam === 'takip' || scopeParam === 'benim') ? scopeParam : 'hepsi';
+  const sortParam = params.get('sirala');
+  const sort: SortKey = sortParam === 'begeni' || sortParam === 'yorum' ? sortParam : 'yeni';
+  const periodParam = params.get('zaman');
+  const period: Period = periodParam === 'gun' || periodParam === 'hafta' || periodParam === 'ay' ? periodParam : 'tum';
+  const filter: FeedFilterValue = { scope, sort, period, tag: tagFilter };
   const [trending, setTrending] = useState<{ tag: string; count: number }[]>([]);
-  const [tags, setTags] = useState<string[]>([]);
+  const [trendingRecent, setTrendingRecent] = useState(true);
   const [posts, setPosts] = useState<Post[] | null>(null);
   const [shown, setShown] = useState(PAGE);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -76,13 +82,14 @@ export default function Akis() {
   const [error, setError] = useState('');
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Süzgeç adreste durur: /akis?etiket=Robotik&kapsam=takip (paylaşılabilir, geri tuşu çalışır)
-  const setFilter = (next: { etiket?: string | null; kapsam?: 'hepsi' | 'takip' | 'benim' }) => {
-    const p = new URLSearchParams(params);
-    if (next.etiket !== undefined) (next.etiket ? p.set('etiket', next.etiket) : p.delete('etiket'));
-    if (next.kapsam !== undefined) (next.kapsam !== 'hepsi' ? p.set('kapsam', next.kapsam) : p.delete('kapsam'));
+  const setFilter = (patch: Partial<FeedFilterValue>) => {
+    const next = { ...filter, ...patch };
+    const p = new URLSearchParams();
+    if (next.tag) p.set('etiket', next.tag);
+    if (next.scope !== DEFAULT_FILTER.scope) p.set('kapsam', next.scope);
+    if (next.sort !== DEFAULT_FILTER.sort) p.set('sirala', next.sort);
+    if (next.period !== DEFAULT_FILTER.period) p.set('zaman', next.period);
     setParams(p);
-    window.scrollTo({ top: 0 });
   };
 
   useEffect(() => {
@@ -107,11 +114,16 @@ export default function Akis() {
 
   useEffect(() => {
     api<Oba[]>('/api/obalar').then(setObalar).catch(() => {});
-    api<{ tag: string; count: number }[]>('/api/posts/etiketler').then(setTrending).catch(() => {});
+    api<{ recent: boolean; tags: { tag: string; count: number }[] }>('/api/posts/etiketler')
+      .then((d) => {
+        setTrending(d.tags);
+        setTrendingRecent(d.recent);
+      })
+      .catch(() => {});
   }, []);
 
-  const toggleTag = (tag: string) =>
-    setTags((prev) => (prev.includes(tag) ? prev.filter((t) => t !== tag) : prev.length < MAX_TAGS ? [...prev, tag] : prev));
+  // Yazarken metindeki #etiketler önizlenir (sunucu da aynı kuralla okur)
+  const draftTags = useMemo(() => extractTags(content), [content]);
 
   const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setContent(e.target.value);
@@ -130,13 +142,17 @@ export default function Akis() {
     try {
       const newPost = await api<Post>('/api/posts', {
         method: 'POST',
-        body: JSON.stringify({ content: text, tags }),
+        body: JSON.stringify({ content: text }),
       });
       // Süzgeçle uyuşmayan yeni gönderi listeye eklenmez (ör. başka etiket seçiliyken)
       if (!tagFilter || newPost.tags?.includes(tagFilter)) setPosts((prev) => [newPost, ...(prev ?? [])]);
-      setTrending((prev) => prev.map((t) => (newPost.tags?.includes(t.tag) ? { ...t, count: t.count + 1 } : t)));
+      // Gündem: var olan etiketlerin sayısı artar, yeni etiketler sona eklenir
+      setTrending((prev) => {
+        const next = prev.map((t) => (newPost.tags?.includes(t.tag) ? { ...t, count: t.count + 1 } : t));
+        for (const t of newPost.tags ?? []) if (!next.some((x) => x.tag === t)) next.push({ tag: t, count: 1 });
+        return next.sort((a, b) => b.count - a.count).slice(0, 12);
+      });
       setContent('');
-      setTags([]);
       if (textareaRef.current) textareaRef.current.style.height = 'auto';
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Gönderi paylaşılamadı.');
@@ -146,6 +162,15 @@ export default function Akis() {
   };
 
   const social = useSocialCounts('post', (posts ?? []).map((p) => p.id));
+
+  // Zaman ve sıralama istemcide (etiket ve kapsam sunucuda/yüklemede uygulanır)
+  const visible = useMemo(() => {
+    const since = periodStart(period);
+    const list = (posts ?? []).filter((p) => new Date(p.createdAt).getTime() >= since);
+    if (sort === 'yeni') return list;
+    const key = (p: Post) => (sort === 'begeni' ? social.get(p.id).likes : social.get(p.id).comments);
+    return [...list].sort((a, b) => key(b) - key(a) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [posts, period, sort, social]);
 
   // Bildirimden #gonderi-ID ile gelindiyse o gönderiye kaydır
   useEffect(() => {
@@ -178,20 +203,19 @@ export default function Akis() {
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handlePostSubmit(e);
                   }}
-                  placeholder="Ne üzerinde çalışıyorsun?"
+                  placeholder="Ne üzerinde çalışıyorsun? #etiket yazarak konu aç"
                   rows={2}
                   maxLength={MAX_LENGTH}
                   className="w-full resize-none bg-transparent pt-1.5 text-base leading-relaxed text-tebesir placeholder:text-tebesir-silik focus:outline-none max-h-80"
                 />
                 {error && <p className="text-sm text-hata mb-2" role="alert">{error}</p>}
-                {(content.length > 0 || tags.length > 0) && (
-                  <div className="flex flex-wrap items-center gap-1.5 mt-1" role="group" aria-label={`Etiketler, en fazla ${MAX_TAGS}`}>
-                    {POST_TAGS.map((t) => (
-                      <TagChip key={t} tag={t} active={tags.includes(t)} onClick={() => toggleTag(t)} />
-                    ))}
-                  </div>
-                )}
                 <div className="flex items-center justify-end gap-4 mt-3">
+                  {/* Metinden okunan etiketler */}
+                  {draftTags.length > 0 && (
+                    <span className="mr-auto flex flex-wrap gap-x-2 gap-y-1 text-sm text-isaret/90" aria-label="Etiketler">
+                      {draftTags.map((t) => <span key={t}>#{t}</span>)}
+                    </span>
+                  )}
                   {content.length > 0 && (
                     <span className={`veri ${remaining < 50 ? 'text-hata' : ''}`}>
                       {remaining}
@@ -210,29 +234,14 @@ export default function Akis() {
             </div>
           )}
 
-          {/* Süzgeç */}
-          <div className="flex flex-wrap items-center gap-3 pt-5 pb-1">
-            {user && (
-              <div className="w-80 max-w-full">
-              <Tabs
-                label="Akış"
-                value={scope}
-                onChange={(v) => setFilter({ kapsam: v })}
-                options={[{ value: 'hepsi', label: 'Herkes' }, { value: 'takip', label: 'Takip ettiklerim' }, { value: 'benim', label: 'Benim' }]}
-              />
-              </div>
-            )}
-            {tagFilter && (
-              <button type="button" onClick={() => setFilter({ etiket: null })} className="inline-flex items-center gap-1.5 h-8 px-2.5 rounded border border-isaret text-sm text-isaret bg-isaret/10">
-                #{tagFilter}
-                <X className="w-3.5 h-3.5" aria-label="Etiket süzgecini kaldır" />
-              </button>
-            )}
+          {/* Filtre */}
+          <div className="pt-5 pb-1">
+            <FeedFilter value={filter} onChange={setFilter} suggestions={trending.map((t) => t.tag)} signedIn={!!user} />
           </div>
           {/* Telefonda gündem: yan sütun gizli olduğundan etiketler burada */}
           <div className="lg:hidden flex gap-1.5 overflow-x-auto pb-2 -mx-1 px-1">
             {trending.map((t) => (
-              <TagChip key={t.tag} tag={t.tag} count={t.count} active={tagFilter === t.tag} onClick={() => setFilter({ etiket: tagFilter === t.tag ? null : t.tag })} />
+              <TagChip key={t.tag} tag={t.tag} count={t.count} active={tagFilter === t.tag} onClick={() => setFilter({ tag: tagFilter === t.tag ? null : t.tag })} />
             ))}
           </div>
 
@@ -250,10 +259,12 @@ export default function Akis() {
                 </div>
               ))}
             </div>
-          ) : posts.length === 0 ? (
+          ) : visible.length === 0 ? (
             <p className="py-12 text-center text-tebesir-silik">
               {loadFailed
                 ? 'Akış yüklenemedi. Sayfayı yenilemeyi dene.'
+                : posts.length > 0
+                  ? 'Bu zaman aralığında gönderi yok.'
                 : tagFilter
                   ? `#${tagFilter} etiketiyle henüz gönderi yok.`
                   : scope === 'benim'
@@ -265,20 +276,20 @@ export default function Akis() {
           ) : (
             <>
             <ul className="divide-y divide-levha-cizgi">
-              {posts.slice(0, shown).map((post) => (
+              {visible.slice(0, shown).map((post) => (
                 <PostItem
                   key={post.id}
                   post={post}
                   onUpdated={(updated) => setPosts((prev) => (prev ?? []).map((p) => (p.id === updated.id ? updated : p)))}
                   onDeleted={(id) => setPosts((prev) => (prev ?? []).filter((p) => p.id !== id))}
-                  footer={<PostFooter post={post} counts={social.get(post.id)} onChange={(patch) => social.update(post.id, patch)} onTag={(t) => setFilter({ etiket: t })} />}
+                  footer={<PostFooter post={post} counts={social.get(post.id)} onChange={(patch) => social.update(post.id, patch)} />}
                 />
               ))}
             </ul>
-            {posts.length > shown && (
+            {visible.length > shown && (
               <div className="pt-4 text-center">
                 <button type="button" className="btn-ikincil" onClick={() => setShown((n) => n + PAGE)}>
-                  Daha fazla göster <span className="veri">{posts.length - shown}</span>
+                  Daha fazla göster <span className="veri">{visible.length - shown}</span>
                 </button>
               </div>
             )}
@@ -291,13 +302,16 @@ export default function Akis() {
           <div className="sticky top-24 space-y-8">
             <section className="rounded-lg border border-levha-cizgi">
               <h2 className="text-sm font-semibold text-tebesir px-4 pt-4 pb-1">Gündem</h2>
-              <p className="px-4 pb-2 text-xs text-tebesir-silik">Son 7 günün etiketleri</p>
+              <p className="px-4 pb-2 text-xs text-tebesir-silik">{trendingRecent ? 'Son 7 günün etiketleri' : 'En çok kullanılan etiketler'}</p>
+              {trending.length === 0 && (
+                <p className="px-4 pb-4 text-sm text-tebesir-silik">Henüz etiket yok. Gönderine #kelime yazarak bir konu aç.</p>
+              )}
               <ul className="pb-2">
                 {trending.map((t) => (
                   <li key={t.tag}>
                     <button
                       type="button"
-                      onClick={() => setFilter({ etiket: tagFilter === t.tag ? null : t.tag })}
+                      onClick={() => setFilter({ tag: tagFilter === t.tag ? null : t.tag })}
                       aria-pressed={tagFilter === t.tag}
                       className={`w-full flex items-center justify-between px-4 py-1.5 text-sm text-left transition-colors hover:bg-levha-yuzey ${
                         tagFilter === t.tag ? 'text-isaret' : 'text-tebesir-soluk hover:text-tebesir'

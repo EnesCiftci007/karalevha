@@ -8,12 +8,15 @@ using Karalevha.API.Services;
 
 namespace Karalevha.API.Controllers
 {
-    /// <summary>Gönderi, proje ve modeller için beğeni ve yorum.</summary>
+    /// <summary>Gönderi, proje ve modeller için beğeni ve yorum; yorumlar da beğenilir ve yanıtlanır.</summary>
     [Route("api")]
     [ApiController]
     public class SocialController : ControllerBase
     {
+        /// <summary>Yorum yapılabilen içerikler</summary>
         private static readonly HashSet<string> TargetTypes = new() { "post", "project", "model" };
+        /// <summary>Beğenilebilenler: içerikler ve yorumlar</summary>
+        private static readonly HashSet<string> LikeTypes = new() { "post", "project", "model", "comment" };
 
         private readonly AppDbContext _context;
         private readonly CurrentUser _current;
@@ -42,6 +45,13 @@ namespace Karalevha.API.Controllers
                 case "model":
                     var model = await _context.PrintModels.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id);
                     return model == null ? null : (model.UserId, $"\"{model.Title}\" modelin", $"/baski-istasyonu?model={id}");
+                case "comment":
+                    // Yorumun bağlantısı, yorumun yapıldığı içeriğin adresi
+                    var comment = await _context.Comments.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
+                    if (comment == null) return null;
+                    var parent = await ResolveTarget(comment.TargetType, comment.TargetId);
+                    var text = comment.Content.Length > 40 ? comment.Content[..40] + "…" : comment.Content;
+                    return parent == null ? null : (comment.UserId, $"yorumun (\"{text}\")", parent.Value.Link);
                 default:
                     return null;
             }
@@ -53,7 +63,7 @@ namespace Karalevha.API.Controllers
         [HttpGet("begeni/{type}")]
         public async Task<IActionResult> GetLikes(string type, [FromQuery] string ids)
         {
-            if (!TargetTypes.Contains(type)) return BadRequest(new { message = "Geçersiz tür." });
+            if (!LikeTypes.Contains(type)) return BadRequest(new { message = "Geçersiz tür." });
             var idList = (ids ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries)
                 .Select(s => int.TryParse(s, out var v) ? v : -1).Where(v => v > 0).Distinct().Take(200).ToList();
             var me = CurrentUser.IdOf(User);
@@ -84,14 +94,21 @@ namespace Karalevha.API.Controllers
         [Authorize]
         public async Task<IActionResult> ToggleLike(string type, int id)
         {
-            if (!TargetTypes.Contains(type)) return BadRequest(new { message = "Geçersiz tür." });
+            if (!LikeTypes.Contains(type)) return BadRequest(new { message = "Geçersiz tür." });
             var userId = CurrentUser.IdOf(User);
             if (userId == null) return Unauthorized();
-            if (await ResolveTarget(type, id) == null) return NotFound(new { message = "Bulunamadı." });
+            var target = await ResolveTarget(type, id);
+            if (target == null) return NotFound(new { message = "Bulunamadı." });
 
             var existing = await _context.Likes.FirstOrDefaultAsync(l => l.TargetType == type && l.TargetId == id && l.UserId == userId);
             if (existing != null) _context.Likes.Remove(existing);
-            else _context.Likes.Add(new Like { TargetType = type, TargetId = id, UserId = userId.Value });
+            else
+            {
+                _context.Likes.Add(new Like { TargetType = type, TargetId = id, UserId = userId.Value });
+                // Yorum beğenisi yorumun sahibine bildirilir
+                if (type == "comment")
+                    _notifications.Add(target.Value.OwnerId, userId, $"{CurrentUser.NameOf(User)} {target.Value.Label} beğendi.", target.Value.Link);
+            }
 
             try
             {
@@ -113,10 +130,21 @@ namespace Karalevha.API.Controllers
         public async Task<IActionResult> GetComments(string type, int id)
         {
             if (!TargetTypes.Contains(type)) return BadRequest(new { message = "Geçersiz tür." });
+            var me = CurrentUser.IdOf(User);
             var comments = await _context.Comments.AsNoTracking()
                 .Where(c => c.TargetType == type && c.TargetId == id)
                 .OrderBy(c => c.CreatedAt)
-                .Select(c => new { c.Id, c.Content, c.CreatedAt, c.UserId, Username = c.User!.Username })
+                .Select(c => new
+                {
+                    c.Id,
+                    c.Content,
+                    c.CreatedAt,
+                    c.UserId,
+                    Username = c.User!.Username,
+                    c.ParentId,
+                    Likes = _context.Likes.Count(l => l.TargetType == "comment" && l.TargetId == c.Id),
+                    Liked = me != null && _context.Likes.Any(l => l.TargetType == "comment" && l.TargetId == c.Id && l.UserId == me),
+                })
                 .ToListAsync();
             return Ok(comments);
         }
@@ -124,6 +152,8 @@ namespace Karalevha.API.Controllers
         public class CommentDto
         {
             public string Content { get; set; } = string.Empty;
+            /// <summary>Yanıtlanan yorum (isteğe bağlı)</summary>
+            public int? ParentId { get; set; }
         }
 
         // POST: api/yorum/{type}/{id}
@@ -147,20 +177,39 @@ namespace Karalevha.API.Controllers
             if (last != default && (DateTime.UtcNow - last).TotalSeconds < 5)
                 return BadRequest(new { message = "Biraz yavaş: yorumlar arasında birkaç saniye bekle." });
 
-            var comment = new Comment { TargetType = type, TargetId = id, UserId = userId.Value, Content = content };
+            // Yanıt: ana yorum aynı içerikte olmalı. Yanıta yanıt, ana yoruma bağlanır (tek seviye).
+            Comment? parent = null;
+            if (dto.ParentId is int parentId)
+            {
+                parent = await _context.Comments.AsNoTracking().FirstOrDefaultAsync(c => c.Id == parentId && c.TargetType == type && c.TargetId == id);
+                if (parent == null) return BadRequest(new { message = "Yanıtlanan yorum bulunamadı." });
+            }
+
+            var comment = new Comment
+            {
+                TargetType = type,
+                TargetId = id,
+                UserId = userId.Value,
+                Content = content,
+                ParentId = parent == null ? null : parent.ParentId ?? parent.Id,
+            };
             _context.Comments.Add(comment);
 
             var me = CurrentUser.NameOf(User);
             var (ownerId, label, link) = target.Value;
-            _notifications.Add(ownerId, userId, $"{me} {label} hakkında yorum yaptı.", link);
+            var notified = new HashSet<int>();
+            if (parent != null && notified.Add(parent.UserId))
+                _notifications.Add(parent.UserId, userId, $"{me} yorumuna yanıt verdi.", link);
+            if (notified.Add(ownerId))
+                _notifications.Add(ownerId, userId, $"{me} {label} hakkında yorum yaptı.", link);
 
             // Yorumda adı geçenlere (@kullanici) de haber ver
             foreach (var mentioned in await MentionedUserIds(content))
-                if (mentioned != ownerId)
+                if (notified.Add(mentioned))
                     _notifications.Add(mentioned, userId, $"{me} bir yorumda senden bahsetti.", link);
 
             await _context.SaveChangesAsync();
-            return Ok(new { comment.Id, comment.Content, comment.CreatedAt, comment.UserId, Username = me });
+            return Ok(new { comment.Id, comment.Content, comment.CreatedAt, comment.UserId, Username = me, comment.ParentId, Likes = 0, Liked = false });
         }
 
         // DELETE: api/yorum/{commentId}
@@ -177,9 +226,13 @@ namespace Karalevha.API.Controllers
             if (!(me == comment.UserId || (target != null && me == target.Value.OwnerId) || _current.IsAdmin(User)))
                 return StatusCode(403, new { message = "Bu yorumu silemezsin." });
 
-            _context.Comments.Remove(comment);
+            // Ana yorum silinince yanıtları da gider; hepsinin beğenileri de
+            var removed = await _context.Comments.Where(c => c.Id == commentId || c.ParentId == commentId).ToListAsync();
+            var removedIds = removed.Select(c => c.Id).ToList();
+            _context.Likes.RemoveRange(_context.Likes.Where(l => l.TargetType == "comment" && removedIds.Contains(l.TargetId)));
+            _context.Comments.RemoveRange(removed);
             await _context.SaveChangesAsync();
-            return Ok(new { success = true });
+            return Ok(new { success = true, removed = removedIds });
         }
 
         private static readonly Regex MentionPattern = new(@"(?<![\w@])@([A-Za-z0-9_.\-ğüşıöçĞÜŞİÖÇ]{2,50})", RegexOptions.Compiled);

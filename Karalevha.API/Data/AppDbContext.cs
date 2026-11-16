@@ -55,6 +55,7 @@ namespace Karalevha.API.Data
             // Bir kişi aynı şeyi bir kez beğenebilir
             modelBuilder.Entity<Like>().HasIndex(l => new { l.TargetType, l.TargetId, l.UserId }).IsUnique();
             modelBuilder.Entity<Comment>().HasIndex(c => new { c.TargetType, c.TargetId, c.CreatedAt });
+            modelBuilder.Entity<Comment>().HasIndex(c => c.ParentId);
 
             // Bir kişi bir obaya bir kez üye olur; bir kişiyi bir kez takip eder
             modelBuilder.Entity<ObaMember>().HasIndex(m => new { m.ObaId, m.UserId }).IsUnique();
