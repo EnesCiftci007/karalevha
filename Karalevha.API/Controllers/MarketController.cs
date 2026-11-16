@@ -22,17 +22,14 @@ namespace Karalevha.API.Controllers
         private readonly AppDbContext _context;
         private readonly CurrentUser _current;
         private readonly NotificationService _notifications;
-        private readonly string _storage;
+        private readonly IFileStore _store;
 
-        public MarketController(AppDbContext context, CurrentUser current, NotificationService notifications, IConfiguration config, IWebHostEnvironment env)
+        public MarketController(AppDbContext context, CurrentUser current, NotificationService notifications, IFileStore store)
         {
             _context = context;
             _current = current;
             _notifications = notifications;
-            _storage = config["Storage:MarketFilesPath"] is { Length: > 0 } configured
-                ? configured
-                : Path.Combine(env.ContentRootPath, "App_Data", "market");
-            Directory.CreateDirectory(_storage);
+            _store = store;
         }
 
         private static object Dto(MarketOrder o, string username) => new
@@ -85,10 +82,10 @@ namespace Karalevha.API.Controllers
             if (!def.Extensions.Contains(extension))
                 return BadRequest(new { message = $"{def.Name} için kabul edilen dosyalar: {string.Join(", ", def.Extensions).ToUpperInvariant()}" });
 
+            // Sipariş dosyaları herkese açık değil: "market/" yalnızca bu controller'dan okunur
             var stored = $"{Guid.NewGuid()}{extension}";
-            var absolute = Path.Combine(_storage, stored);
-            await using (var stream = new FileStream(absolute, FileMode.CreateNew))
-                await file.CopyToAsync(stream);
+            await using (var upload = file.OpenReadStream())
+                await _store.SaveAsync($"market/{stored}", upload, "application/octet-stream");
 
             var userId = CurrentUser.IdOf(User)!.Value;
             var order = new MarketOrder
@@ -117,7 +114,7 @@ namespace Karalevha.API.Controllers
             }
             catch
             {
-                System.IO.File.Delete(absolute);
+                await _store.DeleteAsync($"market/{stored}");
                 throw;
             }
             return Ok(Dto(order, me));
@@ -163,10 +160,11 @@ namespace Karalevha.API.Controllers
             if (order == null) return NotFound(new { message = "Sipariş bulunamadı." });
             if (!_current.CanManage(User, order.UserId)) return StatusCode(403, new { message = "Bu dosyayı göremezsin." });
 
-            var path = Path.GetFullPath(Path.Combine(_storage, order.StoredName));
-            if (!path.StartsWith(Path.GetFullPath(_storage)) || !System.IO.File.Exists(path)) return NotFound(new { message = "Dosya bulunamadı." });
+            var key = $"market/{Path.GetFileName(order.StoredName)}";
+            var stored = FileKeys.IsValid(key) ? await _store.OpenAsync(key, HttpContext.RequestAborted) : null;
+            if (stored == null) return NotFound(new { message = "Dosya bulunamadı." });
             Response.Headers["X-Content-Type-Options"] = "nosniff";
-            return PhysicalFile(path, "application/octet-stream", order.FileName);
+            return File(stored.Content, "application/octet-stream", order.FileName, enableRangeProcessing: stored.Content.CanSeek);
         }
 
         /// <summary>Durum değişikliğini kaydeder ve karşı tarafa bildirir.</summary>

@@ -24,17 +24,16 @@ namespace Karalevha.API.Controllers
         private static readonly HashSet<string> Categories = new() { "baski", "oyun" };
 
         private readonly AppDbContext _context;
-        private readonly IWebHostEnvironment _env;
+        private readonly IFileStore _store;
         private readonly CurrentUser _current;
 
-        public PrintModelsController(AppDbContext context, IWebHostEnvironment env, CurrentUser current)
+        public PrintModelsController(AppDbContext context, IFileStore store, CurrentUser current)
         {
             _context = context;
-            _env = env;
+            _store = store;
             _current = current;
         }
 
-        private string WebRoot => _env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
 
         public class UpdateModelDto
         {
@@ -82,14 +81,8 @@ namespace Karalevha.API.Controllers
             _context.Comments.RemoveRange(_context.Comments.Where(c => c.TargetType == "model" && c.TargetId == id));
             await _context.SaveChangesAsync();
 
-            // Kayıt silindikten sonra dosyaları da kaldır. Yol yalnızca /uploads altındaysa ve dışarı taşmıyorsa.
-            var uploads = Path.GetFullPath(Path.Combine(WebRoot, "uploads"));
-            foreach (var relative in makePhotos.Append(model.FilePath))
-            {
-                var path = Path.GetFullPath(Path.Combine(WebRoot, relative.TrimStart('/')));
-                if (path.StartsWith(uploads + Path.DirectorySeparatorChar) && System.IO.File.Exists(path))
-                    System.IO.File.Delete(path);
-            }
+            // Kayıt silindikten sonra dosyaları da kaldır (yalnızca /uploads altındaki geçerli yollar)
+            await UploadFiles.DeleteAsync(_store, makePhotos.Append(model.FilePath));
 
             return Ok(new { success = true });
         }
@@ -195,15 +188,8 @@ namespace Karalevha.API.Controllers
 
             // Dosya ismi zafiyetlerini (Path Traversal) ve URL bozulmalarını önlemek için sadece GUID kullan
             var safeFileName = $"{Guid.NewGuid()}{extension}";
-            var uploadsFolder = Path.Combine(_env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", "models");
-            Directory.CreateDirectory(uploadsFolder);
-
-            var absoluteFilePath = Path.Combine(uploadsFolder, safeFileName);
-
-            await using (var stream = new FileStream(absoluteFilePath, FileMode.CreateNew))
-            {
-                await file.CopyToAsync(stream);
-            }
+            await using (var upload = file.OpenReadStream())
+                await _store.SaveAsync($"uploads/models/{safeFileName}", upload, "application/octet-stream");
 
             var printModel = new PrintModel
             {
@@ -224,11 +210,8 @@ namespace Karalevha.API.Controllers
             }
             catch
             {
-                // DB'ye yazılamazsa çöp dosyayı diskten sil
-                if (System.IO.File.Exists(absoluteFilePath))
-                {
-                    System.IO.File.Delete(absoluteFilePath);
-                }
+                // DB'ye yazılamazsa çöp dosyayı depodan sil
+                await _store.DeleteAsync($"uploads/models/{safeFileName}");
                 throw;
             }
 

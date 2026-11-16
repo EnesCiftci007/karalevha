@@ -3,9 +3,9 @@ using Microsoft.AspNetCore.StaticFiles;
 namespace Karalevha.API.Services
 {
     /// <summary>
-    /// Oba sohbetlerinde paylaşılan dosyaların diskteki yeri.
-    /// Dosyalar bilerek wwwroot dışında tutulur: gizli obaların dosyaları
-    /// statik sunucudan değil, yetki kontrolü yapan controller'dan geçmek zorunda.
+    /// Oba sohbetlerinde paylaşılan dosyalar: kabul kuralları ve depodaki yerleri ("oba-files/{ad}").
+    /// Dosyalar bilerek herkese açık /uploads dışında tutulur: gizli obaların dosyaları
+    /// yetki kontrolü yapan controller'dan geçmek zorunda.
     /// </summary>
     public class ObaFileStorage
     {
@@ -30,14 +30,11 @@ namespace Karalevha.API.Services
 
         private readonly FileExtensionContentTypeProvider _contentTypes = new();
 
-        public string Root { get; }
+        private readonly IFileStore _store;
 
-        public ObaFileStorage(IConfiguration config, IWebHostEnvironment env)
+        public ObaFileStorage(IFileStore store)
         {
-            Root = config["Storage:ObaFilesPath"] is { Length: > 0 } configured
-                ? configured
-                : Path.Combine(env.ContentRootPath, "App_Data", "oba-files");
-            Directory.CreateDirectory(Root);
+            _store = store;
         }
 
         public static bool IsAllowed(string fileName) =>
@@ -50,14 +47,26 @@ namespace Karalevha.API.Services
         public static string NewStoredName(string originalFileName) =>
             $"{Guid.NewGuid():N}{Path.GetExtension(originalFileName).ToLowerInvariant()}";
 
-        public string PathFor(string storedName) =>
-            Path.Combine(Root, Path.GetFileName(storedName));
+        private static string KeyOf(string storedName) => $"oba-files/{Path.GetFileName(storedName)}";
 
-        public void Delete(string? storedName)
+        public Task SaveAsync(string storedName, Stream content, string contentType) =>
+            _store.SaveAsync(KeyOf(storedName), content, contentType);
+
+        public Task<StoredFile?> OpenAsync(string storedName, CancellationToken ct = default) =>
+            FileKeys.IsValid(KeyOf(storedName)) ? _store.OpenAsync(KeyOf(storedName), ct) : Task.FromResult<StoredFile?>(null);
+
+        /// <summary>Kayıt silindikten sonra dosyayı kaldırır; silinemezse kaydı geri almaya değmez</summary>
+        public async Task DeleteAsync(string? storedName)
         {
-            if (string.IsNullOrEmpty(storedName)) return;
-            var path = PathFor(storedName);
-            if (File.Exists(path)) File.Delete(path);
+            if (string.IsNullOrEmpty(storedName) || !FileKeys.IsValid(KeyOf(storedName))) return;
+            try
+            {
+                await _store.DeleteAsync(KeyOf(storedName));
+            }
+            catch
+            {
+                // depo geçici olarak yanıt vermiyorsa artık dosya kalır, işlem bozulmaz
+            }
         }
     }
 }
