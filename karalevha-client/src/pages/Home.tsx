@@ -6,6 +6,7 @@ import { api } from '../services/api';
 import { ClubEvent, Oba, Post, PrintModel, Project } from '../types';
 import CommunityPulse from '../components/home/CommunityPulse';
 import ClubNotes, { pickNote, rememberNote } from '../components/home/ClubNotes';
+import { lastObaPath } from '../utils/lastOba';
 
 // three.js sahnesi ayrı parça olarak, sayfa açıldıktan sonra yüklenir
 const PrintScene = lazy(() => import('../components/home/PrintScene'));
@@ -102,7 +103,7 @@ export default function Home() {
               {user ? (
                 <>
                   <Link to="/atolye" className="btn-ikincil">Yazıcı ayır</Link>
-                  <Link to="/e-oba" className="btn-ana">Obalara git</Link>
+                  <Link to={lastObaPath(user?.id)} className="btn-ana">Obalara git</Link>
                 </>
               ) : (
                 <>

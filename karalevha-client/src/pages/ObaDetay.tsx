@@ -11,6 +11,7 @@ import Field from '../components/ui/Field';
 import Skeleton from '../components/ui/Skeleton';
 import { fullDate } from '../utils/time';
 import { Oba } from '../types';
+import { forgetOba, lastChannelOf, rememberOba } from '../utils/lastOba';
 import Attachment, { FileTypeIcon } from '../components/oba/Attachment';
 import FileViewer from '../components/oba/FileViewer';
 import ItemMenu from '../components/ui/ItemMenu';
@@ -196,6 +197,11 @@ export default function ObaDetay() {
     };
   }, [activeChannel]);
 
+  // Açık oba ve kanal hatırlanır: E-Oba'ya dönünce burası açılsın
+  useEffect(() => {
+    if (activeChannel) rememberOba(user?.id, Number(id), activeChannel.id);
+  }, [activeChannel, id, user?.id]);
+
   const selectChannel = (channel: Channel) => {
     setActiveChannel(channel);
     setIsSidebarOpen(false);
@@ -233,11 +239,18 @@ export default function ObaDetay() {
         return;
       }
 
+      // Oba silinmiş: son açılanlardan çıkar, listeye dön
+      if (res.status === 404) {
+        forgetOba(user?.id, Number(id));
+        navigate('/e-oba', { replace: true });
+        return;
+      }
+
       if (res.ok) {
         const data: Channel[] = await res.json();
         setChannels(data);
-        // Seçilecek kanal: az önce kaydedilen, bağlantıdaki ?kanal= ya da şimdiki; yoksa ilk kanal
-        const wanted = selectId ?? Number(new URLSearchParams(window.location.search).get('kanal'));
+        // Seçilecek kanal: az önce kaydedilen, bağlantıdaki ?kanal=, bu obada en son açık olan ya da şimdiki; yoksa ilk kanal
+        const wanted = selectId ?? (Number(new URLSearchParams(window.location.search).get('kanal')) || lastChannelOf(user?.id, Number(id)));
         setActiveChannel((current) =>
           data.find((c) => c.id === wanted) ?? data.find((c) => c.id === current?.id) ?? data[0] ?? null
         );
@@ -791,6 +804,7 @@ export default function ObaDetay() {
           onClose={() => setConfirmLeave(false)}
           onConfirm={async () => {
             await api(`/api/obalar/${id}/leave`, { method: 'POST' });
+            forgetOba(user?.id, Number(id));
             navigate('/e-oba');
           }}
         >
