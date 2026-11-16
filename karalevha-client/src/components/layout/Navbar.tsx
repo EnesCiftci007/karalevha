@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut, Menu, Search, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import NotificationBell from './NotificationBell';
 import { Logo, Wordmark } from '../brand/Brand';
+import { lastObaPath } from '../../utils/lastOba';
 
 const menuItems = [
   { name: 'Ana sayfa', path: '/', end: true },
@@ -67,7 +68,15 @@ function SearchBox({ onDone }: { onDone?: () => void }) {
 export default function Navbar({ fluid = false }: { fluid?: boolean }) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const { pathname } = useLocation(); // her sayfa değişiminde yeniden çizilsin: E-Oba hedefi güncel kalsın
   const [menuOpen, setMenuOpen] = useState(false);
+
+  // E-Oba: son açılan obaya (Discord'daki gibi) git; zaten bir obanın içindeyse oba listesine dön
+  const inOba = pathname.startsWith('/e-oba/');
+  const hrefOf = (item: (typeof menuItems)[number]) =>
+    item.path === '/e-oba' ? (inOba ? '/e-oba' : lastObaPath(user?.id)) : item.path;
+  const isActive = (item: (typeof menuItems)[number]) =>
+    item.end ? pathname === item.path : pathname === item.path || pathname.startsWith(`${item.path}/`);
 
   const handleLogout = () => {
     logout();
@@ -87,19 +96,19 @@ export default function Navbar({ fluid = false }: { fluid?: boolean }) {
         {/* Bölümler (geniş ekran) */}
         <nav className="hidden xl:flex items-center gap-0.5 ml-4" aria-label="Bölümler">
           {menuItems.map((item) => (
-            <NavLink
+            <Link
               key={item.path}
-              to={item.path}
-              end={item.end}
-              className={({ isActive }) =>
+              to={hrefOf(item)}
+              aria-current={isActive(item) ? 'page' : undefined}
+              className={
                 'relative px-2.5 py-2 text-sm font-medium rounded-md whitespace-nowrap transition-colors ' +
-                (isActive
+                (isActive(item)
                   ? 'text-tebesir sprey-alti'
                   : 'text-tebesir-soluk hover:text-tebesir hover:bg-levha-yuzey')
               }
             >
               {item.name}
-            </NavLink>
+            </Link>
           ))}
         </nav>
 
@@ -147,18 +156,18 @@ export default function Navbar({ fluid = false }: { fluid?: boolean }) {
           <div className="md:hidden"><SearchBox onDone={() => setMenuOpen(false)} /></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
             {menuItems.map((item) => (
-              <NavLink
+              <Link
                 key={item.path}
-                to={item.path}
-                end={item.end}
+                to={hrefOf(item)}
                 onClick={() => setMenuOpen(false)}
-                className={({ isActive }) =>
+                aria-current={isActive(item) ? 'page' : undefined}
+                className={
                   'block px-3 py-2.5 rounded-md text-base font-medium border-l-2 ' +
-                  (isActive ? 'text-tebesir border-isaret bg-levha-yuzey' : 'text-tebesir-soluk border-transparent hover:text-tebesir')
+                  (isActive(item) ? 'text-tebesir border-isaret bg-levha-yuzey' : 'text-tebesir-soluk border-transparent hover:text-tebesir')
                 }
               >
                 {item.name}
-              </NavLink>
+              </Link>
             ))}
           </div>
         </nav>
