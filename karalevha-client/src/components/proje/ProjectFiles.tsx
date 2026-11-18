@@ -16,6 +16,8 @@ import ConfirmDialog from '../ui/ConfirmDialog';
 const PdfView = lazy(() => import('../oba/PdfView'));
 const CodeBlock = lazy(() => import('../kod/CodeBlock'));
 const ModelViewerPanel = lazy(() => import('../modeller/ModelViewerPanel'));
+const KicadViewer = lazy(() => import('../devre/KicadViewer'));
+const GerberPreview = lazy(() => import('../devre/GerberPreview'));
 
 const MAX_UPLOAD = 25 * 1024 * 1024; // Backend sınırıyla aynı
 const MAX_CODE_VIEW = 1024 * 1024; // Daha büyük kod dosyası sitede açılmaz, indirilir
@@ -24,6 +26,11 @@ const urlOf = (f: ProjectFile) => `${API_URL}${f.fileUrl}`;
 const isImage = (f: ProjectFile) => f.contentType.startsWith('image/');
 const isPdf = (f: ProjectFile) => f.contentType === 'application/pdf';
 /** STEP / IGES: sitede 3B açılır (büyük montajlar tarayıcıyı zorlar) */
+/** KiCad 6+ şema ve PCB: KiCanvas ile sitede açılır */
+const isKicad = (f: ProjectFile) => /\.kicad_(sch|pcb)$/i.test(f.fileName) && f.size <= 25 * 1024 * 1024;
+/** Gerber katmanı ya da Elektronik bölümündeki ZIP (üretim dosyaları): kart görünümü */
+const isGerber = (f: ProjectFile) =>
+  f.kind === 'elektronik' && (/\.(gbr|ger|gtl|gbl|gto|gbo|gts|gbs|gtp|gbp|gko|gm1|gml)$/i.test(f.fileName) || /\.zip$/i.test(f.fileName));
 const isCad = (f: ProjectFile) => !!cadFormatOf(f.fileName) && f.size <= 60 * 1024 * 1024;
 const isText = (f: ProjectFile) => f.contentType === 'text/plain' && f.size <= MAX_CODE_VIEW;
 const extOf = (f: ProjectFile) => (f.fileName.includes('.') ? f.fileName.slice(f.fileName.lastIndexOf('.') + 1) : '').toUpperCase();
@@ -39,7 +46,7 @@ const COPY: Record<FileKind, { icon: typeof PenTool; add: string; empty: string;
     icon: CircuitBoard,
     add: 'Devre dosyası ekle',
     empty: 'Bu projede henüz devre dosyası yok',
-    tip: 'Şema, PCB ve Gerber dosyaları burada durur. Sitede görünmesi için şemanın PDF çıktısını ya da kartın fotoğrafını da ekle.',
+    tip: 'Şema, PCB ve Gerber dosyaları burada durur. KiCad 6+ şema ve PCB dosyaları ile Gerber ZIP’leri sitede açılır; Eagle, Altium gibi diğerleri için PDF çıktısı ya da kartın fotoğrafı da ekle.',
   },
   kod: {
     icon: Code2,
@@ -112,6 +119,7 @@ export default function ProjectFiles({ projectId, kind, canEdit, canDelete, onCo
   const [types, setTypes] = useState<FileTypes | null>(null);
   const [viewing, setViewing] = useState<ProjectFile | null>(null);
   const [viewing3d, setViewing3d] = useState<ProjectFile | null>(null);
+  const [viewingCircuit, setViewingCircuit] = useState<ProjectFile | null>(null);
   const [deleting, setDeleting] = useState<ProjectFile | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -219,7 +227,9 @@ export default function ProjectFiles({ projectId, kind, canEdit, canDelete, onCo
                 <li key={f.id} className="flex items-center gap-3 px-4 py-3">
                   <KindIcon file={f} className="w-5 h-5 shrink-0 text-tebesir-silik" />
                   <span className="min-w-0 flex-1">
-                    {isCad(f) ? (
+                    {isKicad(f) || isGerber(f) ? (
+                      <button type="button" onClick={() => setViewingCircuit(f)} className="block max-w-full text-sm font-medium text-tebesir hover:underline underline-offset-4 truncate text-left">{f.title}</button>
+                    ) : isCad(f) ? (
                       <button type="button" onClick={() => setViewing3d(f)} className="block max-w-full text-sm font-medium text-tebesir hover:underline underline-offset-4 truncate text-left">{f.title}</button>
                     ) : opens(f) ? (
                       <button type="button" onClick={() => setViewing(f)} className="block max-w-full text-sm font-medium text-tebesir hover:underline underline-offset-4 truncate text-left">{f.title}</button>
@@ -230,6 +240,11 @@ export default function ProjectFiles({ projectId, kind, canEdit, canDelete, onCo
                       {f.fileName} · {formatSize(f.size)} · <time dateTime={f.uploadedAt} title={fullDate(f.uploadedAt)}>{timeAgo(f.uploadedAt)}</time>
                     </span>
                   </span>
+                  {(isKicad(f) || isGerber(f)) && (
+                    <button type="button" onClick={() => setViewingCircuit(f)} className="btn-sade h-7 px-2 text-xs shrink-0" title={isKicad(f) ? 'Şemayı ya da kartı sitede aç' : 'Kartın üst ve alt yüzünü gör'}>
+                      <CircuitBoard className="w-3.5 h-3.5" aria-hidden="true" />{isKicad(f) ? 'Görüntüle' : 'Kart'}
+                    </button>
+                  )}
                   {isCad(f) && (
                     <button type="button" onClick={() => setViewing3d(f)} className="btn-sade h-7 px-2 text-xs shrink-0" title="Sitede 3B olarak aç">
                       <Box className="w-3.5 h-3.5" aria-hidden="true" />3B
@@ -271,6 +286,25 @@ export default function ProjectFiles({ projectId, kind, canEdit, canDelete, onCo
               )}
               <a href={urlOf(viewing)} download={viewing.fileName} className="btn-ikincil"><Download className="w-4 h-4" aria-hidden="true" />İndir</a>
             </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* KiCad şema/PCB ya da Gerber kart görünümü */}
+      {viewingCircuit && (
+        <Modal title={viewingCircuit.title} onClose={() => setViewingCircuit(null)} wide>
+          <div className="h-[72vh] bg-levha-koyu">
+            <Suspense fallback={<Spinner />}>
+              {isKicad(viewingCircuit) ? (
+                <KicadViewer url={urlOf(viewingCircuit)} fileName={viewingCircuit.fileName} />
+              ) : (
+                <GerberPreview url={urlOf(viewingCircuit)} fileName={viewingCircuit.fileName} />
+              )}
+            </Suspense>
+          </div>
+          <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-levha-cizgi">
+            <span className="text-xs text-tebesir-silik truncate">{viewingCircuit.fileName} · {formatSize(viewingCircuit.size)} · {viewingCircuit.uploader}</span>
+            <a href={urlOf(viewingCircuit)} download={viewingCircuit.fileName} className="btn-ikincil shrink-0"><Download className="w-4 h-4" aria-hidden="true" />İndir</a>
           </div>
         </Modal>
       )}

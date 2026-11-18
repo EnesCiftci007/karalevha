@@ -1,0 +1,18 @@
+/* KiCanvas'ın yazı tipleri yerelden: Google Fonts'a istek gitmez (ziyaretçi IP'si paylaşılmaz).
+   Simge yazı tipi yalnızca KiCanvas'ın kullandığı ~30 simgeyi içerir (4 MB yerine 23 KB). */
+@import '@fontsource/nunito/400.css';
+@import '@fontsource/nunito/600.css';
+
+@font-face {
+  font-family: 'Material Symbols Outlined';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url('/vendor/kicanvas/material-symbols-outlined.woff2') format('woff2');
+}
+
+kicanvas-embed {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
