@@ -21,6 +21,8 @@ export default function Auth() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Kayıtta şifre iki kez yazılır: yazım hatasıyla açılıp girilemeyen hesap olmasın
+  const [passwordAgain, setPasswordAgain] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -35,10 +37,18 @@ export default function Auth() {
     setErrorMsg('');
     setSuccessMsg('');
     setPassword('');
+    setPasswordAgain('');
   };
+
+  // Tekrar alanına yazılmaya başlanınca ve uyuşmuyorsa alanın altında söylenir
+  const mismatch = !isLogin && passwordAgain.length > 0 && passwordAgain !== password;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isLogin && password !== passwordAgain) {
+      setErrorMsg('Şifreler aynı değil. İkisini de aynı yaz.');
+      return;
+    }
     setLoading(true);
     setErrorMsg('');
     setSuccessMsg('');
@@ -59,6 +69,7 @@ export default function Auth() {
         });
         setMode('giris');
         setPassword('');
+        setPasswordAgain('');
         setSuccessMsg(data.message || 'Kayıt başarılı. Şimdi giriş yapabilirsin.');
         // Doğrulama e-postası gelmezse buradan yeniden istenebilsin
         if (data.requiresVerification) setUnverifiedEmail(data.email ?? email);
@@ -169,6 +180,20 @@ export default function Auth() {
                 className="girdi"
               />
             </Field>
+            {!isLogin && (
+              <Field id="sifre-tekrar" label="Şifre (tekrar)" error={mismatch ? 'Şifreler aynı değil.' : undefined}>
+                <input
+                  id="sifre-tekrar"
+                  type="password"
+                  required
+                  autoComplete="new-password"
+                  value={passwordAgain}
+                  onChange={(e) => setPasswordAgain(e.target.value)}
+                  aria-invalid={mismatch}
+                  className="girdi"
+                />
+              </Field>
+            )}
             <button type="submit" disabled={loading} className="btn-ana w-full mt-2">
               {loading ? 'Bekle…' : isLogin ? 'Giriş yap' : 'Hesap oluştur'}
             </button>
