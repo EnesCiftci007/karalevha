@@ -62,6 +62,23 @@ npm run dev
 
 Site http://localhost:5173 adresinde açılır. Farklı bir API adresi için `VITE_API_URL` tanımlayın.
 
+## ✅ Testler
+
+API'nin entegrasyon testleri `Karalevha.API.Tests` klasöründedir ve gerçek PostgreSQL üzerinde çalışır
+(PostgreSQL'e özgü sorgular ve migration'lar da sınanır). Her çalıştırmada `karalevha_test` veritabanı
+sıfırdan kurulur; geliştirme veritabanınıza dokunulmaz. Yerelde veritabanını başlatıp çalıştırın:
+
+```bash
+dotnet test Karalevha.API.Tests
+```
+
+Bağlantı `KARALEVHA_TEST_DB` ortam değişkeninden alınır; yoksa API'nin user-secrets'taki bağlantısı
+kullanılır ve veritabanı adı `karalevha_test` yapılır. Testlerde istek sınırları kapalıdır
+(`RateLimits:Disabled`) ve dosyalar geçici bir klasöre yazılır.
+
+GitHub'da her PR'da `.github/workflows/ci.yml` çalışır: API testleri, istemcinin lint ve derlemesi,
+Docker imajının derlenmesi.
+
 ## 👀 Giriş yapmadan gezinme
 
 Sitenin tamamı üye olmadan gezilebilir: ana sayfa, akış, projeler, 3B baskı istasyonu ve **açık** obaların
