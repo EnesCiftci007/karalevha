@@ -290,7 +290,7 @@ namespace Karalevha.API.Controllers
             _context.ObaChannels.Remove(channel); // kişi kayıtları veritabanında kendiliğinden silinir
             await _context.SaveChangesAsync();
 
-            foreach (var s in stored) _storage.Delete(s);
+            foreach (var s in stored) await _storage.DeleteAsync(s);
             return Ok(new { success = true });
         }
     }
