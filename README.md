@@ -162,9 +162,26 @@ Canlıda ortam değişkeni olarak: `OwnerUsername`, `Admins__0`, `Admins__1`, �
 
 ### E-posta doğrulama (isteğe bağlı)
 
-Varsayılan olarak kapalı; hesaplar kayıt olunca kullanılabilir. Açmak için `Auth__RequireEmailVerification=true` ve
-[Resend](https://resend.com) anahtarı (`Resend__ApiKey`, isteğe bağlı `Resend__FromEmail`) tanımlayın. Geliştirmede
-anahtar yoksa doğrulama bağlantısı API günlüğüne yazılır.
+Varsayılan olarak kapalı; hesaplar kayıt olunca kullanılabilir. Açıkken her e-posta adresiyle kayıt olunur ama
+hesap, e-postadaki bağlantıya tıklanınca açılır (bağlantı 24 saat geçerli; süresi dolmuş doğrulanmamış bir kayıt
+adresi kilitlemez, aynı adresle yeniden kayıt olunabilir).
+
+Açmak için:
+
+1. [Resend](https://resend.com)'de hesap açın ve **Domains** bölümünden kulübün alan adını ekleyip DNS kayıtlarını
+   girin (alan adı doğrulanmadan Resend yalnızca hesap sahibinin kendi adresine e-posta gönderir).
+2. **API Keys** bölümünden yalnızca gönderme izni olan bir anahtar oluşturun.
+3. API sunucusuna şu ortam değişkenlerini girin:
+
+| Değişken | Değer |
+| --- | --- |
+| `Auth__RequireEmailVerification` | `true` |
+| `Resend__ApiKey` | Resend anahtarı (`re_...`) |
+| `Resend__FromEmail` | Doğrulanmış alan adından bir adres, ör. `noreply@kulup-alan-adi.com` |
+| `Cors__Origins__0` | Sitenin adresi; e-postadaki bağlantı buna gider |
+
+Anahtar tanımlı değilken doğrulama açılırsa API canlıda açılmaz ve nedenini yazar. Geliştirmede anahtar yoksa
+doğrulama bağlantısı API günlüğüne yazılır. Doğrulama açılmadan önce açılmış hesaplar doğrulanmış sayılır.
 
 ## 🌐 Canlı Yayına Alma (Ortam Değişkenleri)
 

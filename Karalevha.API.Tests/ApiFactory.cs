@@ -1,7 +1,9 @@
 using Karalevha.API.Data;
 using Karalevha.API.Services;
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
@@ -20,6 +22,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public const string AdminName = "test_yonetici";
     public const string Password = "Test-Sifre-2026!";
 
+    /// <summary>Test sırasında değiştirilebilen ayarlar (ör. Auth:RequireEmailVerification)</summary>
+    public Toggles Settings { get; } = new();
+
+    /// <summary>Gönderilen e-postalar: gerçek e-posta yerine burada toplanır</summary>
+    public FakeEmail Email { get; } = new();
+
     private readonly string _storageRoot = Path.Combine(Path.GetTempPath(), "karalevha-test-" + Guid.NewGuid().ToString("N")[..8]);
 
     public ApiFactory()
@@ -35,6 +43,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["Jwt__Issuer"] = "Karalevha.API",
             ["Jwt__Audience"] = "Karalevha.Client",
             ["Admins__0"] = AdminName,
+            // Doğrulama bağlantısındaki site adresi
+            ["Cors__Origins__0"] = "http://localhost:5173",
             ["RateLimits__Disabled"] = "true",
             ["Storage__Provider"] = "local",
             ["Storage__LocalRoot"] = _storageRoot,
@@ -46,6 +56,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     {
         // "Testing": geliştiricinin user-secrets'ı (gerçek e-posta anahtarı vb.) yüklenmez
         builder.UseEnvironment("Testing");
+        builder.ConfigureAppConfiguration(config => config.Add(Settings));
+        builder.ConfigureTestServices(services =>
+        {
+            foreach (var d in services.Where(d => d.ServiceType == typeof(IEmailService)).ToList()) services.Remove(d);
+            services.AddSingleton<IEmailService>(Email);
+        });
     }
 
     /// <summary>Depodaki dosyanın diskteki yeri (yerel depo, Storage:LocalRoot)</summary>
@@ -91,4 +107,50 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 public sealed class ApiCollection : ICollectionFixture<ApiFactory>
 {
     public const string Name = "api";
+}
+
+/// <summary>Çalışırken değiştirilebilen yapılandırma; istek anında okunan ayarlar için</summary>
+public sealed class Toggles : ConfigurationProvider, IConfigurationSource
+{
+    public IConfigurationProvider Build(IConfigurationBuilder builder) => this;
+
+    public void Set(string key, string? value)
+    {
+        if (value == null) Data.Remove(key); else Data[key] = value;
+        OnReload();
+    }
+
+    /// <summary>using bloğu bitince ayar eski haline döner</summary>
+    public IDisposable Scoped(string key, string value)
+    {
+        Set(key, value);
+        return new Reset(() => Set(key, null));
+    }
+
+    private sealed class Reset(Action action) : IDisposable
+    {
+        public void Dispose() => action();
+    }
+}
+
+/// <summary>Doğrulama bağlantılarını gönderilmiş gibi saklar</summary>
+public sealed class FakeEmail : IEmailService
+{
+    private readonly ConcurrentDictionary<string, List<string>> _sent = new(StringComparer.OrdinalIgnoreCase);
+
+    public Task SendVerificationEmailAsync(string toEmail, string verificationLink)
+    {
+        _sent.GetOrAdd(toEmail, _ => new List<string>()).Add(verificationLink);
+        return Task.CompletedTask;
+    }
+
+    public IReadOnlyList<string> SentTo(string email) => _sent.TryGetValue(email, out var list) ? list : Array.Empty<string>();
+
+    /// <summary>Son bağlantıdaki kod</summary>
+    public string LastToken(string email)
+    {
+        var link = SentTo(email).Last();
+        var query = System.Web.HttpUtility.ParseQueryString(new Uri(link).Query);
+        return query["token"]!;
+    }
 }

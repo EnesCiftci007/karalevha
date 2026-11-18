@@ -40,7 +40,24 @@ namespace Karalevha.API.Controllers
         /// </summary>
         private bool RequireEmailVerification => _configuration.GetValue("Auth:RequireEmailVerification", false);
 
-        private static string NewToken() => Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        /// <summary>Doğrulama bağlantısı 24 saat geçerli; yeniden gönderim en erken 1 dakika sonra</summary>
+        private static readonly TimeSpan VerificationLifetime = TimeSpan.FromHours(24);
+        private static readonly TimeSpan ResendCooldown = TimeSpan.FromMinutes(1);
+
+        private static string NewToken() =>
+            Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)).Replace('+', '-').Replace('/', '_').TrimEnd('=');
+
+        /// <summary>Veritabanında kodun kendisi değil SHA-256 özeti durur: veri sızsa da bağlantı üretilemez</summary>
+        private static string HashToken(string token) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(token)));
+
+        /// <summary>Yeni doğrulama kodu üretir, özetini kullanıcıya yazar, kodun kendisini döner (e-postaya)</summary>
+        private static string IssueVerification(User user)
+        {
+            var token = NewToken();
+            user.EmailVerificationToken = HashToken(token);
+            user.EmailVerificationTokenExpiresAt = DateTime.UtcNow.Add(VerificationLifetime);
+            return token;
+        }
 
         private static object UserDto(User user) => new
         {
@@ -61,9 +78,9 @@ namespace Karalevha.API.Controllers
             throw new InvalidOperationException("Cors:Origins tanımlı değil; doğrulama bağlantısı üretilemiyor.");
         }
 
-        private Task SendVerification(User user) =>
+        private Task SendVerification(User user, string token) =>
             _email.SendVerificationEmailAsync(user.Email,
-                $"{FrontendBaseUrl()}/verify-email?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(user.EmailVerificationToken!)}");
+                $"{FrontendBaseUrl()}/verify-email?email={Uri.EscapeDataString(user.Email)}&token={Uri.EscapeDataString(token)}");
 
         private static readonly string DummyHash = BCrypt.Net.BCrypt.EnhancedHashPassword("dummy-password");
 
@@ -73,6 +90,14 @@ namespace Karalevha.API.Controllers
         {
             var emailNormal = dto.Email.Trim().ToLowerInvariant();
             var usernameNormal = dto.Username.Trim().ToLowerInvariant();
+
+            // Başkasının adresiyle açılıp hiç doğrulanmayan hesaplar adresi ve adı sonsuza dek kilitlemesin:
+            // bağlantısının süresi dolmuşsa yeni kayıt onun yerini alır. (Doğrulanmamış hesap giriş
+            // yapamadığı için hiçbir içeriği yoktur.)
+            await _context.Users
+                .Where(u => !u.EmailConfirmed && u.EmailVerificationTokenExpiresAt < DateTime.UtcNow &&
+                            (u.Email == emailNormal || u.NormalizedUsername == usernameNormal))
+                .ExecuteDeleteAsync();
 
             if (await _context.Users.AnyAsync(u => u.Email == emailNormal || u.NormalizedUsername == usernameNormal))
                 return BadRequest(new { message = "Bu kullanıcı adı veya e-posta zaten kullanılıyor." });
@@ -86,11 +111,7 @@ namespace Karalevha.API.Controllers
                 AvatarSeed = usernameNormal,
                 EmailConfirmed = !RequireEmailVerification,
             };
-            if (RequireEmailVerification)
-            {
-                user.EmailVerificationToken = NewToken();
-                user.EmailVerificationTokenExpiresAt = DateTime.UtcNow.AddHours(24);
-            }
+            var verificationToken = RequireEmailVerification ? IssueVerification(user) : null;
             // Yapılandırmada Owner/Admin olarak adı geçen kişi kayıt olunca rolünü alır
             _current.Promote(user);
 
@@ -109,13 +130,13 @@ namespace Karalevha.API.Controllers
 
             try
             {
-                await SendVerification(user);
+                await SendVerification(user, verificationToken!);
             }
             catch (Exception)
             {
-                return Ok(new { requiresVerification = true, message = "Kayıt başarılı ama doğrulama e-postası gönderilemedi. Giriş ekranından yeniden isteyebilirsin." });
+                return Ok(new { requiresVerification = true, email = user.Email, message = "Kayıt başarılı ama doğrulama e-postası gönderilemedi. Giriş ekranından yeniden isteyebilirsin." });
             }
-            return Ok(new { requiresVerification = true, message = "Kayıt başarılı! E-posta adresine bir doğrulama bağlantısı gönderdik." });
+            return Ok(new { requiresVerification = true, email = user.Email, message = "Kayıt başarılı. E-posta adresine bir doğrulama bağlantısı gönderdik; bağlantıya tıklayınca giriş yapabilirsin." });
         }
 
         [HttpPost("login")]
@@ -176,7 +197,7 @@ namespace Karalevha.API.Controllers
 
             var stored = user.EmailVerificationToken;
             var valid = stored != null && user.EmailVerificationTokenExpiresAt > DateTime.UtcNow &&
-                CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(stored), Encoding.UTF8.GetBytes(dto.Token ?? string.Empty));
+                CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(stored), Encoding.UTF8.GetBytes(HashToken(dto.Token ?? string.Empty)));
             if (!valid) return BadRequest(new { message = "Bağlantı geçersiz ya da süresi dolmuş." });
 
             user.EmailConfirmed = true;
@@ -202,12 +223,15 @@ namespace Karalevha.API.Controllers
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             if (user == null || user.EmailConfirmed || !RequireEmailVerification) return Ok(new { message = reply });
 
-            user.EmailVerificationToken = NewToken();
-            user.EmailVerificationTokenExpiresAt = DateTime.UtcNow.AddHours(24);
+            // Birinin gelen kutusunu doldurmak için art arda istenemesin; yanıt yine aynı
+            var issuedAt = user.EmailVerificationTokenExpiresAt - VerificationLifetime;
+            if (issuedAt > DateTime.UtcNow - ResendCooldown) return Ok(new { message = reply });
+
+            var token = IssueVerification(user);
             await _context.SaveChangesAsync();
             try
             {
-                await SendVerification(user);
+                await SendVerification(user, token);
             }
             catch (Exception)
             {
