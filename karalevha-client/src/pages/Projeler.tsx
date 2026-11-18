@@ -1,256 +1,260 @@
-import React, { useState, useEffect } from 'react';
-import { api } from '../services/api';
-import { Terminal, FolderGit2, Star, GitFork, ExternalLink, Plus, Code2, Trash2 } from 'lucide-react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Box, CircuitBoard, Code2, FolderGit2, Heart, MessageSquare, PenTool, Plus } from 'lucide-react';
+import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Project } from '../types';
+import { fullDate, timeAgo } from '../utils/time';
+import ProjectFormModal from '../components/projeler/ProjectFormModal';
+import PageHeader from '../components/ui/PageHeader';
+import ListToolbar from '../components/ui/ListToolbar';
+import { useMine } from '../components/ui/useMine';
+import { useSocialCounts } from '../components/social/Social';
+import ModelThumbnail from '../components/proje/ModelThumbnail';
+import { formatOf } from '../utils/loadModel';
+import { PROJECT_CATEGORIES, categoryOf } from '../utils/projectCategories';
+
+type SortKey = 'yeni' | 'begeni' | 'yorum' | 'ad';
+
+/** "https://github.com/kulup/robot" -> "github.com" */
+function repoHost(url: string): string {
+  try {
+    return new URL(url).host.replace(/^www\./, '');
+  } catch {
+    return 'depo';
+  }
+}
+
+/** "https://github.com/kulup/robot" -> "kulup/robot" */
+function repoPath(url: string): string {
+  try {
+    return new URL(url).pathname.replace(/^\/|\.git$|\/$/g, '') || url;
+  } catch {
+    return url;
+  }
+}
 
 export default function Projeler() {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [initialLoad, setInitialLoad] = useState(true);
+  const [projects, setProjects] = useState<Project[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<SortKey>('yeni');
+  const [mine, setMine] = useMine();
+  // Dal süzgeci adreste (?dal=robotik), paylaşılabilsin
+  const [params, setParams] = useSearchParams();
+  const dal = PROJECT_CATEGORIES.some((c) => c.id === params.get('dal')) ? params.get('dal') : null;
+  const setDal = (id: string | null) =>
+    setParams((p) => {
+      const n = new URLSearchParams(p);
+      if (id) n.set('dal', id);
+      else n.delete('dal');
+      return n;
+    }, { replace: true });
   const [showModal, setShowModal] = useState(false);
 
-  // Form State
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [repoUrl, setRepoUrl] = useState('');
-
   useEffect(() => {
-    fetchProjects();
+    let cancelled = false;
+    api<Project[]>('/api/projects')
+      .then((data) => !cancelled && setProjects(data))
+      .catch(() => {
+        if (cancelled) return;
+        setProjects([]);
+        setLoadFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  useEffect(() => {
-    if (searchParams.get('new') === 'true' && user) {
-      setShowModal(true);
-      searchParams.delete('new');
-      setSearchParams(searchParams, { replace: true });
-    }
-  }, [searchParams, user, setSearchParams]);
+  const social = useSocialCounts('project', (projects ?? []).map((p) => p.id));
 
-  const fetchProjects = async () => {
-    try {
-      const data = await api<Project[]>('/api/projects');
-      setProjects(data);
-    } catch (error) {
-      console.error('Projeler yüklenemedi:', error);
-    } finally {
-      setInitialLoad(false);
-    }
-  };
+  const visible = useMemo(() => {
+    const q = query.trim().toLocaleLowerCase('tr');
+    const list = (projects ?? []).filter(
+      (p) =>
+        (!mine || p.owner === user?.username) && (!dal || categoryOf(p.category).id === dal) && (!q ||
+        p.title.toLocaleLowerCase('tr').includes(q) ||
+        (p.description ?? '').toLocaleLowerCase('tr').includes(q) ||
+        p.owner.toLocaleLowerCase('tr').includes(q))
+    );
+    const newest = (a: Project, b: Project) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    return [...list].sort((a, b) => {
+      if (sort === 'ad') return a.title.localeCompare(b.title, 'tr');
+      if (sort === 'begeni') return social.get(b.id).likes - social.get(a.id).likes || newest(a, b);
+      if (sort === 'yorum') return social.get(b.id).comments - social.get(a.id).comments || newest(a, b);
+      return newest(a, b);
+    });
+  }, [projects, query, sort, social, mine, user, dal]);
+  const countOf = (id: string) => (projects ?? []).filter((p) => categoryOf(p.category).id === id).length;
 
-  const handleCreateProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!title.trim() || !repoUrl.trim()) return;
-
-    setLoading(true);
-    try {
-      const newProject = await api<Project>('/api/projects', {
-        method: 'POST',
-        body: JSON.stringify({ title, description, repoUrl })
-      });
-      setProjects(prev => [newProject, ...prev]);
-      setShowModal(false);
-      setTitle('');
-      setDescription('');
-      setRepoUrl('');
-    } catch (error: any) {
-      alert(error?.message || "Bir hata oluştu.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDeleteProject = async (e: React.MouseEvent, id: number) => {
-    e.stopPropagation();
-    if (!window.confirm('Bu projeyi silmek istediğinize emin misiniz?')) return;
-    try {
-      await api(`/api/projects/${id}`, { method: 'DELETE' });
-      setProjects(prev => prev.filter(p => p.id !== id));
-    } catch (err: any) {
-      alert(err?.message || 'Proje silinemedi.');
-    }
-  };
 
   return (
-    <div className="max-w-7xl mx-auto animate-in fade-in duration-300 pb-20">
-      
-      {/* Banner */}
-      <div className="bg-[#111216] border-2 border-[#1f2129] p-8 mb-8 relative overflow-hidden flex flex-col md:flex-row items-center justify-between group">
-        <div className="absolute inset-0 bg-[#00e5ff]/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-        <div className="relative z-10 text-center md:text-left">
-          <h1 className="text-4xl font-black uppercase tracking-widest text-white flex items-center justify-center md:justify-start">
-            <Terminal className="w-8 h-8 mr-3 text-[#00e5ff]" />
-            Açık Kaynak Projeler
-          </h1>
-          <p className="text-zinc-400 text-[15px] mt-2 font-medium tracking-wide">Yazılım ve Donanım projelerinizi sergileyin, takımlara katılın.</p>
-        </div>
-        
-        {user ? (
-          <button 
-            onClick={() => setShowModal(true)}
-            className="mt-6 md:mt-0 relative flex items-center bg-[#00e5ff] hover:bg-white text-black px-6 py-3 text-[16px] font-black uppercase tracking-widest transition-all duration-300 shadow-[6px_6px_0px_rgba(255,255,255,0.2)] hover:shadow-[8px_8px_0px_#00e5ff] hover:-translate-y-1 hover:-translate-x-1 border-2 border-black z-10"
-          >
-            <Plus className="w-5 h-5 mr-2" strokeWidth={3} />
-            PROJE EKLE
-          </button>
-        ) : (
-          <p className="text-zinc-500 font-bold uppercase mt-6 md:mt-0">Proje eklemek için giriş yapın.</p>
-        )}
-      </div>
-
-      {/* Projeler Listesi */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        {initialLoad ? (
-          <div className="col-span-full flex flex-col items-center justify-center py-20 text-[#00e5ff]">
-            <Code2 className="w-12 h-12 animate-pulse mb-4" />
-            <span className="font-black uppercase tracking-widest text-lg">REPO'LAR ÇEKİLİYOR...</span>
-          </div>
-        ) : projects.length === 0 ? (
-          <div className="col-span-full text-center text-zinc-500 font-bold uppercase py-10">
-            Henüz hiç proje eklenmemiş. İlk projeyi sen duyur!
-          </div>
-        ) : (
-          projects.map((project) => (
-            <div
-              key={project.id}
-              onClick={() => navigate(`/projeler/${project.id}`)}
-              className="bg-[#0b0c10] cursor-pointer border-2 border-[#1f2129] p-6 hover:border-[#00e5ff]/50 transition-colors flex flex-col group relative overflow-hidden"
-            >
-              <div className="absolute right-0 top-0 w-32 h-32 bg-[url('/baskikorsanlari.png')] bg-cover bg-center opacity-10 group-hover:opacity-20 transition-opacity filter grayscale pointer-events-none transform translate-x-10 -translate-y-10"></div>
-              
-              <div className="flex justify-between items-start mb-4 relative z-10">
-                <div>
-                  <h3 className="text-2xl font-black text-white uppercase tracking-wider mb-1 group-hover:text-[#00e5ff] transition-colors">
-                    {project.title}
-                  </h3>
-                  <span className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
-                    GELİŞTİRİCİ: {project.owner}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-3">
-                  {user && (user.username === project.owner || user.role === 'Owner' || user.role === 'Admin') && (
-                    <button
-                      onClick={(e) => handleDeleteProject(e, project.id)}
-                      title="Projeyi Sil"
-                      className="text-zinc-500 hover:text-red-500 transition-colors"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  )}
-                  <a
-                    href={project.repoUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="text-zinc-400 hover:text-white transition-colors"
-                  >
-                    <FolderGit2 className="w-6 h-6" />
-                  </a>
-                </div>
-              </div>
-
-              <p className="text-zinc-400 text-sm font-medium leading-relaxed mb-8 flex-grow relative z-10">
-                {project.description}
-              </p>
-
-              <div className="flex items-center justify-between border-t-2 border-[#1f2129] pt-4 mt-auto relative z-10">
-                <div className="flex items-center space-x-4">
-                  <span className="flex items-center text-zinc-500 font-bold text-sm">
-                    <Star className="w-4 h-4 mr-1" /> {project.stars}
-                  </span>
-                  <span className="flex items-center text-zinc-500 font-bold text-sm">
-                    <GitFork className="w-4 h-4 mr-1" /> {project.forks}
-                  </span>
-                </div>
-                <a
-                  href={project.repoUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="flex items-center text-xs font-black uppercase tracking-widest text-[#00e5ff] hover:text-white transition-colors"
-                >
-                  REPO'YA GİT <ExternalLink className="w-3 h-3 ml-1" />
-                </a>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Modal - Proje Ekle */}
-      {showModal && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#111216] border-2 border-[#00e5ff] p-8 shadow-[12px_12px_0px_#00e5ff] relative animate-in zoom-in-95 duration-200">
-            
-            <button 
-              onClick={() => setShowModal(false)}
-              className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
-            >
-              <Plus className="w-6 h-6 rotate-45" />
+    <div className="pb-16">
+      <PageHeader
+        title="Projeler"
+        description="Kulüpte geliştirilen projeler: kodu, 3B modelleri ve çizimleri bir arada."
+        action={
+          user ? (
+            <button type="button" onClick={() => setShowModal(true)} className="btn-ana">
+              <Plus className="w-4 h-4" strokeWidth={2.5} />
+              Yeni proje
             </button>
+          ) : (
+            <Link to="/auth" state={{ from: '/projeler' }} className="btn-ikincil">Proje eklemek için giriş yap</Link>
+          )
+        }
+      />
 
-            <h2 className="text-2xl font-black uppercase tracking-widest text-white mb-6 flex items-center">
-              <Code2 className="w-6 h-6 mr-2 text-[#00e5ff]" />
-              PROJE EKLE
-            </h2>
+      <ListToolbar
+        id="proje-ara"
+        query={query}
+        onQuery={setQuery}
+        placeholder="Proje, açıklama ya da kişi ara"
+        sort={sort}
+        onSort={setSort}
+        sortOptions={[
+          { value: 'yeni', label: 'En yeni' },
+          { value: 'begeni', label: 'En çok beğenilen' },
+          { value: 'yorum', label: 'En çok yorumlanan' },
+          { value: 'ad', label: 'Ada göre (A–Z)' },
+        ]}
+        count={projects && projects.length > 0 ? { shown: visible.length, total: projects.length, unit: 'proje' } : undefined}
+        mine={user ? { active: mine, onChange: setMine } : undefined}
+      />
 
-            <form onSubmit={handleCreateProject} className="space-y-6">
-              
-              <div className="space-y-2">
-                <label className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">Proje Adı</label>
-                <input 
-                  type="text" 
-                  required
-                  maxLength={100}
-                  value={title}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setTitle(e.target.value)}
-                  placeholder="Projenizin adı..."
-                  className="w-full bg-[#0b0c10] border-2 border-[#1f2129] px-4 py-3 text-white focus:border-[#00e5ff] outline-none transition-colors"
-                />
-              </div>
+      {/* Dallar */}
+      <nav className="flex flex-wrap items-center gap-2 mb-5" aria-label="Proje dalları">
+        {[{ id: null as string | null, label: 'Tümü', count: projects?.length }, ...PROJECT_CATEGORIES.map((c) => ({ id: c.id as string | null, label: c.label, count: countOf(c.id), icon: c.icon }))].map((c) => {
+          const active = dal === c.id;
+          const Icon = 'icon' in c ? c.icon : null;
+          return (
+            <button
+              key={c.id ?? 'hepsi'}
+              type="button"
+              onClick={() => setDal(c.id)}
+              aria-pressed={active}
+              className={`inline-flex items-center gap-1.5 h-8 px-3 rounded-md border text-sm transition-colors ${active ? 'border-isaret/60 bg-isaret/10 text-tebesir' : 'border-levha-cizgi text-tebesir-soluk hover:border-tebesir-silik hover:text-tebesir'}`}
+            >
+              {Icon && <Icon className="w-4 h-4" aria-hidden="true" />}
+              {c.label}
+              {c.count !== undefined && <span className={`veri ${active ? 'text-isaret' : ''}`}>{c.count}</span>}
+            </button>
+          );
+        })}
+      </nav>
 
-              <div className="space-y-2">
-                <label className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">Açıklama</label>
-                <textarea 
-                  required
-                  maxLength={1000}
-                  value={description}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
-                  placeholder="Projeniz ne yapıyor? Hangi teknolojiler kullanıldı?"
-                  className="w-full bg-[#0b0c10] border-2 border-[#1f2129] px-4 py-3 text-white focus:border-[#00e5ff] outline-none transition-colors min-h-[100px] resize-none"
-                ></textarea>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">GİTHUB REPO URL</label>
-                <input 
-                  type="url" 
-                  required
-                  value={repoUrl}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRepoUrl(e.target.value)}
-                  placeholder="https://github.com/kullanici/repo"
-                  className="w-full bg-[#0b0c10] border-2 border-[#1f2129] px-4 py-3 text-white focus:border-[#00e5ff] outline-none transition-colors"
-                />
-              </div>
-
-              <button 
-                type="submit"
-                disabled={loading}
-                className={`w-full py-4 text-[16px] font-black uppercase tracking-widest border-2 border-black transition-all
-                  ${loading ? 'bg-zinc-600 text-zinc-400' : 'bg-[#00e5ff] text-black hover:bg-white hover:shadow-[4px_4px_0px_#00e5ff] hover:-translate-y-1'}`}
-              >
-                {loading ? 'EKLENİYOR...' : 'PROJEYİ DUYUR'}
-              </button>
-
-            </form>
-          </div>
+      {/* Liste */}
+      {projects === null ? (
+        <div className="rounded-lg border border-levha-cizgi divide-y divide-levha-cizgi" aria-hidden="true">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="p-5 space-y-2.5">
+              <div className="h-4 w-56 rounded bg-levha-yuzey/60" />
+              <div className="h-3 w-full max-w-xl rounded bg-levha-yuzey/60" />
+            </div>
+          ))}
         </div>
+      ) : visible.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-levha-cizgi py-14 px-6 text-center">
+          <FolderGit2 className="w-8 h-8 mx-auto mb-3 text-tebesir-silik" strokeWidth={1.5} />
+          <p className="text-tebesir-soluk">
+            {loadFailed
+              ? 'Projeler yüklenemedi. Sayfayı yenilemeyi dene.'
+              : projects.length === 0
+                ? 'Henüz paylaşılmış proje yok.'
+                : query.trim()
+                  ? `"${query.trim()}" için sonuç bulunamadı.`
+                  : 'Bu dalda henüz proje yok.'}
+          </p>
+          {!loadFailed && projects.length === 0 && user && (
+            <button type="button" onClick={() => setShowModal(true)} className="btn-ikincil mt-4">İlk projeyi ekle</button>
+          )}
+        </div>
+      ) : (
+        <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {visible.map((project) => {
+            const counts = social.get(project.id);
+            const dal = categoryOf(project.category);
+            const coverFormat = project.cover ? formatOf(project.cover.fileName) : null;
+            return (
+              <li key={project.id}>
+                <Link to={`/projeler/${project.id}`} className="kart group flex flex-col h-full overflow-hidden hover:border-tebesir-silik transition-colors">
+                  {/* Önizleme: modeli varsa modelin küçük resmi, yalnızca kodsa depo */}
+                  {project.cover && coverFormat ? (
+                    <ModelThumbnail url={`${API_URL}${project.cover.fileUrl}`} format={coverFormat} />
+                  ) : (
+                    <div className="relative aspect-[4/3] bg-levha-koyu overflow-hidden">
+                      <div className="kareli absolute inset-0" aria-hidden="true" />
+                      <div className="relative h-full flex flex-col justify-center gap-2 px-6 font-mono text-xs text-tebesir-silik">
+                        <Code2 className="w-6 h-6 mb-1 text-levha-cizgi group-hover:text-isaret transition-colors" strokeWidth={1.5} aria-hidden="true" />
+                        {project.repoUrl ? (
+                          <>
+                            <span className="text-tebesir-soluk truncate">{repoPath(project.repoUrl)}</span>
+                            <span>{repoHost(project.repoUrl)}</span>
+                          </>
+                        ) : (
+                          <span>henüz kod, model ya da çizim yok</span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex-1 flex flex-col px-4 py-3 border-t border-levha-cizgi">
+                    <span className="flex items-center gap-2">
+                      <span className="flex-1 min-w-0 font-semibold text-tebesir truncate group-hover:text-isaret transition-colors">{project.title}</span>
+                      <span className="inline-flex items-center gap-1 shrink-0 text-xs text-tebesir-silik" title={`Dal: ${dal.label}`}>
+                        <dal.icon className="w-3.5 h-3.5" aria-hidden="true" />{dal.label}
+                      </span>
+                    </span>
+                    {project.description && project.description.trim() !== project.title && (
+                      <span className="mt-0.5 text-sm text-tebesir-soluk line-clamp-2">{project.description}</span>
+                    )}
+                    <span className="mt-auto pt-3 flex items-center gap-3 text-xs text-tebesir-silik">
+                      <span className="min-w-0 truncate">
+                        {project.owner} · <time dateTime={project.createdAt} title={fullDate(project.createdAt)}>{timeAgo(project.createdAt)}</time>
+                      </span>
+                      <span className="ml-auto flex items-center gap-3 shrink-0">
+                        {/* Projenin parçaları */}
+                        {(project.repoUrl || !!project.codeFileCount) && <span title="Kod"><Code2 className="w-3.5 h-3.5" aria-hidden="true" /><span className="sr-only">kod</span></span>}
+                        {!!project.modelCount && (
+                          <span className="inline-flex items-center gap-1" title={`${project.modelCount} 3B model`}>
+                            <Box className="w-3.5 h-3.5" aria-hidden="true" /><span className="veri">{project.modelCount}</span>
+                          </span>
+                        )}
+                        {!!project.drawingCount && (
+                          <span className="inline-flex items-center gap-1" title={`${project.drawingCount} çizim`}>
+                            <PenTool className="w-3.5 h-3.5" aria-hidden="true" /><span className="veri">{project.drawingCount}</span>
+                          </span>
+                        )}
+                        {!!project.electronicsCount && (
+                          <span className="inline-flex items-center gap-1" title={`${project.electronicsCount} devre dosyası`}>
+                            <CircuitBoard className="w-3.5 h-3.5" aria-hidden="true" /><span className="veri">{project.electronicsCount}</span>
+                          </span>
+                        )}
+                        <span className={`inline-flex items-center gap-1 ${counts.liked ? 'text-isaret' : ''}`} title="Beğeni">
+                          <Heart className={`w-3.5 h-3.5 ${counts.liked ? 'fill-isaret' : ''}`} aria-hidden="true" />
+                          <span className="veri">{counts.likes}</span>
+                        </span>
+                        <span className="inline-flex items-center gap-1" title="Yorum">
+                          <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
+                          <span className="veri">{counts.comments}</span>
+                        </span>
+                      </span>
+                    </span>
+                  </div>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       )}
 
+      {/* Yeni proje */}
+      {showModal && (
+        <ProjectFormModal
+          onSaved={(created) => setProjects((prev) => [created, ...(prev ?? [])])}
+          onClose={() => setShowModal(false)}
+        />
+      )}
     </div>
   );
 }

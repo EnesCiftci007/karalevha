@@ -1,172 +1,107 @@
-using Karalevha.API.Filters;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
 using Karalevha.API.Models;
-using Karalevha.API.DTOs;
-using Karalevha.API.Extensions;
+using Karalevha.API.Services;
 
 namespace Karalevha.API.Controllers
 {
+    /// <summary>
+    /// Kulüp yönetimi. Owner rol dağıtır; Owner ve Admin hesapları süreli askıya alır.
+    /// Owner hesabı askıya alınamaz, rolü değiştirilemez; Admin başka bir Admin'e dokunamaz.
+    /// </summary>
     [Route("api/[controller]")]
     [ApiController]
+    [Authorize]
     public class AdminController : ControllerBase
     {
-        private readonly AppDbContext _context;
+        private const int MaxBanMinutes = 30 * 24 * 60;
 
-        public AdminController(AppDbContext context)
+        private readonly AppDbContext _context;
+        private readonly CurrentUser _current;
+        private readonly NotificationService _notifications;
+
+        public AdminController(AppDbContext context, CurrentUser current, NotificationService notifications)
         {
             _context = context;
+            _current = current;
+            _notifications = notifications;
         }
 
-        // POST: api/admin/set-role (Yalnızca Owner çağırabilir)
+        public class SetRoleDto
+        {
+            public int UserId { get; set; }
+            public string Role { get; set; } = string.Empty;
+        }
+
+        // POST: api/admin/set-role  (yalnızca Owner)
         [HttpPost("set-role")]
-        [Authorize] // Rol, JWT yerine veritabanından kontrol edilir (rol değişiklikleri anında geçerli olsun)
-        [CheckBanned]
-        public async Task<IActionResult> SetRole([FromBody] SetRoleDto dto)
+        public async Task<IActionResult> SetRole(SetRoleDto dto)
         {
-            var callerId = User.GetRequiredUserId();
-            var caller = await _context.Users.FindAsync(callerId);
-            if (caller == null || caller.Role != "Owner")
-            {
-                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Yalnızca Owner bu işlemi yapabilir." });
-            }
-            var targetRole = dto.Role?.Trim();
+            if (!_current.IsOwner(User)) return StatusCode(403, new { message = "Rolleri yalnızca Owner değiştirebilir." });
+            if (dto.Role != Roles.Admin && dto.Role != Roles.User) return BadRequest(new { message = "Rol 'Admin' ya da 'User' olabilir." });
+            if (dto.UserId == CurrentUser.IdOf(User)) return BadRequest(new { message = "Kendi rolünü değiştiremezsin." });
 
-            if (targetRole != "Admin" && targetRole != "User")
-            {
-                return BadRequest(new { message = "Geçersiz rol. Sadece 'Admin' veya 'User' atanabilir." });
-            }
+            var target = await _context.Users.FindAsync(dto.UserId);
+            if (target == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
+            if (target.Role == Roles.Owner) return BadRequest(new { message = "Owner'ın rolü değiştirilemez." });
 
-            if (dto.UserId == callerId)
-            {
-                return BadRequest(new { message = "Kendi rolünüzü bu endpoint üzerinden değiştiremezsiniz." });
-            }
-
-            var targetUser = await _context.Users.FindAsync(dto.UserId);
-            if (targetUser == null)
-            {
-                return NotFound(new { message = "Kullanıcı bulunamadı." });
-            }
-
-            if (targetUser.Role == "Owner")
-            {
-                return BadRequest(new { message = "Owner rolündeki kullanıcının rolü değiştirilemez." });
-            }
-
-            targetUser.Role = targetRole;
+            target.Role = dto.Role;
+            _notifications.Add(target.Id, CurrentUser.IdOf(User),
+                dto.Role == Roles.Admin ? "Kulüp yöneticisi yapıldın." : "Kulüp yöneticiliğin kaldırıldı.", $"/u/{target.Username}");
             await _context.SaveChangesAsync();
-
-            return Ok(new
-            {
-                message = $"Kullanıcının rolü başarıyla '{targetRole}' olarak güncellendi.",
-                userId = targetUser.Id,
-                role = targetUser.Role
-            });
+            _current.SetRole(target.Username, target.Role);
+            return Ok(new { userId = target.Id, role = target.Role });
         }
 
-        // POST: api/admin/ban-user (Owner veya Admin çağırabilir)
+        public class BanUserDto
+        {
+            public int UserId { get; set; }
+            public int DurationMinutes { get; set; }
+            public int DurationHours { get; set; }
+        }
+
+        /// <summary>Hedefe dokunabilir mi? Hata varsa yanıtını döner.</summary>
+        private IActionResult? CheckTarget(User target, string verb)
+        {
+            if (target.Id == CurrentUser.IdOf(User)) return BadRequest(new { message = $"Kendini {verb}." });
+            if (target.Role == Roles.Owner) return StatusCode(403, new { message = "Owner hesabına dokunulamaz." });
+            if (target.Role == Roles.Admin && !_current.IsOwner(User)) return StatusCode(403, new { message = "Bir yönetici başka bir yöneticiye dokunamaz." });
+            return null;
+        }
+
+        // POST: api/admin/ban-user  (Owner ya da Admin)
         [HttpPost("ban-user")]
-        [Authorize]
-        [CheckBanned]
-        public async Task<IActionResult> BanUser([FromBody] BanUserDto dto)
+        public async Task<IActionResult> BanUser(BanUserDto dto)
         {
-            var callerId = User.GetRequiredUserId();
-            var caller = await _context.Users.FindAsync(callerId);
-            if (caller == null || (caller.Role != "Owner" && caller.Role != "Admin"))
-            {
-                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Bu işlemi yapma yetkiniz yok." });
-            }
-            var callerRole = caller.Role;
+            if (!_current.IsAdmin(User)) return StatusCode(403, new { message = "Bu işlem kulüp yöneticilerine açık." });
 
-            if (dto.UserId == callerId)
-            {
-                return BadRequest(new { message = "Kendinizi engelleyemezsiniz." });
-            }
+            var minutes = dto.DurationMinutes > 0 ? dto.DurationMinutes : dto.DurationHours * 60;
+            if (minutes < 1 || minutes > MaxBanMinutes) return BadRequest(new { message = "Süre 1 dakika ile 30 gün arasında olmalı." });
 
-            var durationMinutes = dto.DurationMinutes > 0
-                ? dto.DurationMinutes
-                : dto.DurationHours * 60;
+            var target = await _context.Users.FindAsync(dto.UserId);
+            if (target == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
+            if (CheckTarget(target, "askıya alamazsın") is { } error) return error;
 
-            if (durationMinutes < 1 || durationMinutes > 43200) // Maksimum 30 gün (43200 dk)
-            {
-                return BadRequest(new { message = "Engelleme süresi 1 dakika ile 43200 dakika (30 gün) arasında olmalıdır." });
-            }
-
-            var targetUser = await _context.Users.FindAsync(dto.UserId);
-            if (targetUser == null)
-            {
-                return NotFound(new { message = "Kullanıcı bulunamadı." });
-            }
-
-            if (targetUser.Role == "Owner")
-            {
-                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Owner hesabı engellenemez." });
-            }
-
-            if (callerRole == "Admin" && targetUser.Role == "Admin")
-            {
-                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Bir admin başka bir admini engelleyemez." });
-            }
-
-            targetUser.BannedUntil = DateTime.UtcNow.AddMinutes(durationMinutes);
+            target.BannedUntil = DateTime.UtcNow.AddMinutes(minutes);
             await _context.SaveChangesAsync();
-
-            return Ok(new
-            {
-                message = $"Kullanıcı {targetUser.BannedUntil.Value:dd.MM.yyyy HH:mm} tarihine kadar başarıyla engellendi.",
-                userId = targetUser.Id,
-                bannedUntil = targetUser.BannedUntil
-            });
+            return Ok(new { userId = target.Id, bannedUntil = target.BannedUntil });
         }
 
-        // POST: api/admin/unban-user/{userId} (Owner veya Admin çağırabilir)
-        [HttpPost("unban-user/{userId}")]
-        [Authorize]
-        [CheckBanned]
-        public Task<IActionResult> UnbanUser(int userId) => UnbanUserInternal(userId);
-
-        // POST: api/admin/unban-user (Body ile çağrım desteği)
-        [HttpPost("unban-user")]
-        [Authorize]
-        [CheckBanned]
-        public Task<IActionResult> UnbanUserByBody([FromBody] UnbanUserDto dto) => UnbanUserInternal(dto.UserId);
-
-        private async Task<IActionResult> UnbanUserInternal(int userId)
+        // POST: api/admin/unban-user/{userId}  (Owner ya da Admin)
+        [HttpPost("unban-user/{userId:int}")]
+        public async Task<IActionResult> UnbanUser(int userId)
         {
-            var callerId = User.GetRequiredUserId();
-            var caller = await _context.Users.FindAsync(callerId);
-            if (caller == null || (caller.Role != "Owner" && caller.Role != "Admin"))
-            {
-                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Bu işlemi yapma yetkiniz yok." });
-            }
-            var callerRole = caller.Role;
+            if (!_current.IsAdmin(User)) return StatusCode(403, new { message = "Bu işlem kulüp yöneticilerine açık." });
 
-            var targetUser = await _context.Users.FindAsync(userId);
-            if (targetUser == null)
-            {
-                return NotFound(new { message = "Kullanıcı bulunamadı." });
-            }
+            var target = await _context.Users.FindAsync(userId);
+            if (target == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
+            if (CheckTarget(target, "askıdan çıkaramazsın") is { } error) return error;
 
-            if (targetUser.Role == "Owner")
-            {
-                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Owner hesabının engel durumu değiştirilemez." });
-            }
-
-            if (callerRole == "Admin" && targetUser.Role == "Admin")
-            {
-                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Bir admin başka bir adminin engel durumunu değiştiremez." });
-            }
-
-            targetUser.BannedUntil = null;
+            target.BannedUntil = null;
             await _context.SaveChangesAsync();
-
-            return Ok(new
-            {
-                message = "Kullanıcının engeli başarıyla kaldırıldı.",
-                userId = targetUser.Id
-            });
+            return Ok(new { userId = target.Id });
         }
     }
 }

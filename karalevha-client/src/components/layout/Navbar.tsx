@@ -1,195 +1,177 @@
-import { useState, useEffect, useRef } from 'react';
-import { NavLink, Link, useNavigate } from 'react-router-dom';
-import { Search, LogOut, User } from 'lucide-react';
-import NotificationsDropdown from './NotificationsDropdown';
+import { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { LogOut, Menu, Search, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { api } from '../../services/api';
+import NotificationBell from './NotificationBell';
+import { Logo, Wordmark } from '../brand/Brand';
+import { lastObaPath } from '../../utils/lastOba';
 
-export default function Navbar() {
-  const { user, logout } = useAuth();
+const menuItems = [
+  { name: 'Ana sayfa', path: '/', end: true },
+  { name: 'Akış', path: '/akis' },
+  { name: 'Projeler', path: '/projeler' },
+  { name: 'Market', path: '/market' },
+  { name: 'E-Oba', path: '/e-oba' },
+  { name: 'Atölye', path: '/atolye' },
+  { name: 'Etkinlikler', path: '/etkinlikler' },
+];
+
+/** Üst menüdeki arama kutusu; Enter ile /ara sayfasına gider. "/" tuşu kutuya odaklanır. */
+function SearchBox({ onDone }: { onDone?: () => void }) {
   const navigate = useNavigate();
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showResults, setShowResults] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
+  const [q, setQ] = useState(() => (location.pathname === '/ara' ? new URLSearchParams(location.search).get('q') ?? '' : ''));
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
-        setShowResults(false);
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) && !target.isContentEditable) {
+        e.preventDefault();
+        inputRef.current?.focus();
       }
     };
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setShowResults(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEscape);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEscape);
-    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  useEffect(() => {
-    if (searchQuery.trim().length < 2) {
-      setSearchResults([]);
-      setShowResults(false);
-      return;
-    }
-
-    const controller = new AbortController();
-    const delayDebounceFn = setTimeout(async () => {
-      setIsSearching(true);
-      setShowResults(true);
-      try {
-        const results = await api<any[]>(`/api/users/search?q=${encodeURIComponent(searchQuery)}`, {
-          signal: controller.signal
-        });
-        setSearchResults(results);
-      } catch (err: any) {
-        if (err.name !== 'AbortError') {
-          console.error("Arama hatası", err);
-        }
-      } finally {
-        setIsSearching(false);
-      }
-    }, 200);
-
-    return () => {
-      clearTimeout(delayDebounceFn);
-      controller.abort();
-    };
-  }, [searchQuery]);
-
-  const menuItems = [
-    { name: 'Ana Sayfa', path: '/' },
-    { name: 'Akış', path: '/akis' },
-    { name: 'Projeler', path: '/projeler' },
-    { name: '3B Baskı', path: '/baski-istasyonu' },
-    { name: 'E-Oba', path: '/e-oba' },
-  ];
-
-  const handleLogout = () => {
-    logout();
-    navigate('/auth');
-  };
-
   return (
-    <header className="h-16 bg-[#0b0c10] border-b-2 border-[#1f2129] flex items-center justify-between px-6 sticky top-0 z-20 shrink-0">
-      
-      {/* Sol Kısım: Logo & Linkler */}
-      <div className="flex items-center space-x-8">
-        <div className="flex items-center cursor-pointer" onClick={() => navigate('/')}>
-          <img src="/logo.png" alt="KaraLevha" className="w-8 h-8 mr-3 object-contain" />
-          <span className="font-black text-[20px] tracking-widest text-white uppercase">KaraLevha</span>
-        </div>
-        
-        <nav className="hidden md:flex items-center space-x-2">
-          {menuItems.map((item) => (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) =>
-                `px-4 py-2 rounded-none text-[14px] font-bold uppercase tracking-wider transition-all duration-200 border-2 ` +
-                (isActive 
-                  ? 'bg-white text-black border-white shadow-[4px_4px_0px_rgba(255,255,255,0.2)]' 
-                  : 'bg-transparent text-zinc-400 border-transparent hover:text-white hover:border-[#1f2129]')
-              }
-            >
-              {item.name}
-            </NavLink>
-          ))}
-        </nav>
-      </div>
-
-      {/* Sağ Kısım: Arama, Bildirimler, Profil */}
-      <div className="flex items-center space-x-6">
-        <div ref={searchRef} className="relative hidden lg:block">
-          <div className="flex items-center text-zinc-400 focus-within:text-white transition-colors bg-[#13151a] border-2 border-[#1f2129] focus-within:border-cyan-400 px-3 py-1.5 rounded-none w-64">
-            <Search className="w-4 h-4 mr-2" />
-            <input 
-              type="text" 
-              placeholder="Ara..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => { if(searchQuery.trim().length >= 2) setShowResults(true); }}
-              className="bg-transparent border-none outline-none text-[14px] font-medium w-full placeholder:text-zinc-600 text-white"
-            />
-          </div>
-          
-          {showResults && (
-            <div className="absolute top-full left-0 mt-2 w-full bg-[#0b0c10] border-2 border-[#1f2129] shadow-[4px_4px_0px_rgba(0,229,255,0.2)] z-50 max-h-80 overflow-y-auto">
-              {isSearching ? (
-                <div className="p-4 text-center text-zinc-500 text-[13px] font-bold">ARANIYOR...</div>
-              ) : searchResults.length > 0 ? (
-                <div className="flex flex-col">
-                  {searchResults.map(resultUser => (
-                    <div 
-                      key={resultUser.username}
-                      onClick={() => {
-                        setShowResults(false);
-                        setSearchQuery('');
-                        navigate(`/profil/${resultUser.username}`);
-                      }}
-                      className="flex items-center p-3 hover:bg-[#13151a] border-b border-[#1f2129] last:border-b-0 cursor-pointer transition-colors group"
-                    >
-                      <img 
-                        src={`https://api.dicebear.com/7.x/bottts/svg?seed=${resultUser.avatarSeed || resultUser.username}&backgroundColor=transparent`}
-                        alt={resultUser.username}
-                        className="w-8 h-8 bg-zinc-800 mr-3 group-hover:scale-110 transition-transform"
-                      />
-                      <span className="text-white font-black text-[13px] uppercase tracking-widest group-hover:text-cyan-400 transition-colors">
-                        {resultUser.username}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="p-4 text-center text-zinc-500 text-[13px] font-bold">SONUÇ BULUNAMADI</div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {user ? (
-          <>
-            <NotificationsDropdown />
-            
-            <div className="flex items-center space-x-3 border-2 border-[#1f2129] p-1 transition-all">
-              <Link to={`/profil/${user.username}`} className="flex items-center space-x-2 cursor-pointer">
-                <img 
-                  src={`https://api.dicebear.com/7.x/bottts/svg?seed=${user.avatarSeed || user.username}&backgroundColor=transparent`} 
-                  alt="Profile" 
-                  className="w-8 h-8 bg-zinc-800"
-                />
-                <span className="text-[14px] font-black text-white uppercase tracking-widest hidden sm:block hover:text-[#00e5ff] transition-colors">
-                  {user.username}
-                </span>
-              </Link>
-              <button onClick={handleLogout} className="text-zinc-500 hover:text-[#ff0055] p-1 ml-2 transition-colors" title="Çıkış Yap">
-                <LogOut className="w-5 h-5" strokeWidth={3} />
-              </button>
-            </div>
-          </>
-        ) : (
-          <button 
-            onClick={() => navigate('/auth')}
-            className="flex items-center bg-cyan-400 hover:bg-white text-black px-4 py-2 text-[14px] font-black uppercase tracking-widest transition-all duration-300 border-2 border-black hover:shadow-[4px_4px_0px_#00e5ff] hover:-translate-y-0.5 hover:-translate-x-0.5"
-          >
-            <User className="w-4 h-4 mr-2" strokeWidth={3} />
-            GİRİŞ YAP
-          </button>
-        )}
-      </div>
-      
-    </header>
+    <form
+      role="search"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const term = q.trim();
+        if (term.length < 2) return;
+        navigate(`/ara?q=${encodeURIComponent(term)}`);
+        inputRef.current?.blur();
+        onDone?.();
+      }}
+      className="relative w-full"
+    >
+      <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-tebesir-silik pointer-events-none" aria-hidden="true" />
+      <label htmlFor="genel-arama" className="sr-only">Sitede ara</label>
+      <input
+        id="genel-arama"
+        ref={inputRef}
+        type="search"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+        placeholder="Ara"
+        className="girdi h-8 pl-8 pr-8 bg-levha-yuzey"
+      />
+      <kbd className="hidden xl:block absolute right-2 top-1/2 -translate-y-1/2 veri px-1.5 rounded border border-levha-cizgi" aria-hidden="true">/</kbd>
+    </form>
   );
 }
 
+/** fluid: içerik kenardan kenara (oba sohbeti gibi tam ekran sayfalarda hizalı dursun) */
+export default function Navbar({ fluid = false }: { fluid?: boolean }) {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const { pathname } = useLocation(); // her sayfa değişiminde yeniden çizilsin: E-Oba hedefi güncel kalsın
+  const [menuOpen, setMenuOpen] = useState(false);
 
+  // E-Oba: son açılan obaya (Discord'daki gibi) git; zaten bir obanın içindeyse oba listesine dön
+  const inOba = pathname.startsWith('/e-oba/');
+  const hrefOf = (item: (typeof menuItems)[number]) =>
+    item.path === '/e-oba' ? (inOba ? '/e-oba' : lastObaPath(user?.id)) : item.path;
+  const isActive = (item: (typeof menuItems)[number]) =>
+    item.end ? pathname === item.path : pathname === item.path || pathname.startsWith(`${item.path}/`);
 
+  const handleLogout = () => {
+    logout();
+    navigate('/'); // çıkıştan sonra giriş ekranına atma, sitede kal
+  };
 
+  return (
+    <header className="sticky top-0 z-20 shrink-0 bg-levha/95 backdrop-blur border-b border-levha-cizgi">
+      <div className={`${fluid ? '' : 'max-w-sayfa mx-auto'} h-16 px-4 sm:px-6 flex items-center gap-4`}>
+
+        {/* Logo */}
+        <Link to="/" className="flex items-center gap-2.5 shrink-0" aria-label="KaraLevha ana sayfa">
+          <Logo className="w-7 h-7 text-isaret" />
+          <Wordmark className="text-lg" />
+        </Link>
+
+        {/* Bölümler (geniş ekran) */}
+        <nav className="hidden xl:flex items-center gap-0.5 ml-4" aria-label="Bölümler">
+          {menuItems.map((item) => (
+            <Link
+              key={item.path}
+              to={hrefOf(item)}
+              aria-current={isActive(item) ? 'page' : undefined}
+              className={
+                'relative px-2.5 py-2 text-sm font-medium rounded-md whitespace-nowrap transition-colors ' +
+                (isActive(item)
+                  ? 'text-tebesir sprey-alti'
+                  : 'text-tebesir-soluk hover:text-tebesir hover:bg-levha-yuzey')
+              }
+            >
+              {item.name}
+            </Link>
+          ))}
+        </nav>
+
+        <div className="flex-1" />
+
+        {/* Arama */}
+        <div className="hidden md:block w-48 lg:w-56">
+          <SearchBox />
+        </div>
+
+        {/* Hesap */}
+        <div className="flex items-center gap-1">
+          {user ? (
+            <>
+              <NotificationBell />
+              <Link to={`/u/${encodeURIComponent(user.username)}`} className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-md hover:bg-levha-yuzey transition-colors" title="Profilin">
+                <span className="w-7 h-7 rounded-full bg-isaret/15 text-isaret border border-isaret/40 flex items-center justify-center font-display font-bold text-sm" aria-hidden="true">
+                  {user.username.charAt(0).toLocaleUpperCase('tr')}
+                </span>
+                <span className="hidden sm:block text-sm font-medium text-tebesir max-w-[120px] truncate">{user.username}</span>
+              </Link>
+              <button onClick={handleLogout} className="p-2 rounded-md text-tebesir-silik hover:text-tebesir hover:bg-levha-yuzey transition-colors" title="Çıkış yap" aria-label="Çıkış yap">
+                <LogOut className="w-[18px] h-[18px]" />
+              </button>
+            </>
+          ) : (
+            <Link to="/auth" className="btn-ana">Giriş yap</Link>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setMenuOpen((v) => !v)}
+            className="xl:hidden p-2 rounded-md text-tebesir-soluk hover:text-tebesir hover:bg-levha-yuzey transition-colors"
+            aria-label={menuOpen ? 'Menüyü kapat' : 'Menüyü aç'}
+            aria-expanded={menuOpen}
+          >
+            {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
+      </div>
+
+      {/* Dar ekran menüsü */}
+      {menuOpen && (
+        <nav className="xl:hidden border-t border-levha-cizgi bg-levha px-4 py-3 space-y-3" aria-label="Bölümler">
+          <div className="md:hidden"><SearchBox onDone={() => setMenuOpen(false)} /></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
+            {menuItems.map((item) => (
+              <Link
+                key={item.path}
+                to={hrefOf(item)}
+                onClick={() => setMenuOpen(false)}
+                aria-current={isActive(item) ? 'page' : undefined}
+                className={
+                  'block px-3 py-2.5 rounded-md text-base font-medium border-l-2 ' +
+                  (isActive(item) ? 'text-tebesir border-isaret bg-levha-yuzey' : 'text-tebesir-soluk border-transparent hover:text-tebesir')
+                }
+              >
+                {item.name}
+              </Link>
+            ))}
+          </div>
+        </nav>
+      )}
+    </header>
+  );
+}

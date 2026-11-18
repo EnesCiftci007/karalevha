@@ -1,0 +1,386 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Box, Download, Heart, MessageSquare, Pencil, Plus, Trash2, UploadCloud, X } from 'lucide-react';
+import { api, API_URL } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
+import { PrintModel } from '../../types';
+import { fullDate, timeAgo } from '../../utils/time';
+import ModelThumbnail from './ModelThumbnail';
+import { GAME_FORMATS, MODEL_ACCEPT, formatOf, type ModelFormat } from '../../utils/loadModel';
+import { formatSize } from '../../services/files';
+import EmptyState from '../ui/EmptyState';
+import Field from '../ui/Field';
+import Modal from '../ui/Modal';
+import Skeleton from '../ui/Skeleton';
+import Tabs from '../ui/Tabs';
+import ConfirmDialog from '../ui/ConfirmDialog';
+import ItemMenu from '../ui/ItemMenu';
+import UserLink from '../ui/UserLink';
+import ModelEditModal from '../modeller/ModelEditModal';
+import MakesSection from '../modeller/MakesSection';
+import ModelViewerPanel from '../modeller/ModelViewerPanel';
+import { Comments, LikeButton, useSocialCounts } from '../social/Social';
+
+const MAX_UPLOAD = 50 * 1024 * 1024; // Backend sınırıyla aynı (50 MB)
+
+type Category = PrintModel['category'];
+const CATEGORY_LABEL: Record<Category, string> = { baski: 'Baskı', oyun: 'Oyun' };
+
+const fileUrlOf = (model: PrintModel) => `${API_URL}${model.fileUrl}`;
+const downloadName = (model: PrintModel) => `${model.title}.${model.format}`;
+
+interface ProjectModelsProps {
+  projectId: number;
+  /** Proje sahibi model ekler, düzenler */
+  canEdit: boolean;
+  /** Bölüm başlığındaki sayı güncellensin */
+  onCountChange?: (count: number) => void;
+}
+
+/**
+ * Projenin "Modeller" bölümü: 3B modellerin ızgarası, tam ekran inceleme (beğeni, "Bunu bastım", yorum),
+ * proje sahibi için yükleme, düzenleme ve silme. Bağlantıdaki ?model=ID modeli doğrudan açar.
+ */
+export default function ProjectModels({ projectId, canEdit, onCountChange }: ProjectModelsProps) {
+  const { user } = useAuth();
+  const [models, setModels] = useState<PrintModel[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [preview, setPreview] = useState<PrintModel | null>(null);
+  const closePreview = useCallback(() => setPreview(null), []);
+  const [params, setParams] = useSearchParams();
+  const [showUpload, setShowUpload] = useState(false);
+  const [editing, setEditing] = useState<PrintModel | null>(null);
+  const [deleting, setDeleting] = useState<PrintModel | null>(null);
+
+  // Yükleme formu
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [category, setCategory] = useState<Category>('baski');
+  const [file, setFile] = useState<File | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [formError, setFormError] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const fetchModels = useCallback(
+    () =>
+      api<PrintModel[]>(`/api/printmodels?projectId=${projectId}&take=100`)
+        .then((data) => {
+          setModels(data);
+          setLoadFailed(false);
+        })
+        .catch(() => {
+          setModels((prev) => prev ?? []);
+          setLoadFailed(true);
+        }),
+    [projectId]
+  );
+
+  useEffect(() => {
+    fetchModels();
+  }, [fetchModels]);
+
+  useEffect(() => {
+    if (models) onCountChange?.(models.length);
+  }, [models, onCountChange]);
+
+  // Bildirimlerdeki ve eski 3B Modeller bağlantıları ?model=ID ile gelir: o modelin penceresini aç
+  useEffect(() => {
+    const id = Number(params.get('model'));
+    if (!id || !models) return;
+    const found = models.find((m) => m.id === id);
+    if (found) setPreview(found);
+    setParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete('model');
+        return next;
+      },
+      { replace: true }
+    );
+  }, [models, params, setParams]);
+
+  const social = useSocialCounts('model', (models ?? []).map((m) => m.id));
+
+  const pickFile = (picked: File | undefined | null) => {
+    if (!picked) return;
+    const format = formatOf(picked.name);
+    if (!format) {
+      setFormError('Desteklenen biçimler: STL, 3MF, OBJ, FBX, GLB.');
+      return;
+    }
+    if (picked.size > MAX_UPLOAD) {
+      setFormError(`Dosya en fazla ${formatSize(MAX_UPLOAD)} olabilir.`);
+      return;
+    }
+    setFormError('');
+    setFile(picked);
+    setCategory(GAME_FORMATS.includes(format) ? 'oyun' : 'baski');
+    setTitle((current) => current || picked.name.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' '));
+  };
+
+  const closeUpload = () => {
+    if (uploading) return;
+    setShowUpload(false);
+    setFormError('');
+    setDragOver(false);
+  };
+
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!file || !title.trim() || uploading) return;
+    setUploading(true);
+    setFormError('');
+    const formData = new FormData();
+    formData.append('title', title.trim());
+    if (description.trim()) formData.append('description', description.trim());
+    formData.append('category', category);
+    formData.append('projectId', String(projectId));
+    formData.append('file', file);
+    try {
+      await api<{ message: string }>('/api/printmodels', { method: 'POST', body: formData });
+      await fetchModels();
+      setTitle('');
+      setDescription('');
+      setFile(null);
+      setShowUpload(false);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Yükleme başarısız.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  return (
+    <div>
+      {canEdit && models && models.length > 0 && (
+        <div className="flex justify-end mb-4">
+          <button type="button" onClick={() => setShowUpload(true)} className="btn-ikincil">
+            <Plus className="w-4 h-4" aria-hidden="true" />
+            Model ekle
+          </button>
+        </div>
+      )}
+
+      {models === null ? (
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="aspect-[4/5]" />)}
+        </div>
+      ) : models.length === 0 ? (
+        <EmptyState
+          icon={Box}
+          title={loadFailed ? 'Modeller yüklenemedi' : 'Bu projede henüz 3B model yok'}
+          description={loadFailed ? 'Sayfayı yenilemeyi dene.' : 'Parçaların STL, 3MF, OBJ, FBX ya da GLB dosyaları burada durur.'}
+          action={!loadFailed && canEdit && (
+            <button type="button" onClick={() => setShowUpload(true)} className="btn-ikincil">Model ekle</button>
+          )}
+        />
+      ) : (
+        <ul className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {models.map((model) => (
+            <li key={model.id} className="kart overflow-hidden flex flex-col hover:border-tebesir-silik transition-colors">
+              <button type="button" onClick={() => setPreview(model)} className="block text-left" aria-label={`${model.title} modelini 3B incele`}>
+                <ModelThumbnail url={fileUrlOf(model)} format={model.format} />
+              </button>
+              <div className="flex-1 flex flex-col p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-tebesir line-clamp-2">
+                    <button type="button" onClick={() => setPreview(model)} className="text-left hover:underline underline-offset-4">{model.title}</button>
+                  </h3>
+                  <span className="veri shrink-0 pt-0.5">{model.format.toUpperCase()}</span>
+                </div>
+                <p className="mt-1 text-xs text-tebesir-silik truncate">
+                  {CATEGORY_LABEL[model.category]} · <time dateTime={model.uploadedAt} title={fullDate(model.uploadedAt)}>{timeAgo(model.uploadedAt)}</time>
+                </p>
+                <div className="mt-auto pt-2.5 flex items-center gap-3 text-xs text-tebesir-silik">
+                  <span className={`inline-flex items-center gap-1 ${social.get(model.id).liked ? 'text-isaret' : ''}`} title="Beğeni">
+                    <Heart className={`w-3.5 h-3.5 ${social.get(model.id).liked ? 'fill-isaret' : ''}`} aria-hidden="true" />
+                    <span className="font-mono tabular-nums">{social.get(model.id).likes}</span>
+                    <span className="sr-only">beğeni</span>
+                  </span>
+                  <span className="inline-flex items-center gap-1" title="Yorum">
+                    <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span className="font-mono tabular-nums">{social.get(model.id).comments}</span>
+                    <span className="sr-only">yorum</span>
+                  </span>
+                  <a
+                    href={fileUrlOf(model)}
+                    download={downloadName(model)}
+                    className="ml-auto -mr-1 p-1.5 rounded-md hover:text-tebesir hover:bg-levha-yuzey transition-colors"
+                    title={`${model.format.toUpperCase()} dosyasını indir`}
+                    aria-label={`${model.title} dosyasını indir`}
+                  >
+                    <Download className="w-4 h-4" />
+                  </a>
+                </div>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* 3B inceleme */}
+      {preview && (
+        <ModelViewerPanel
+          title={preview.title}
+          meta={
+            <span className="inline-flex items-center gap-2">
+              <span>{CATEGORY_LABEL[preview.category]}</span>·
+              <UserLink username={preview.uploader} className="text-tebesir-soluk" />·
+              <span>{fullDate(preview.uploadedAt)}</span>
+            </span>
+          }
+          url={fileUrlOf(preview)}
+          format={preview.format}
+          unit={preview.category === 'baski' ? 'mm' : null}
+          onClose={closePreview}
+          actions={
+            <div className="flex flex-col gap-3">
+              <a href={fileUrlOf(preview)} download={downloadName(preview)} className="btn-ana justify-center">
+                <Download className="w-4 h-4" strokeWidth={2.5} />
+                {preview.format.toUpperCase()} indir
+              </a>
+              <div className="flex items-center gap-2">
+                <LikeButton type="model" id={preview.id} counts={social.get(preview.id)} onChange={(p) => social.update(preview.id, p)} />
+                {preview.category === 'baski' && (
+                  <>
+                    <Link to={`/atolye?model=${preview.id}`} className="btn-ikincil">Yazıcı ayır</Link>
+                    <Link to={`/market?hizmet=baski`} className="btn-sade">Bastır</Link>
+                  </>
+                )}
+                <div className="ml-auto">
+                  <ItemMenu
+                    label="Model seçenekleri"
+                    actions={[
+                      ...(user?.id === preview.userId ? [{ label: 'Düzenle', icon: Pencil, onSelect: () => setEditing(preview) }] : []),
+                      ...(user?.id === preview.userId || user?.isAdmin ? [{ label: 'Sil', icon: Trash2, danger: true, onSelect: () => setDeleting(preview) }] : []),
+                    ]}
+                  />
+                </div>
+              </div>
+            </div>
+          }
+        >
+          {preview.description && (
+            <section className="px-5 py-4 border-b border-levha-cizgi" aria-label="Açıklama">
+              <p className="text-sm text-tebesir-soluk whitespace-pre-wrap break-words">{preview.description}</p>
+            </section>
+          )}
+          <div className="pt-4">
+            <MakesSection modelId={preview.id} />
+          </div>
+          <section className="px-5 pb-5" aria-label="Yorumlar">
+            <h3 className="text-sm font-semibold text-tebesir mb-3">
+              Yorumlar {social.get(preview.id).comments > 0 && <span className="veri">{social.get(preview.id).comments}</span>}
+            </h3>
+            <Comments type="model" id={preview.id} ownerId={preview.userId} onCountChange={(n) => social.update(preview.id, { comments: n })} />
+          </section>
+        </ModelViewerPanel>
+      )}
+
+      {/* Yükleme */}
+      {showUpload && (
+        <Modal title="Projeye model ekle" onClose={closeUpload}>
+          <form onSubmit={handleUpload} className="p-5 space-y-4">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept={MODEL_ACCEPT}
+              className="hidden"
+              onChange={(e) => {
+                pickFile(e.target.files?.[0]);
+                e.target.value = '';
+              }}
+            />
+            {file ? (
+              <div className="flex items-center gap-3 rounded-md border border-levha-cizgi bg-levha-koyu px-3 py-2.5">
+                <Box className="w-5 h-5 shrink-0 text-tebesir-silik" strokeWidth={1.75} aria-hidden="true" />
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium text-tebesir truncate">{file.name}</span>
+                  <span className="block veri">{formatSize(file.size)}</span>
+                </span>
+                <button type="button" onClick={() => setFile(null)} className="p-1 text-tebesir-silik hover:text-tebesir" aria-label="Dosyayı kaldır">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setDragOver(false);
+                  pickFile(e.dataTransfer.files[0]);
+                }}
+                className={`w-full rounded-md border border-dashed px-4 py-8 text-center transition-colors ${
+                  dragOver ? 'border-isaret bg-isaret/5' : 'border-levha-cizgi hover:border-tebesir-silik'
+                }`}
+              >
+                <UploadCloud className="w-6 h-6 mx-auto mb-2 text-tebesir-silik" strokeWidth={1.5} aria-hidden="true" />
+                <span className="block text-sm font-medium text-tebesir">Model dosyasını sürükle ya da seç</span>
+                <span className="block mt-1 text-xs text-tebesir-silik">STL, 3MF, OBJ, FBX, GLB · en fazla {formatSize(MAX_UPLOAD)}</span>
+              </button>
+            )}
+
+            <div>
+              <span className="alan-etiketi">Tür</span>
+              <Tabs
+                label="Tür"
+                value={category}
+                onChange={setCategory}
+                options={[{ value: 'baski', label: 'Baskı parçası' }, { value: 'oyun', label: 'Görsel / oyun modeli' }]}
+              />
+            </div>
+            <Field id="model-ad" label="Model adı">
+              <input id="model-ad" type="text" value={title} onChange={(e) => setTitle(e.target.value)} maxLength={100} required placeholder="Ör. taban plakası" className="girdi" />
+            </Field>
+            <Field id="model-aciklama" label="Açıklama" note="isteğe bağlı" hint="Baskı ayarları, malzeme, destek gerekip gerekmediği…">
+              <textarea id="model-aciklama" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={500} rows={3} className="girdi resize-y" />
+            </Field>
+            {file && formatOf(file.name) === 'obj' && (
+              <p className="text-xs text-tebesir-silik">OBJ'nin malzeme ve doku dosyaları (.mtl, resimler) yüklenmez; model düz renkte görünür.</p>
+            )}
+
+            {formError && <p className="text-sm text-hata" role="alert">{formError}</p>}
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={closeUpload} disabled={uploading} className="btn-ikincil">Vazgeç</button>
+              <button type="submit" disabled={uploading || !file || !title.trim()} className="btn-ana">
+                {uploading ? 'Yükleniyor…' : 'Ekle'}
+              </button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {editing && (
+        <ModelEditModal
+          model={editing}
+          onClose={() => setEditing(null)}
+          onSaved={(updated) => {
+            setModels((prev) => (prev ?? []).map((m) => (m.id === updated.id ? updated : m)));
+            setPreview(updated);
+          }}
+        />
+      )}
+      {deleting && (
+        <ConfirmDialog
+          title="Model silinsin mi?"
+          confirmLabel="Modeli sil"
+          onClose={() => setDeleting(null)}
+          onConfirm={async () => {
+            await api(`/api/printmodels/${deleting.id}`, { method: 'DELETE' });
+            setModels((prev) => (prev ?? []).filter((m) => m.id !== deleting.id));
+            setPreview(null);
+          }}
+        >
+          <span className="font-medium text-tebesir">{deleting.title}</span> ve dosyası kalıcı olarak silinecek.
+        </ConfirmDialog>
+      )}
+    </div>
+  );
+}

@@ -10,16 +10,24 @@ namespace Karalevha.API.Data
         }
 
         public DbSet<User> Users { get; set; }
-        public DbSet<UserFollow> UserFollows { get; set; }
         public DbSet<Post> Posts { get; set; }
-        public DbSet<PostLike> PostLikes { get; set; }
-        public DbSet<PostComment> PostComments { get; set; }
         public DbSet<Oba> Obalar { get; set; }
         public DbSet<PrintModel> PrintModels { get; set; }
         public DbSet<Project> Projects { get; set; }
         public DbSet<ObaChannel> ObaChannels { get; set; }
         public DbSet<ObaMessage> ObaMessages { get; set; }
         public DbSet<ObaMember> ObaMembers { get; set; }
+        public DbSet<ObaChannelMember> ObaChannelMembers { get; set; }
+        public DbSet<UserFollow> UserFollows { get; set; }
+        public DbSet<ProjectFile> ProjectFiles { get; set; }
+        public DbSet<MarketOrder> MarketOrders { get; set; }
+        public DbSet<Equipment> Equipment { get; set; }
+        public DbSet<Reservation> Reservations { get; set; }
+        public DbSet<ClubEvent> Events { get; set; }
+        public DbSet<EventAttendee> EventAttendees { get; set; }
+        public DbSet<PrintMake> PrintMakes { get; set; }
+        public DbSet<Like> Likes { get; set; }
+        public DbSet<Comment> Comments { get; set; }
         public DbSet<Notification> Notifications { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -35,66 +43,48 @@ namespace Karalevha.API.Data
                 .HasIndex(u => u.NormalizedUsername)
                 .IsUnique();
 
-            modelBuilder.Entity<User>()
-                .Property(u => u.Role)
-                .HasDefaultValue("User");
+            // Çakışma sorgusu ekipman + zaman aralığına göre yapılır
+            modelBuilder.Entity<Reservation>().HasIndex(r => new { r.EquipmentId, r.StartsAt, r.EndsAt });
+            modelBuilder.Entity<Reservation>().HasOne(r => r.PrintModel).WithMany().OnDelete(DeleteBehavior.SetNull);
 
-            modelBuilder.Entity<UserFollow>()
-                .HasOne(f => f.Follower)
-                .WithMany(u => u.Following)
-                .HasForeignKey(f => f.FollowerId)
-                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<ClubEvent>().HasIndex(e => e.StartsAt);
+            modelBuilder.Entity<EventAttendee>().HasIndex(a => new { a.EventId, a.UserId }).IsUnique();
+            modelBuilder.Entity<EventAttendee>().HasOne(a => a.Event).WithMany().OnDelete(DeleteBehavior.Cascade);
 
-            modelBuilder.Entity<UserFollow>()
-                .HasOne(f => f.Following)
-                .WithMany(u => u.Followers)
-                .HasForeignKey(f => f.FollowingId)
-                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<PrintMake>().HasIndex(m => m.PrintModelId);
+            modelBuilder.Entity<PrintMake>().HasOne(m => m.PrintModel).WithMany().OnDelete(DeleteBehavior.Cascade);
 
-            // Çift Kayıt Önleme (Unique Constraints)
-            modelBuilder.Entity<ObaMember>()
-                .HasIndex(m => new { m.ObaId, m.UserId })
-                .IsUnique();
+            // Bir kişi aynı şeyi bir kez beğenebilir
+            modelBuilder.Entity<Like>().HasIndex(l => new { l.TargetType, l.TargetId, l.UserId }).IsUnique();
+            modelBuilder.Entity<Comment>().HasIndex(c => new { c.TargetType, c.TargetId, c.CreatedAt });
+            modelBuilder.Entity<Comment>().HasIndex(c => c.ParentId);
 
-            modelBuilder.Entity<UserFollow>()
-                .HasIndex(f => new { f.FollowerId, f.FollowingId })
-                .IsUnique();
+            // Proje silinince modelleri ve dosyaları da silinir (diskteki dosyaları controller siler)
+            modelBuilder.Entity<PrintModel>().HasOne(m => m.Project).WithMany().HasForeignKey(m => m.ProjectId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ProjectFile>().HasOne(f => f.Project).WithMany().HasForeignKey(f => f.ProjectId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ProjectFile>().HasIndex(f => f.ProjectId);
+            modelBuilder.Entity<MarketOrder>().HasIndex(o => new { o.UserId, o.CreatedAt });
+            modelBuilder.Entity<MarketOrder>().HasIndex(o => o.Status);
+            modelBuilder.Entity<Oba>().HasIndex(o => o.InviteCode).IsUnique();
 
-            modelBuilder.Entity<PostLike>()
-                .HasKey(pl => new { pl.PostId, pl.UserId });
+            // Bir kişi bir obaya bir kez üye olur; bir kişiyi bir kez takip eder
+            modelBuilder.Entity<ObaMember>().HasIndex(m => new { m.ObaId, m.UserId }).IsUnique();
+            modelBuilder.Entity<UserFollow>().HasIndex(f => new { f.FollowerId, f.FollowingId }).IsUnique();
+            modelBuilder.Entity<UserFollow>().HasIndex(f => f.FollowingId);
+            modelBuilder.Entity<UserFollow>().HasOne(f => f.Follower).WithMany().HasForeignKey(f => f.FollowerId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<UserFollow>().HasOne(f => f.Following).WithMany().HasForeignKey(f => f.FollowingId).OnDelete(DeleteBehavior.Cascade);
 
-            modelBuilder.Entity<PostComment>()
-                .HasOne(c => c.ParentComment)
-                .WithMany(c => c.Replies)
-                .HasForeignKey(c => c.ParentCommentId)
-                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<User>().Property(u => u.Role).HasDefaultValue(Roles.User);
+            modelBuilder.Entity<User>().Property(u => u.Interests).HasDefaultValueSql("'{}'::text[]");
+            modelBuilder.Entity<Post>().Property(p => p.Tags).HasDefaultValueSql("'{}'::text[]");
 
-            modelBuilder.Entity<Notification>()
-                .HasOne(n => n.RecipientUser)
-                .WithMany()
-                .HasForeignKey(n => n.RecipientUserId)
-                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ObaChannelMember>().HasIndex(m => new { m.ChannelId, m.UserId }).IsUnique();
+            modelBuilder.Entity<ObaChannelMember>().HasOne(m => m.Channel).WithMany().OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<ObaChannelMember>().HasOne(m => m.User).WithMany().OnDelete(DeleteBehavior.Cascade);
 
-            modelBuilder.Entity<Notification>()
-                .HasOne(n => n.ActorUser)
-                .WithMany()
-                .HasForeignKey(n => n.ActorUserId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            modelBuilder.Entity<Notification>()
-                .HasOne(n => n.Post)
-                .WithMany()
-                .HasForeignKey(n => n.PostId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            modelBuilder.Entity<Notification>()
-                .HasOne(n => n.Comment)
-                .WithMany()
-                .HasForeignKey(n => n.CommentId)
-                .OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<Notification>().HasIndex(n => new { n.UserId, n.IsRead, n.CreatedAt });
+            modelBuilder.Entity<Notification>().HasOne(n => n.Actor).WithMany().HasForeignKey(n => n.ActorId).OnDelete(DeleteBehavior.SetNull);
+            modelBuilder.Entity<Notification>().HasOne(n => n.User).WithMany().HasForeignKey(n => n.UserId).OnDelete(DeleteBehavior.Cascade);
         }
-
-
     }
 }
-

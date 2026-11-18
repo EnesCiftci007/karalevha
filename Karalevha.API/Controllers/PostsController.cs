@@ -1,243 +1,152 @@
-using Karalevha.API.Filters;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
 using Karalevha.API.Models;
 using Karalevha.API.DTOs;
-using Karalevha.API.Extensions;
-using Microsoft.AspNetCore.Authorization;
 using Karalevha.API.Services;
-using Npgsql;
 
 namespace Karalevha.API.Controllers
 {
-    [ApiController]
     [Route("api/[controller]")]
+    [ApiController]
     public class PostsController : ControllerBase
     {
         private readonly AppDbContext _context;
-        private readonly ILogger<PostsController> _logger;
-        private readonly INotificationService _notificationService;
+        private readonly CurrentUser _current;
 
-        public PostsController(AppDbContext context, ILogger<PostsController> logger, INotificationService notificationService)
+        public PostsController(AppDbContext context, CurrentUser current)
         {
             _context = context;
-            _logger = logger;
-            _notificationService = notificationService;
+            _current = current;
         }
 
-        // GET: api/posts
-        [HttpGet]
-        public async Task<IActionResult> GetPosts([FromQuery] int page = 1, [FromQuery] int pageSize = 10)
-        {
-            page = Math.Max(1, page);
-            pageSize = Math.Clamp(pageSize, 1, 50);
-
-            var currentUserId = User.GetUserId();
-
-            var interests = new List<string>();
-            if (currentUserId != null)
+        private IQueryable<object> Project(IQueryable<Post> query) =>
+            query.Select(p => new
             {
-                interests = await _context.Users
-                    .Where(u => u.Id == currentUserId)
-                    .Select(u => u.Interests)
-                    .FirstOrDefaultAsync() ?? new List<string>();
+                p.Id,
+                p.Content,
+                p.Likes,
+                p.CreatedAt,
+                p.EditedAt,
+                p.Tags,
+                User = new { p.User!.Id, p.User.Username, p.User.AvatarSeed }
+            });
+
+        private const int MaxTags = 5;
+
+        // GET: api/posts?etiket=Robotik&kapsam=takip
+        // Giriş yapan kişinin ilgi alanlarıyla eşleşen son 7 günün gönderileri öne çıkar; geri kalanı yeniden eskiye.
+        // kapsam=takip yalnızca takip edilen kişilerin (ve kişinin kendi) gönderilerini getirir.
+        [HttpGet]
+        public async Task<IActionResult> GetPosts([FromQuery] string? etiket, [FromQuery] string? kapsam)
+        {
+            var me = CurrentUser.IdOf(User);
+            var query = _context.Posts.AsNoTracking();
+
+            if (!string.IsNullOrWhiteSpace(etiket))
+            {
+                var tag = PostTags.Normalize(etiket);
+                if (tag.Length < 2) return Ok(Array.Empty<object>());
+                query = query.Where(p => p.Tags.Contains(tag));
             }
 
-            // Kişiselleştirme sıralaması veritabanında yapılır, böylece sayfalar arasında tutarlı kalır.
-            // İlgi alanıyla eşleşen gönderiler yalnızca son 7 gün içindeyse öne çıkarılır;
-            // aksi halde eski eşleşmeler yeni gönderilerin önünde kalıcı olarak dururdu.
-            var boostCutoff = DateTime.UtcNow.AddDays(-7);
-            var hasInterests = interests.Count > 0;
+            if (kapsam == "takip")
+            {
+                if (me == null) return Unauthorized();
+                var followed = _context.UserFollows.Where(f => f.FollowerId == me).Select(f => f.FollowingId);
+                query = query.Where(p => p.UserId == me || followed.Contains(p.UserId));
+            }
 
-            var query = await _context.Posts
-                .OrderByDescending(p => hasInterests && p.CreatedAt >= boostCutoff && p.Tags.Any(t => interests.Contains(t)))
+            var interests = (me == null ? new List<string>()
+                : await _context.Users.Where(u => u.Id == me).Select(u => u.Interests).FirstOrDefaultAsync() ?? new List<string>())
+                .Select(PostTags.Normalize).ToList(); // "3B Baskı" ilgi alanı "#3bbaskı" etiketine denk
+            var boostSince = DateTime.UtcNow.AddDays(-7);
+            var boost = interests.Count > 0;
+
+            var ordered = query
+                .OrderByDescending(p => boost && p.CreatedAt >= boostSince && p.Tags.Any(t => interests.Contains(t)))
                 .ThenByDescending(p => p.CreatedAt)
-                .ThenByDescending(p => p.Id)
-                .Skip((page - 1) * pageSize)
-                .Take(pageSize)
-                .Select(p => new
-                {
-                    p.Id,
-                    p.Content,
-                    Likes = p.PostLikes.Count,
-                    CommentsCount = p.PostComments.Count,
-                    IsLikedByCurrentUser = currentUserId != null && p.PostLikes.Any(pl => pl.UserId == currentUserId),
-                    p.Tags,
-                    p.CreatedAt,
-                    User = new
-                    {
-                        p.User!.Id,
-                        p.User.Username,
-                        p.User.AvatarSeed
-                    }
-                })
-                .ToListAsync();
-
-            return Ok(query);
+                .ThenByDescending(p => p.Id);
+            return Ok(await Project(ordered).ToListAsync());
         }
 
-        [HttpGet("{id}")]
-        public async Task<IActionResult> GetPost(int id)
+        // GET: api/posts/etiketler
+        // Gündem: son 7 günde en çok kullanılan 12 etiket. O hafta hiç yoksa tüm zamanların en çokları.
+        [HttpGet("etiketler")]
+        public async Task<IActionResult> GetTags()
         {
-            var currentUserId = User.GetUserId();
+            async Task<List<TagCount>> top(DateTime? since) =>
+                await _context.Posts.AsNoTracking()
+                    .Where(p => since == null || p.CreatedAt >= since)
+                    .SelectMany(p => p.Tags)
+                    .GroupBy(t => t)
+                    .OrderByDescending(g => g.Count()).ThenBy(g => g.Key)
+                    .Take(12)
+                    .Select(g => new TagCount(g.Key, g.Count()))
+                    .ToListAsync();
 
-            var post = await _context.Posts
-                .Where(p => p.Id == id)
-                .Select(p => new
-                {
-                    p.Id,
-                    p.Content,
-                    Likes = p.PostLikes.Count,
-                    CommentsCount = p.PostComments.Count,
-                    IsLikedByCurrentUser = currentUserId != null && p.PostLikes.Any(pl => pl.UserId == currentUserId),
-                    p.Tags,
-                    p.CreatedAt,
-                    User = new
-                    {
-                        p.User!.Id,
-                        p.User.Username,
-                        p.User.AvatarSeed
-                    }
-                })
-                .FirstOrDefaultAsync();
-
-            if (post == null) return NotFound();
-            return Ok(post);
+            var week = await top(DateTime.UtcNow.AddDays(-7));
+            var list = week.Count > 0 ? week : await top(null);
+            return Ok(new { recent = week.Count > 0, tags = list.Select(t => new { tag = t.Tag, count = t.Count }) });
         }
+
+        private record TagCount(string Tag, int Count);
 
         // POST: api/posts
         [HttpPost]
         [Authorize]
-        [CheckBanned]
         public async Task<IActionResult> CreatePost(CreatePostDto dto)
         {
-            var userId = User.GetRequiredUserId();
-            var user = await _context.Users.FindAsync(userId);
-            if (user == null) return Unauthorized();
+            var userId = CurrentUser.IdOf(User);
+            if (userId == null) return Unauthorized();
 
-            var post = new Post
-            {
-                Content = dto.Content,
-                Tags = dto.Tags?.Where(t => !string.IsNullOrWhiteSpace(t)).Distinct().Take(3).ToList() ?? new List<string>(),
-                UserId = userId,
-                CreatedAt = DateTime.UtcNow
-            };
+            var content = dto.Content.Trim();
+            if (content.Length == 0) return BadRequest(new { message = "Gönderi boş olamaz." });
 
+            var post = new Post { Content = content, Tags = PostTags.FromContent(content, MaxTags), UserId = userId.Value, CreatedAt = DateTime.UtcNow };
             _context.Posts.Add(post);
             await _context.SaveChangesAsync();
 
-            var createdPost = new
-            {
-                post.Id,
-                post.Content,
-                Likes = 0,
-                CommentsCount = 0,
-                IsLikedByCurrentUser = false,
-                post.Tags,
-                post.CreatedAt,
-                User = new
-                {
-                    user.Id,
-                    user.Username,
-                    user.AvatarSeed
-                }
-            };
-
-            return CreatedAtAction(nameof(GetPost), new { id = post.Id }, createdPost);
+            var created = await Project(_context.Posts.Where(p => p.Id == post.Id)).FirstAsync();
+            return CreatedAtAction(nameof(GetPosts), new { id = post.Id }, created);
         }
 
-        // POST: api/posts/{id}/like
-        [HttpPost("{id}/like")]
+        // PUT: api/posts/{id}
+        [HttpPut("{id:int}")]
         [Authorize]
-        [CheckBanned]
-        public async Task<IActionResult> ToggleLike(int id)
+        public async Task<IActionResult> UpdatePost(int id, CreatePostDto dto)
         {
-            var userId = User.GetRequiredUserId();
-
-            var post = await _context.Posts.FirstOrDefaultAsync(p => p.Id == id);
+            var post = await _context.Posts.FindAsync(id);
             if (post == null) return NotFound(new { message = "Gönderi bulunamadı." });
+            // Düzenlemeyi yalnızca yazarı yapabilir; yönetici sadece silebilir
+            if (CurrentUser.IdOf(User) != post.UserId) return StatusCode(403, new { message = "Bu gönderiyi düzenleyemezsin." });
 
-            var existingLike = await _context.PostLikes.FirstOrDefaultAsync(pl => pl.PostId == id && pl.UserId == userId);
+            var content = dto.Content.Trim();
+            if (content.Length == 0) return BadRequest(new { message = "Gönderi boş olamaz." });
 
-            bool isLiked;
-            if (existingLike != null)
-            {
-                _context.PostLikes.Remove(existingLike);
-                isLiked = false;
-            }
-            else
-            {
-                var newLike = new PostLike { PostId = id, UserId = userId };
-                try
-                {
-                    _context.PostLikes.Add(newLike);
-                    await _context.SaveChangesAsync();
-                    isLiked = true;
+            post.Content = content;
+            post.Tags = PostTags.FromContent(content, MaxTags); // metin değişince etiketler de yeniden okunur
+            post.EditedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
 
-                    await _notificationService.SendNotificationAsync(post.UserId, userId, "Like", id, null);
-                }
-                catch (DbUpdateException ex)
-                {
-                    if (ex.InnerException is PostgresException pgEx && pgEx.SqlState == "23505")
-                    {
-                        _context.Entry(newLike).State = EntityState.Detached;
-
-                        bool exists = await _context.PostLikes.AnyAsync(pl => pl.PostId == id && pl.UserId == userId);
-                        if (exists)
-                        {
-                            isLiked = true;
-                        }
-                        else
-                        {
-                            _logger.LogError(ex, "ToggleLike unique constraint caught but record not found for PostId {PostId}, UserId {UserId}", id, userId);
-                            return StatusCode(500, new { message = "Bir veritabanı hatası oluştu." });
-                        }
-                    }
-                    else
-                    {
-                        _logger.LogError(ex, "ToggleLike DbUpdateException for PostId {PostId}, UserId {UserId}", id, userId);
-                        return StatusCode(500, new { message = "Bir veritabanı hatası oluştu." });
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "ToggleLike Exception for PostId {PostId}, UserId {UserId}", id, userId);
-                    return StatusCode(500, new { message = "Beklenmeyen bir hata oluştu." });
-                }
-            }
-
-            if (!isLiked)
-            {
-                await _context.SaveChangesAsync();
-            }
-
-            var newLikeCount = await _context.PostLikes.CountAsync(pl => pl.PostId == id);
-            return Ok(new { likes = newLikeCount, isLiked });
+            return Ok(await Project(_context.Posts.Where(p => p.Id == id)).FirstAsync());
         }
 
         // DELETE: api/posts/{id}
-        [HttpDelete("{id}")]
+        [HttpDelete("{id:int}")]
         [Authorize]
-        [CheckBanned]
         public async Task<IActionResult> DeletePost(int id)
         {
-            var userId = User.GetRequiredUserId();
-
-            var post = await _context.Posts.FirstOrDefaultAsync(p => p.Id == id);
+            var post = await _context.Posts.FindAsync(id);
             if (post == null) return NotFound(new { message = "Gönderi bulunamadı." });
-
-            var currentUser = await _context.Users.FindAsync(userId);
-            bool isOwnerOrAdmin = currentUser != null && (currentUser.Role == "Owner" || currentUser.Role == "Admin");
-            if (post.UserId != userId && !isOwnerOrAdmin)
-            {
-                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Bu gönderiyi silme yetkiniz yok." });
-            }
+            if (!_current.CanManage(User, post.UserId)) return StatusCode(403, new { message = "Bu gönderiyi silemezsin." });
 
             _context.Posts.Remove(post);
+            _context.Likes.RemoveRange(_context.Likes.Where(l => l.TargetType == "post" && l.TargetId == id));
+            _context.Comments.RemoveRange(_context.Comments.Where(c => c.TargetType == "post" && c.TargetId == id));
             await _context.SaveChangesAsync();
-
-            return Ok(new { message = "Gönderi başarıyla silindi." });
+            return Ok(new { success = true });
         }
     }
 }

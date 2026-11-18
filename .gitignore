@@ -29,3 +29,6 @@ Karalevha.API/appsettings.*.json
 .env.*
 Karalevha.API/wwwroot/uploads/
 archive/
+
+# Oba sohbet dosyalari
+Karalevha.API/App_Data/

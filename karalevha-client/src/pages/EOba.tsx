@@ -1,298 +1,357 @@
-import React, { useState, useEffect } from 'react';
-import { api } from '../services/api';
-import { Plus, Zap, Hash, Users, Lock, Trash2 } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { EyeOff, Lock, MessageSquare, MessagesSquare, Pencil, Plus, Trash2, Users } from 'lucide-react';
+import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Oba } from '../types';
+import Avatar from '../components/ui/Avatar';
+import Badge from '../components/ui/Badge';
+import EmptyState from '../components/ui/EmptyState';
+import Field from '../components/ui/Field';
+import Modal from '../components/ui/Modal';
+import PageHeader from '../components/ui/PageHeader';
+import Skeleton from '../components/ui/Skeleton';
+import ItemMenu from '../components/ui/ItemMenu';
+import ListToolbar from '../components/ui/ListToolbar';
+import { useMine } from '../components/ui/useMine';
+import { fullDate, timeAgo } from '../utils/time';
+import { leaveOba } from '../utils/lastOba';
+
+type SortKey = 'aktif' | 'uye' | 'ad';
 
 export default function EOba() {
   const { user } = useAuth();
-  const [obalar, setObalar] = useState<Oba[]>([]);
-  const [activeTab, setActiveTab] = useState<'discover' | 'joined'>('discover');
-  const [showModal, setShowModal] = useState(false);
-  
+  const [obalar, setObalar] = useState<Oba[] | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<SortKey>('aktif');
+  const [mine, setMine] = useMine();
+
+  // Oba listesine gelindiyse kişi obadan çıkmıştır: E-Oba bir dahaki sefere son obayı değil listeyi açsın
+  useEffect(() => {
+    leaveOba(user?.id);
+  }, [user?.id]);
+
+  // Oba kurma
+  const [showCreate, setShowCreate] = useState(false);
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
-  const [color, setColor] = useState('#39ff14');
-  const [isPrivate, setIsPrivate] = useState(false);
-  const [joinPassword, setJoinPassword] = useState(''); 
-  const [loading, setLoading] = useState(false);
-  const [initialLoad, setInitialLoad] = useState(true);
+  // Görünürlük: herkese açık / gizli (listede, şifreyle) / davetli (listede yok, bağlantıyla)
+  const [visibility, setVisibility] = useState<'acik' | 'gizli' | 'davetli'>('acik');
+  const isPrivate = visibility === 'gizli';
+  const [joinPassword, setJoinPassword] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState('');
+
+  // Düzenleme
+  const [toEdit, setToEdit] = useState<Oba | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState('');
+
+  // Silme onayı
+  const [toDelete, setToDelete] = useState<Oba | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+
   useEffect(() => {
-    fetchObalar();
+    let cancelled = false;
+    api<Oba[]>('/api/obalar')
+      .then((data) => !cancelled && setObalar(data))
+      .catch(() => {
+        if (cancelled) return;
+        setObalar([]);
+        setLoadFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const fetchObalar = async () => {
-    try {
-      const data = await api<Oba[]>('/api/obalar');
-      setObalar(data);
-    } catch (error) {
-      console.error('Obalar yüklenemedi:', error);
-    } finally {
-      setInitialLoad(false); 
-    }
+  const visible = useMemo(() => {
+    const q = query.trim().toLocaleLowerCase('tr');
+    const list = (obalar ?? []).filter(
+      (o) =>
+        (!mine || o.isMember || o.owner === user?.username) &&
+        (!q || o.name.toLocaleLowerCase('tr').includes(q) || (o.description ?? '').toLocaleLowerCase('tr').includes(q))
+    );
+    // "aktif": sunucunun sırası (son mesaj ya da kuruluş zamanı, en yeni üstte)
+    if (sort === 'uye') return [...list].sort((a, b) => (b.memberCount ?? 1) - (a.memberCount ?? 1));
+    if (sort === 'ad') return [...list].sort((a, b) => a.name.localeCompare(b.name, 'tr'));
+    return list;
+  }, [obalar, query, sort, mine, user]);
+
+  const closeCreate = () => {
+    if (saving) return;
+    setShowCreate(false);
+    setFormError('');
   };
 
-  const handleDeleteOba = async (e: React.MouseEvent, id: number) => {
-    e.preventDefault(); // Prevent Link navigation
-    if (!window.confirm("Bu obayı tamamen silmek istediğine emin misin? Tüm kanallar ve mesajlar kalıcı olarak yok olacak!")) return;
-    
-    try {
-      await api(`/api/obalar/${id}`, {
-        method: 'DELETE'
-      });
-      setObalar(prev => prev.filter(o => o.id !== id));
-    } catch(err) {
-      console.error(err);
-    }
-  };
-
-  const handleCreateOba = async (e: React.FormEvent) => {
+  const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    if (!name.trim() || saving) return;
+    if (isPrivate && !joinPassword.trim()) {
+      setFormError('Gizli oba için bir katılım şifresi belirle.');
+      return;
+    }
 
-    setLoading(true);
+    setSaving(true);
+    setFormError('');
     try {
-      if (isPrivate && !joinPassword.trim()) {
-        alert('Gizli bir oba için katılım şifresi belirlemelisin.');
-        return;
-      }
-      const newOba = await api<Oba>('/api/obalar', {
+      const created = await api<Oba>('/api/obalar', {
         method: 'POST',
-        body: JSON.stringify({ name, description, color, isPrivate, joinPassword: isPrivate ? joinPassword : null })
+        body: JSON.stringify({
+          name: name.trim(),
+          description: description.trim(),
+          isPrivate: visibility !== 'acik',
+          isUnlisted: visibility === 'davetli',
+          joinPassword: isPrivate ? joinPassword.trim() : null,
+        }),
       });
-      setObalar(prev => [{ ...newOba, isMember: true, memberCount: newOba.memberCount ?? 1 }, ...prev]);
-      setShowModal(false);
+      setObalar((prev) => [created, ...(prev ?? [])]);
       setName('');
       setDescription('');
-      setColor('#39ff14');
-      setIsPrivate(false);
+      setVisibility('acik');
       setJoinPassword('');
-    } catch (error: any) {
-      alert(error?.message || 'Oba oluşturulamadı.');
+      setShowCreate(false);
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : 'Oba kurulamadı.');
     } finally {
-      setLoading(false);
+      setSaving(false);
+    }
+  };
+
+  const openEdit = (oba: Oba) => {
+    setToEdit(oba);
+    setEditName(oba.name);
+    setEditDescription(oba.description ?? '');
+    setEditError('');
+  };
+
+  const handleEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!toEdit || !editName.trim() || editSaving) return;
+    setEditSaving(true);
+    setEditError('');
+    try {
+      const updated = await api<Oba>(`/api/obalar/${toEdit.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ name: editName.trim(), description: editDescription.trim() }),
+      });
+      setObalar((prev) => (prev ?? []).map((o) => (o.id === updated.id ? { ...o, ...updated } : o)));
+      setToEdit(null);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : 'Kaydedilemedi.');
+    } finally {
+      setEditSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!toDelete || deleting) return;
+    setDeleting(true);
+    setDeleteError('');
+    try {
+      await api(`/api/obalar/${toDelete.id}`, { method: 'DELETE' });
+      setObalar((prev) => (prev ?? []).filter((o) => o.id !== toDelete.id));
+      setToDelete(null);
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : 'Oba silinemedi.');
+    } finally {
+      setDeleting(false);
     }
   };
 
   return (
-    <div className="max-w-7xl mx-auto animate-in fade-in duration-300 pb-20">
-      
-      <div className="bg-[#111216] border-2 border-[#1f2129] p-8 mb-8 relative overflow-hidden flex flex-col md:flex-row items-center justify-between group">
-        <div className="absolute inset-0 bg-[#39ff14]/5 blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
-        <div className="relative z-10 text-center md:text-left">
-          <h1 className="text-4xl font-black uppercase tracking-widest text-white flex items-center justify-center md:justify-start">
-            <Zap className="w-8 h-8 mr-3 text-[#39ff14]" fill="currentColor" />
-            E-Oba
-          </h1>
-          <p className="text-zinc-400 text-[15px] mt-2 font-medium tracking-wide">Dijital topluluklarınızı yönetin veya yeni obalara katılın.</p>
-        </div>
-        
-        {user ? (
-          <button 
-            onClick={() => setShowModal(true)}
-            className="mt-6 md:mt-0 relative flex items-center bg-[#39ff14] hover:bg-white text-black px-6 py-3 text-[16px] font-black uppercase tracking-widest transition-all duration-300 shadow-[6px_6px_0px_rgba(255,255,255,0.2)] hover:shadow-[8px_8px_0px_#39ff14] hover:-translate-y-1 hover:-translate-x-1 border-2 border-black z-10"
-          >
-            <Plus className="w-5 h-5 mr-2" strokeWidth={3} />
-            YENİ OBA KUR
-          </button>
-        ) : (
-          <p className="text-zinc-500 font-bold uppercase mt-6 md:mt-0">Oba kurmak için giriş yapın.</p>
-        )}
-      </div>
-
-      
-      {/* Sekme Yapısı */}
-      <div className="flex border-b-2 border-[#1f2129] mb-6">
-        <button 
-          onClick={() => setActiveTab('discover')}
-          className={`flex-1 py-4 text-sm font-black uppercase tracking-widest transition-colors ${
-            activeTab === 'discover' 
-              ? 'text-[#39ff14] border-b-4 border-[#39ff14] bg-[#39ff14]/5' 
-              : 'text-zinc-500 hover:text-white bg-transparent'
-          }`}
-        >
-          OBALARI KEŞFET
-        </button>
-        <div className="w-[2px] bg-[#1f2129]"></div>
-        <button 
-          onClick={() => setActiveTab('joined')}
-          className={`flex-1 py-4 text-sm font-black uppercase tracking-widest transition-colors ${
-            activeTab === 'joined' 
-              ? 'text-[#39ff14] border-b-4 border-[#39ff14] bg-[#39ff14]/5' 
-              : 'text-zinc-500 hover:text-white bg-transparent'
-          }`}
-        >
-          KATILDIĞIM OBALAR
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {initialLoad ? (
-          <div className="col-span-full flex flex-col items-center justify-center py-20 text-[#39ff14]">
-            <Zap className="w-12 h-12 animate-pulse mb-4" />
-            <span className="font-black uppercase tracking-widest text-lg">TOPLULUKLAR YÜKLENİYOR...</span>
-          </div>
-        ) : obalar.length === 0 ? (
-          <div className="col-span-full text-center text-zinc-500 font-bold uppercase py-10">
-            Hiç Oba Yok. İlk kuran sen ol!
-          </div>
-        ) : (
-          obalar.filter(oba => activeTab === 'discover' ? true : oba.isMember || oba.owner === user?.username).map((oba) => (
-            <Link to={`/e-oba/${oba.id}`} key={oba.id} className="bg-[#0b0c10] border-2 border-[#1f2129] flex flex-col group hover:border-[#39ff14]/50 transition-colors relative overflow-hidden">
-              
-              
-              {user && (user.username === oba.owner || user.role === 'Owner') && (
-                <button 
-                  onClick={(e) => handleDeleteOba(e, oba.id)}
-                  className="absolute top-3 left-3 z-20 text-zinc-500 hover:text-red-500 transition-colors p-2 bg-[#111216] border-2 border-[#1f2129] hover:border-red-500"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-
-              {oba.isPrivate && <Lock className="w-5 h-5 absolute top-3 right-3 text-red-500/80 z-20" />}
-              <div className="h-24 bg-[#111216] border-b-2 border-[#1f2129] relative flex items-center justify-center overflow-hidden">
-                <div className="absolute inset-0 opacity-20 bg-cover bg-center" style={{ backgroundImage: "url('/forum.png')" }}></div>
-                <div 
-                  className="absolute inset-0 opacity-10"
-                  style={{ backgroundColor: oba.color || '#39ff14' }}
-                ></div>
-                
-                <div className="absolute -bottom-8">
-                  <div className="w-16 h-16 bg-[#0b0c10] border-2 border-[#1f2129] p-1 shadow-lg relative" style={{ borderColor: oba.color || '#39ff14' }}>
-                    <img 
-                      src={`https://api.dicebear.com/7.x/bottts/svg?seed=${oba.avatarSeed || oba.name}&backgroundColor=transparent`} 
-                      alt={oba.name} 
-                      className="w-full h-full object-contain"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-6 pt-12 flex flex-col flex-grow text-center">
-                <h3 className="text-xl font-black text-white uppercase tracking-wider mb-2 flex items-center justify-center">
-                  <Hash className="w-4 h-4 mr-1 text-zinc-500" />
-                  {oba.name}
-                </h3>
-                <p className="text-zinc-400 text-sm font-medium leading-relaxed mb-6 flex-grow">
-                  {oba.description || "Açıklama bulunmuyor..."}
-                </p>
-                
-                <div className="flex items-center justify-between mt-auto border-t-2 border-[#1f2129] pt-4">
-                  <div className="flex items-center text-zinc-500 font-bold text-xs uppercase tracking-wider">
-                    <Users className="w-4 h-4 mr-2" />
-                    {oba.memberCount ?? 1} ÜYE
-                  </div>
-                  <span className="text-xs font-bold text-zinc-600 uppercase tracking-wider">
-                    Kurucu: {oba.owner}
-                  </span>
-                </div>
-              </div>
-            </Link>
-          ))
-        )}
-      </div>
-
-      {showModal && (
-        <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md bg-[#111216] border-2 border-[#39ff14] p-8 shadow-[12px_12px_0px_#39ff14] relative animate-in zoom-in-95 duration-200">
-            
-            <button 
-              onClick={() => setShowModal(false)}
-              className="absolute top-4 right-4 text-zinc-500 hover:text-white transition-colors"
-            >
-              <Plus className="w-6 h-6 rotate-45" />
+    <div>
+      <PageHeader
+        title="E-Oba"
+        description="Kulübün sohbet odaları: ders notları, çıkmış sorular ve proje dosyaları burada paylaşılır."
+        action={
+          user ? (
+            <button type="button" onClick={() => setShowCreate(true)} className="btn-ana">
+              <Plus className="w-4 h-4" strokeWidth={2.5} />
+              Oba kur
             </button>
+          ) : (
+            <Link to="/auth" state={{ from: '/e-oba' }} className="btn-ikincil">Oba kurmak için giriş yap</Link>
+          )
+        }
+      />
 
-            <h2 className="text-2xl font-black uppercase tracking-widest text-white mb-6 flex items-center">
-              <Zap className="w-6 h-6 mr-2 text-[#39ff14]" />
-              YENİ OBA KUR
-            </h2>
-
-            <form onSubmit={handleCreateOba} className="space-y-6">
-              
-              <div className="space-y-2">
-                <label className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">Oba Adı</label>
-                <input 
-                  type="text" 
-                  required
-                  maxLength={50}
-                  value={name}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setName(e.target.value)}
-                  placeholder="Oba'nın adını girin..."
-                  className="w-full bg-[#0b0c10] border-2 border-[#1f2129] px-4 py-3 text-white focus:border-[#39ff14] outline-none transition-colors"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">Açıklama</label>
-                <textarea 
-                  value={description}
-                  onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setDescription(e.target.value)}
-                  placeholder="Bu oba ne hakkında?"
-                  className="w-full bg-[#0b0c10] border-2 border-[#1f2129] px-4 py-3 text-white focus:border-[#39ff14] outline-none transition-colors min-h-[100px] resize-none"
-                ></textarea>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">Tema Rengi</label>
-                <div className="flex items-center space-x-3">
-                  <input 
-                    type="color" 
-                    value={color}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setColor(e.target.value)}
-                    className="w-12 h-12 bg-transparent border-none cursor-pointer p-0"
-                  />
-                  <span className="text-zinc-500 font-bold uppercase">{color}</span>
-                </div>
-              </div>
-
-              
-              <div className="flex items-center mt-6 mb-6">
-                  <input
-                    type="checkbox"
-                    id="isPrivate"
-                    checked={isPrivate}
-                    onChange={(e) => setIsPrivate(e.target.checked)}
-                    className="w-5 h-5 bg-[#0b0c10] border-2 border-[#1f2129] text-[#39ff14] focus:ring-[#39ff14] focus:ring-offset-[#111216] rounded-sm accent-[#39ff14]"
-                  />
-                  <label htmlFor="isPrivate" className="ml-3 block text-sm font-bold text-zinc-300 uppercase tracking-widest cursor-pointer">
-                    Gizli Oba (Sadece Üyeler)
-                  </label>
-              </div>
-
-              {isPrivate && (
-                <div className="space-y-2 mb-6 animate-in slide-in-from-top-2">
-                  <label className="text-[12px] font-bold text-zinc-400 uppercase tracking-widest">Katılım Şifresi</label>
-                  <input 
-                    type="text" 
-                    value={joinPassword}
-                    onChange={(e) => setJoinPassword(e.target.value)}
-                    placeholder="Oba şifresi belirle..."
-                    className="w-full bg-[#0b0c10] border-2 border-[#1f2129] px-4 py-3 text-white focus:border-[#39ff14] outline-none transition-colors"
-                  />
-                </div>
-              )}
-
-
-              <button 
-                type="submit"
-                disabled={loading}
-                className={`w-full py-4 text-[16px] font-black uppercase tracking-widest border-2 border-black transition-all
-                  ${loading ? 'bg-zinc-600 text-zinc-400' : 'bg-[#39ff14] text-black hover:bg-white hover:shadow-[4px_4px_0px_#39ff14] hover:-translate-y-1'}`}
-              >
-                {loading ? 'KURULUYOR...' : 'OBA YI OLUŞTUR'}
-              </button>
-
-            </form>
-          </div>
-        </div>
+      {obalar && obalar.length > 0 && (
+        <ListToolbar
+          id="oba-ara"
+          query={query}
+          onQuery={setQuery}
+          placeholder="Oba ara"
+          sort={sort}
+          onSort={setSort}
+          sortOptions={[
+            { value: 'aktif', label: 'Son etkinlik' },
+            { value: 'uye', label: 'Üye sayısı' },
+            { value: 'ad', label: 'Ada göre (A–Z)' },
+          ]}
+          count={{ shown: visible.length, total: obalar.length, unit: 'oba' }}
+          mine={user ? { active: mine, onChange: setMine } : undefined}
+        />
       )}
 
+      {obalar === null ? (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {[0, 1, 2].map((i) => <Skeleton key={i} className="h-36" />)}
+        </div>
+      ) : visible.length === 0 ? (
+        <EmptyState
+          icon={MessagesSquare}
+          title={loadFailed ? 'Obalar yüklenemedi' : obalar.length === 0 ? 'Henüz kurulmuş oba yok' : 'Sonuç bulunamadı'}
+          description={
+            loadFailed
+              ? 'Sayfayı yenilemeyi dene.'
+              : obalar.length === 0
+                ? 'Dersin, takımın ya da projen için bir oba kur; notlar ve dosyalar tek yerde dursun.'
+                : `"${query.trim()}" adında bir oba yok.`
+          }
+          action={!loadFailed && obalar.length === 0 && user && (
+            <button type="button" onClick={() => setShowCreate(true)} className="btn-ikincil">İlk obayı kur</button>
+          )}
+        />
+      ) : (
+        <ul className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {visible.map((oba) => {
+            const isOwner = user?.username === oba.owner;
+            return (
+              <li key={oba.id} className="relative kart hover:border-tebesir-silik transition-colors">
+                <Link to={`/e-oba/${oba.id}`} className="flex flex-col h-full p-5">
+                  <div className="flex items-start gap-3">
+                    <Avatar name={oba.name} />
+                    <div className="min-w-0 flex-1 pr-8">
+                      <h2 className="text-base font-semibold text-tebesir truncate">{oba.name}</h2>
+                      <p className="text-xs text-tebesir-silik truncate">{oba.owner} kurdu</p>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-sm text-tebesir-soluk line-clamp-2 flex-1">
+                    {oba.description || 'Açıklama eklenmemiş.'}
+                  </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2 text-xs text-tebesir-silik">
+                    <span className="inline-flex items-center gap-1">
+                      <Users className="w-3.5 h-3.5" aria-hidden="true" />
+                      {oba.memberCount ?? 1} üye
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <MessageSquare className="w-3.5 h-3.5" aria-hidden="true" />
+                      {oba.lastMessageAt ? (
+                        <time dateTime={oba.lastMessageAt} title={`Son mesaj: ${fullDate(oba.lastMessageAt)}`}>
+                          {oba.messageCount} mesaj · son {timeAgo(oba.lastMessageAt)}
+                        </time>
+                      ) : (
+                        'Henüz mesaj yok'
+                      )}
+                    </span>
+                    {oba.isUnlisted ? (
+                      <Badge><EyeOff className="w-3 h-3" aria-hidden="true" />Davetli</Badge>
+                    ) : (
+                      oba.isPrivate && <Badge><Lock className="w-3 h-3" aria-hidden="true" />Gizli</Badge>
+                    )}
+                    {isOwner ? <Badge tone="isaret">Kurucu</Badge> : oba.isMember && <Badge>Üyesin</Badge>}
+                  </div>
+                </Link>
+                {isOwner && (
+                  <div className="absolute top-4 right-4">
+                    <ItemMenu
+                      label={`${oba.name} seçenekleri`}
+                      actions={[
+                        { label: 'Düzenle', icon: Pencil, onSelect: () => openEdit(oba) },
+                        { label: 'Sil', icon: Trash2, danger: true, onSelect: () => { setDeleteError(''); setToDelete(oba); } },
+                      ]}
+                    />
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+
+      {/* Oba kur */}
+      {showCreate && (
+        <Modal title="Oba kur" onClose={closeCreate}>
+          <form onSubmit={handleCreate} className="p-5 space-y-4">
+            <Field id="oba-adi" label="Oba adı">
+              <input id="oba-adi" type="text" required maxLength={50} autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Devre Analizi" className="girdi" />
+            </Field>
+            <Field id="oba-aciklama" label="Açıklama" note="isteğe bağlı">
+              <textarea id="oba-aciklama" rows={3} maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Bu oba ne için?" className="girdi resize-y" />
+            </Field>
+            <fieldset className="space-y-2">
+              <legend className="mb-2 text-sm font-medium text-tebesir">Görünürlük</legend>
+              {([
+                ['acik', 'Herkese açık', 'Listede görünür, herkes okur ve katılır.'],
+                ['gizli', 'Gizli, listede görünür', 'Listede görünür; içeriği yalnızca şifreyle katılan üyeler görür.'],
+                ['davetli', 'Gizli, listede görünmez', 'Listede ve aramada çıkmaz; yalnızca davet bağlantısıyla katılınır.'],
+              ] as const).map(([value, label, note]) => (
+                <label key={value} className={`flex items-start gap-3 cursor-pointer rounded-md border px-3 py-2.5 transition-colors ${visibility === value ? 'border-isaret/60 bg-isaret/5' : 'border-levha-cizgi hover:border-tebesir-silik'}`}>
+                  <input type="radio" name="oba-gorunurluk" value={value} checked={visibility === value} onChange={() => setVisibility(value)} className="mt-0.5 w-4 h-4 accent-isaret" />
+                  <span>
+                    <span className="block text-sm font-medium text-tebesir">{label}</span>
+                    <span className="block text-xs text-tebesir-silik">{note}</span>
+                  </span>
+                </label>
+              ))}
+            </fieldset>
+            {visibility === 'davetli' && (
+              <p className="text-xs text-tebesir-silik">Kurduktan sonra davet bağlantısını obanın menüsünden alırsın.</p>
+            )}
+            {isPrivate && (
+              <Field id="oba-sifre" label="Katılım şifresi" hint="Bu şifreyi katılmasını istediğin kişilerle paylaş.">
+                <input id="oba-sifre" type="text" maxLength={100} value={joinPassword} onChange={(e) => setJoinPassword(e.target.value)} className="girdi" />
+              </Field>
+            )}
+            {formError && <p className="text-sm text-hata" role="alert">{formError}</p>}
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={closeCreate} disabled={saving} className="btn-ikincil">Vazgeç</button>
+              <button type="submit" disabled={saving || !name.trim()} className="btn-ana">{saving ? 'Kuruluyor…' : 'Obayı kur'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Düzenleme */}
+      {toEdit && (
+        <Modal title="Obayı düzenle" onClose={() => !editSaving && setToEdit(null)}>
+          <form onSubmit={handleEdit} className="p-5 space-y-4">
+            <Field id="oba-duzenle-ad" label="Oba adı">
+              <input id="oba-duzenle-ad" type="text" required maxLength={100} autoFocus value={editName} onChange={(e) => setEditName(e.target.value)} className="girdi" />
+            </Field>
+            <Field id="oba-duzenle-aciklama" label="Açıklama" note="isteğe bağlı">
+              <textarea id="oba-duzenle-aciklama" rows={3} maxLength={500} value={editDescription} onChange={(e) => setEditDescription(e.target.value)} className="girdi resize-y" />
+            </Field>
+            {editError && <p className="text-sm text-hata" role="alert">{editError}</p>}
+            <div className="flex justify-end gap-3 pt-2">
+              <button type="button" onClick={() => setToEdit(null)} disabled={editSaving} className="btn-ikincil">Vazgeç</button>
+              <button type="submit" disabled={editSaving || !editName.trim()} className="btn-ana">{editSaving ? 'Kaydediliyor…' : 'Kaydet'}</button>
+            </div>
+          </form>
+        </Modal>
+      )}
+
+      {/* Silme onayı */}
+      {toDelete && (
+        <Modal title="Oba silinsin mi?" onClose={() => !deleting && setToDelete(null)}>
+          <div className="p-5 space-y-4">
+            <p className="text-sm text-tebesir-soluk">
+              <span className="font-medium text-tebesir">{toDelete.name}</span> obası, bütün kanalları, mesajları ve
+              paylaşılan dosyalarıyla birlikte kalıcı olarak silinecek. Bu işlem geri alınamaz.
+            </p>
+            {deleteError && <p className="text-sm text-hata" role="alert">{deleteError}</p>}
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setToDelete(null)} disabled={deleting} className="btn-ikincil">Vazgeç</button>
+              <button type="button" onClick={handleDelete} disabled={deleting} className="btn-tehlike">{deleting ? 'Siliniyor…' : 'Kalıcı olarak sil'}</button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
-
-
-

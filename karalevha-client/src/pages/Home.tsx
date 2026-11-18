@@ -1,76 +1,145 @@
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowUpRight } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { api } from '../services/api';
+import { ClubEvent, Oba, Post, PrintModel, Project } from '../types';
+import CommunityPulse from '../components/home/CommunityPulse';
+import ClubNotes, { pickNote, rememberNote } from '../components/home/ClubNotes';
+import { lastObaPath } from '../utils/lastOba';
 
-export default function Home() {
+// three.js sahnesi ayrı parça olarak, sayfa açıldıktan sonra yüklenir
+const PrintScene = lazy(() => import('../components/home/PrintScene'));
+
+/*
+ * Yükseklik bütçesi: üst menü + sahne kartı + rakamlar + footer tek ekrana sığar (sayfa kaymaz).
+ * Kartın dışında kalan her şey yaklaşık 25rem; kart ekranın geri kalanını alır.
+ */
+// Telefonda footer iki satıra kırılır, bu yüzden orada daha çok yer ayrılır
+const SCENE_HEIGHT = 'h-[calc(100dvh-40.5rem)] sm:h-[calc(100dvh-29.75rem)] min-h-[180px] sm:min-h-[200px] max-h-[560px]';
+
+/** Başlığın altındaki elle çekilmiş sprey çizgisi (menüdeki etkin sekmenin çizgisiyle aynı) */
+function SprayUnderline() {
   return (
-    <div className="flex flex-col items-center py-10 px-4 max-w-[1250px] mx-auto animate-in fade-in duration-300">
-      
-      {/* Hero Section */}
-      <div className="text-center max-w-3xl mb-14 relative">
-        <h1 className="text-5xl md:text-6xl font-black text-transparent bg-clip-text bg-gradient-to-br from-white to-zinc-500 mb-6 tracking-tighter uppercase">
-          KaraLevha'ya Hoş Geldin
-        </h1>
-        <p className="text-zinc-400 text-[16px] md:text-[18px] font-medium leading-relaxed tracking-wide">
-          Burası makerlar, yazılımcılar ve donanım geliştiricileri için dijital bir buluşma noktasıdır. 
-          Kendi Oba'nı kur, projelere katıl ve üretmeye başla!
-        </p>
-      </div>
+    <svg viewBox="0 0 100 8" preserveAspectRatio="none" className="absolute left-0 -bottom-2 w-full h-2.5 text-isaret" aria-hidden="true">
+      <path d="M2 5.5c14-3 26-2.5 38-1.5s27 1.6 40-1.2c6-1.2 11-1 18 .4" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+    </svg>
+  );
+}
 
-      {/* Cards Grid - Sokak Tarzı (Brutalist/Neon) */}
-      <div className="w-full grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-        
-        {/* 1. Akış Kartı (Neon Turuncu) */}
-        <Link to="/akis" className="group h-[340px] bg-[#111216] flex flex-col transition-all duration-300 ease-out hover:-translate-y-2 hover:-translate-x-2 border-2 border-[#ff5500]/50 hover:border-[#ff5500] hover:shadow-[8px_8px_0px_#ff5500]">
-          <div className="flex-1 w-full h-full overflow-hidden flex items-center justify-center p-1">
-            <img src="/forum.png" alt="Akış" className="w-full h-full object-cover group-hover:scale-110 group-hover:rotate-1 transition-transform duration-500 opacity-80 group-hover:opacity-100" />
-          </div>
-          <div className="h-[70px] bg-[#0b0c10] flex flex-col justify-center px-5 border-t-2 border-[#ff5500]/50 group-hover:border-[#ff5500] transition-colors relative overflow-hidden">
-            <span className="text-white font-black uppercase text-[18px] tracking-widest relative z-10">Akış</span>
-            <span className="text-[#ff5500] text-xs font-bold uppercase tracking-widest relative z-10">Meydan</span>
-            <div className="absolute inset-0 bg-[#ff5500]/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-          </div>
-        </Link>
+async function list<T>(path: string): Promise<T[] | null> {
+  try {
+    return await api<T[]>(path);
+  } catch {
+    return null;
+  }
+}
 
-        {/* 2. Projeler Kartı (Neon Mavi/Cyan) */}
-        <Link to="/projeler" className="group h-[340px] bg-[#111216] flex flex-col transition-all duration-300 ease-out hover:-translate-y-2 hover:-translate-x-2 border-2 border-[#00e5ff]/50 hover:border-[#00e5ff] hover:shadow-[8px_8px_0px_#00e5ff]">
-          <div className="flex-1 w-full h-full flex items-center justify-center bg-[url('/baskikorsanlari.png')] bg-cover bg-center bg-blend-overlay bg-[#00e5ff]/5 group-hover:bg-[#00e5ff]/10 transition-colors">
-            <svg width="96" height="96" viewBox="0 0 24 24" fill="none" stroke="#00e5ff" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" className="group-hover:scale-110 transition-transform duration-500 drop-shadow-[0_0_15px_rgba(0,229,255,0.8)]">
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
-              <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
-              <line x1="12" y1="22.08" x2="12" y2="12"></line>
-            </svg>
-          </div>
-          <div className="h-[70px] bg-[#0b0c10] flex flex-col justify-center px-5 border-t-2 border-[#00e5ff]/50 group-hover:border-[#00e5ff] transition-colors relative overflow-hidden">
-            <span className="text-white font-black uppercase text-[18px] tracking-widest relative z-10">Projeler</span>
-            <span className="text-[#00e5ff] text-xs font-bold uppercase tracking-widest relative z-10">Açık Kaynak</span>
-            <div className="absolute inset-0 bg-[#00e5ff]/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-          </div>
-        </Link>
+interface Lists {
+  projects: Project[] | null;
+  models: PrintModel[] | null;
+  obalar: Oba[] | null;
+  posts: Post[] | null;
+  /** Yaklaşan ilk etkinlik (yoksa null) */
+  event: ClubEvent | null;
+}
 
-        {/* 3. 3B Baskı Kartı (Neon Mor) */}
-        <Link to="/baski-istasyonu" className="group h-[340px] bg-[#111216] flex flex-col transition-all duration-300 ease-out hover:-translate-y-2 hover:-translate-x-2 border-2 border-[#a855f7]/50 hover:border-[#a855f7] hover:shadow-[8px_8px_0px_#a855f7]">
-          <div className="flex-1 w-full h-full overflow-hidden flex items-center justify-center p-1">
-            <img src="/baski.png" alt="3B Baskı İstasyonu" className="w-full h-full object-cover group-hover:scale-110 group-hover:-rotate-1 transition-transform duration-500 opacity-80 group-hover:opacity-100" />
-          </div>
-          <div className="h-[70px] bg-[#0b0c10] flex flex-col justify-center px-5 border-t-2 border-[#a855f7]/50 group-hover:border-[#a855f7] transition-colors relative overflow-hidden">
-            <span className="text-white font-black uppercase text-[18px] tracking-widest relative z-10">3B Baskı</span>
-            <span className="text-[#a855f7] text-xs font-bold uppercase tracking-widest relative z-10">İstasyon</span>
-            <div className="absolute inset-0 bg-[#a855f7]/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-          </div>
-        </Link>
+/**
+ * Ana sayfa: bir vitrin. Katman katman baskı yapan 3B sahnenin içinde başlık ve düğmeler,
+ * altında kulübün rakamları. Kişiye özel listeler profilde, bölümler üst menüde.
+ */
+export default function Home() {
+  const { user } = useAuth();
+  const [lists, setLists] = useState<Lists | null>(null);
+  // Her gelişte bir not; sahne o notun modelini basar
+  const [note] = useState(pickNote);
+  useEffect(() => rememberNote(note), [note]);
 
-        {/* 4. E-Oba Kartı (Neon Yeşil) */}
-        <Link to="/e-oba" className="group h-[340px] bg-[#111216] flex flex-col transition-all duration-300 ease-out hover:-translate-y-2 hover:-translate-x-2 border-2 border-[#39ff14]/50 hover:border-[#39ff14] hover:shadow-[8px_8px_0px_#39ff14]">
-          <div className="flex-1 w-full h-full overflow-hidden flex items-center justify-center p-1">
-            <img src="/eoba.jpg" alt="E-Oba" className="w-full h-full object-cover group-hover:scale-110 group-hover:rotate-1 transition-transform duration-500 opacity-80 group-hover:opacity-100 filter contrast-125" />
-          </div>
-          <div className="h-[70px] bg-[#0b0c10] flex flex-col justify-center px-5 border-t-2 border-[#39ff14]/50 group-hover:border-[#39ff14] transition-colors relative overflow-hidden">
-            <span className="text-white font-black uppercase text-[18px] tracking-widest relative z-10">E-Oba</span>
-            <span className="text-[#39ff14] text-xs font-bold uppercase tracking-widest relative z-10">Sunucular</span>
-            <div className="absolute inset-0 bg-[#39ff14]/10 translate-y-full group-hover:translate-y-0 transition-transform duration-300"></div>
-          </div>
-        </Link>
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      list<Project>('/api/projects'),
+      list<PrintModel>('/api/printmodels'),
+      list<Oba>('/api/obalar'),
+      list<Post>('/api/posts'),
+      list<ClubEvent>('/api/etkinlik?take=1'),
+    ]).then(([projects, models, obalar, posts, events]) =>
+      !cancelled && setLists({ projects, models, obalar, posts, event: events?.[0] ?? null })
+    );
+    return () => {
+      cancelled = true;
+    };
+    // Giriş/çıkışta "senin" sayıları değişir (obalardaki üyelik bilgisi kişiye göre gelir)
+  }, [user?.id]);
 
-      </div>
+  // Giriş yapan kişiye kendi sayıları ve kendi içeriğine süzülmüş sayfalar; misafire kulübün toplamı
+  const mineOnly = <T,>(items: T[] | null | undefined, isMine: (t: T) => boolean) =>
+    items ? (user ? items.filter(isMine).length : items.length) : undefined;
+  const stats = [
+    { label: user ? 'projen' : 'proje', value: mineOnly(lists?.projects, (p) => p.owner === user?.username), to: '/projeler' },
+    { label: user ? 'modelin' : 'model', value: mineOnly(lists?.models, (m) => m.userId === user?.id), to: '/projeler' },
+    { label: user ? 'oban' : 'oba', value: mineOnly(lists?.obalar, (o) => !!o.isMember || o.owner === user?.username), to: '/e-oba' },
+    { label: user ? 'paylaşımın' : 'paylaşım', value: mineOnly(lists?.posts, (p) => p.user?.id === user?.id), to: '/akis' },
+  ].map((s) => ({ ...s, to: user ? `${s.to}?${s.to === '/akis' ? 'kapsam' : 'kimin'}=benim` : s.to }));
+
+  return (
+    <div>
+      <section className="relative" aria-label="KaraLevha">
+        <div className="kareli absolute -inset-3 pointer-events-none rounded-lg" aria-hidden="true" />
+        <div className="relative kart bg-levha-koyu/70 px-3 pt-3 pb-2 overflow-hidden">
+          {/* Başlık ve düğmeler sahnenin üstünde; arkadaki sahne fareyle çevrilebilir kalsın diye yalnızca kendileri tıklanır */}
+          <header className="absolute inset-x-0 top-0 z-10 flex flex-wrap items-start justify-between gap-4 p-5 sm:p-6 pointer-events-none">
+            <div className="space-y-10">
+              <h1 className="relative inline-block font-display font-bold text-2xl text-tebesir">
+                KaraLevha
+                <SprayUnderline />
+              </h1>
+              {/* Kulüp notları: sahne sağa kaydığında solda kalan boşlukta (geniş ekran) */}
+              <div className="hidden lg:block">
+                <ClubNotes note={note} />
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 pointer-events-auto">
+              {user ? (
+                <>
+                  <Link to="/atolye" className="btn-ikincil">Yazıcı ayır</Link>
+                  <Link to={lastObaPath(user?.id)} className="btn-ana">Obalara git</Link>
+                </>
+              ) : (
+                <>
+                  <Link to="/projeler" className="btn-ikincil">Projelere bak</Link>
+                  <Link to="/auth" className="btn-ana">Kayıt ol</Link>
+                </>
+              )}
+            </div>
+          </header>
+
+          <Suspense fallback={<div className={SCENE_HEIGHT} />}>
+            <PrintScene className={SCENE_HEIGHT} shiftRight={0.17} model={note.model} />
+          </Suspense>
+        </div>
+      </section>
+
+      {/* Rakamlar: tıklayınca ilgili sayfa (giriş yapılmışsa kişinin kendi içeriğine süzülmüş) */}
+      <nav aria-label={user ? 'Senin içeriğin' : 'Kulübün rakamları'} className="mt-8 grid grid-cols-4 divide-x divide-levha-cizgi border-y border-levha-cizgi">
+        {stats.map(({ label, value, to }) => (
+          <Link key={label} to={to} className="group relative py-4 px-4 flex flex-col hover:bg-white/[0.03] focus-visible:bg-white/[0.03] transition-colors">
+            {/* Üzerine gelince sağ üstte beliren ok */}
+            <ArrowUpRight
+              className="absolute top-3 right-3 w-4 h-4 text-isaret opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity duration-200"
+              aria-hidden="true"
+            />
+            <span className="font-display font-bold text-xl text-tebesir tabular-nums group-hover:text-isaret transition-colors">{value ?? '—'}</span>
+            <span className="etiket mt-0.5 group-hover:text-tebesir-soluk transition-colors">{label}</span>
+            {/* Alttaki ince çizgi limon yeşiline döner */}
+            <span className="absolute inset-x-0 -bottom-px h-0.5 bg-transparent group-hover:bg-isaret group-focus-visible:bg-isaret transition-colors" aria-hidden="true" />
+          </Link>
+        ))}
+      </nav>
+
+      {/* Topluluk nabzı: yaklaşan etkinlik ve en son paylaşım */}
+      {/* Veri geldiyse etkinlik ya vardır ya da yoktur (null); undefined yalnızca yüklenirken */}
+      <CommunityPulse event={lists ? lists.event ?? null : undefined} projects={lists?.projects} posts={lists?.posts} />
     </div>
   );
 }

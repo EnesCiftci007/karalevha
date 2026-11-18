@@ -23,5 +23,17 @@ namespace Karalevha.API.Models
         public User? User { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        // Ek dosya (opsiyonel). Dosyanın kendisi diskte FileStoredName adıyla durur.
+        [MaxLength(255)]
+        public string? FileName { get; set; } // Kullanıcının yüklediği orijinal ad
+
+        [MaxLength(100)]
+        public string? FileStoredName { get; set; } // Diskteki GUID tabanlı ad
+
+        [MaxLength(100)]
+        public string? FileContentType { get; set; }
+
+        public long? FileSize { get; set; }
     }
 }

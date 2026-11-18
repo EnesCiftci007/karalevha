@@ -24,6 +24,16 @@ namespace Karalevha.API.Models
         public int MemberCount { get; set; } = 1; // Kurucu dahil
 
         public bool IsPrivate { get; set; } = false;
+
+        /// <summary>
+        /// Listede görünmez (private-unlisted): obalar listesinde ve aramada çıkmaz, yalnızca davet
+        /// bağlantısıyla katılınır. Her zaman gizlidir (IsPrivate).
+        /// </summary>
+        public bool IsUnlisted { get; set; } = false;
+
+        /// <summary>Davet bağlantısının kodu (/e-oba/davet/{kod}). Kurucu yenileyince eskisi geçersiz olur.</summary>
+        [MaxLength(32)]
+        public string? InviteCode { get; set; }
         
         [MaxLength(100)]
         public string? JoinPassword { get; set; }

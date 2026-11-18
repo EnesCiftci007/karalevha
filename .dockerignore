@@ -5,5 +5,4 @@ karalevha-client
 .git
 .vscode
 .env*
-appsettings.*.json
-!Karalevha.API/appsettings.json
+appsettings.*.json\n!Karalevha.API/appsettings.json

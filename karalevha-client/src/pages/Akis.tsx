@@ -1,389 +1,368 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
+import { Lock, Users } from 'lucide-react';
 import { api } from '../services/api';
-import { MessageSquare, Heart, Share2, Send, Flame, Hash, Loader2, Trash2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { Post } from '../types';
-import { Link, useLocation } from 'react-router-dom';
-import PostComments from '../components/post/PostComments';
+import { Oba, Post } from '../types';
+import { extractTags, normalizeTag } from '../utils/hashtags';
+import FeedFilter, { DEFAULT_FILTER, type FeedFilterValue, type Period, type Scope, type SortKey } from '../components/akis/FeedFilter';
+import Avatar from '../components/ui/Avatar';
+import PageHeader from '../components/ui/PageHeader';
+import PostItem from '../components/akis/PostItem';
+import { Comments, CommentToggle, LikeButton, useSocialCounts } from '../components/social/Social';
+import { SocialCounts } from '../types';
 
-const AVAILABLE_TAGS = ['Yazılım', 'Robotik', '3B Baskı', 'Elektronik', 'El İşi', 'Tasarım', 'Oyun Geliştirme', 'IoT', 'Duyuru'];
+/** Zaman filtresinin başlangıcı (yerel saatle: bugün gece yarısı, haftanın pazartesisi, ayın biri) */
+function periodStart(period: Period): number {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  if (period === 'hafta') d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  if (period === 'ay') d.setDate(1);
+  return period === 'tum' ? 0 : d.getTime();
+}
 
-export default function Akis() {
-  const { user } = useAuth();
-  const [posts, setPosts] = useState<Post[]>([]);
-  const [content, setContent] = useState('');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [initialLoad, setInitialLoad] = useState(true);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(true);
-  const scrollState = useRef({ loadingMore: false, hasMore: true });
-  const [activeFilter, setActiveFilter] = useState<string | null>(null);
-  const likingPosts = useRef<Set<number>>(new Set());
-  const [expandedPostId, setExpandedPostId] = useState<number | null>(null);
-  const [highlightedPostId, setHighlightedPostId] = useState<number | null>(null);
-  const location = useLocation();
-
-  const fetchPosts = async (pageNum: number) => {
-    try {
-      if (pageNum > 1) {
-        scrollState.current.loadingMore = true;
-      }
-      const data = await api<any>(`/api/posts?page=${pageNum}&pageSize=10`);
-      if (data.length < 10) {
-        setHasMore(false);
-        scrollState.current.hasMore = false;
-      }
-      
-      if (pageNum === 1) {
-        setPosts(data);
-      } else {
-        setPosts(prev => {
-          // Avoid duplicates in React Strict Mode
-          const existingIds = new Set(prev.map(p => p.id));
-          const newPosts = data.filter((p: any) => !existingIds.has(p.id));
-          return [...prev, ...newPosts];
-        });
-      }
-    } catch (error) {
-      console.error('Gönderiler yüklenemedi:', error);
-    } finally {
-      setInitialLoad(false);
-      scrollState.current.loadingMore = false;
-    }
-  };
-
-  useEffect(() => {
-    const handleScroll = () => {
-      if (window.innerHeight + document.documentElement.scrollTop >= document.documentElement.offsetHeight - 200) {
-        if (!scrollState.current.loadingMore && scrollState.current.hasMore) {
-          setPage(prev => prev + 1);
-        }
-      }
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  useEffect(() => {
-    fetchPosts(page);
-  }, [page]);
-
-  // Bildirimden gelinen gönderiye (#post-123) git: listede yoksa tek başına yükleyip en üste ekle
-  useEffect(() => {
-    const match = location.hash.match(/^#post-(\d+)$/);
-    if (!match || initialLoad) return;
-    const postId = Number(match[1]);
-    let cancelled = false;
-
-    const focusPost = async () => {
-      if (!posts.some(p => p.id === postId)) {
-        try {
-          const post = await api<Post>(`/api/posts/${postId}`);
-          if (cancelled) return;
-          setPosts(prev => prev.some(p => p.id === postId) ? prev : [post, ...prev]);
-        } catch {
-          return; // gönderi silinmiş olabilir
-        }
-      }
-      if (cancelled) return;
-      setActiveFilter(null);
-      setExpandedPostId(postId);
-      setHighlightedPostId(postId);
-      requestAnimationFrame(() => {
-        document.getElementById(`post-${postId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
-    };
-
-    focusPost();
-    return () => { cancelled = true; };
-    // posts bilinçli olarak bağımlılık değil: sadece hash değişince/ilk yüklemede çalışmalı
-  }, [location.hash, initialLoad]);
-
-  const toggleTag = (tag: string) => {
-    if (selectedTags.includes(tag)) {
-      setSelectedTags(prev => prev.filter(t => t !== tag));
-    } else {
-      if (selectedTags.length < 3) setSelectedTags([...selectedTags, tag]);
-    }
-  };
-
-  const handlePostSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!content.trim() || !user) return;
-
-    setLoading(true);
-    try {
-      const newPost = await api<any>('/api/posts', {
-        method: 'POST',
-        body: JSON.stringify({ content, tags: selectedTags })
-      });
-      if (newPost) {
-        setPosts([newPost, ...posts]);
-        setContent('');
-        setSelectedTags([]);
-      }
-    } catch (error) {
-      console.error('Gönderi paylaşılamadı:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleLike = async (postId: number) => {
-    if (!user) return;
-    if (likingPosts.current.has(postId)) return;
-    
-    likingPosts.current.add(postId);
-    
-    setPosts(prevPosts => prevPosts.map(p => {
-      if (p.id === postId) {
-        const isCurrentlyLiked = p.isLikedByCurrentUser;
-        return { ...p, likes: isCurrentlyLiked ? Math.max(0, (p.likes || 0) - 1) : ((p.likes || 0) + 1), isLikedByCurrentUser: !isCurrentlyLiked };
-      }
-      return p;
-    }));
-
-    try {
-      const response = await api<any>(`/api/posts/${postId}/like`, { method: 'POST' });
-      setPosts(prevPosts => prevPosts.map(p => p.id === postId ? { ...p, likes: response.likes, isLikedByCurrentUser: response.isLiked } : p));
-    } catch (error) {
-      setPosts(prevPosts => prevPosts.map(p => {
-        if (p.id === postId) {
-          const isCurrentlyLiked = p.isLikedByCurrentUser;
-          return { ...p, likes: isCurrentlyLiked ? ((p.likes || 0) + 1) : Math.max(0, (p.likes || 0) - 1), isLikedByCurrentUser: !isCurrentlyLiked };
-        }
-        return p;
-      }));
-    } finally {
-      likingPosts.current.delete(postId);
-    }
-  };
-
-  const handleDeletePost = async (postId: number) => {
-    if (!window.confirm('Bu gönderiyi silmek istediğinize emin misiniz?')) return;
-    try {
-      await api(`/api/posts/${postId}`, { method: 'DELETE' });
-      setPosts(prev => prev.filter(p => p.id !== postId));
-    } catch (err: any) {
-      console.error('Gönderi silinemedi:', err);
-      alert(err?.message || 'Gönderi silinemedi.');
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('tr-TR', { 
-      day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' 
-    });
-  };
-
-  const filteredPosts = activeFilter 
-    ? posts.filter(p => p.tags && p.tags.includes(activeFilter))
-    : posts;
-
+/** Etiket düğmesi: seçili olunca işaret rengi */
+function TagChip({ tag, active, onClick, count }: { tag: string; active?: boolean; onClick: () => void; count?: number }) {
   return (
-    <div className="max-w-6xl mx-auto px-4 animate-in fade-in duration-300 pb-20">
-      
-      <div className="flex items-center space-x-3 mb-8 border-b-2 border-[#1f2129] pb-4">
-        <Flame className="w-8 h-8 text-[#ff5500]" fill="currentColor" />
-        <h1 className="text-3xl font-black uppercase tracking-widest text-white">Akış (Meydan)</h1>
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`inline-flex items-center gap-1.5 h-7 px-2.5 rounded border text-xs transition-colors ${
+        active ? 'border-isaret text-isaret bg-isaret/10' : 'border-levha-cizgi text-tebesir-soluk hover:border-tebesir-silik hover:text-tebesir'
+      }`}
+    >
+      #{tag}
+      {count !== undefined && count > 0 && <span className="veri">{count}</span>}
+    </button>
+  );
+}
+
+function PostFooter({ post, counts, onChange }: { post: Post; counts: SocialCounts; onChange: (patch: Partial<SocialCounts>) => void }) {
+  const [open, setOpen] = useState(() => window.location.hash === `#gonderi-${post.id}`);
+  return (
+    <div className="mt-2">
+      <div className="flex items-center gap-2">
+        <LikeButton type="post" id={post.id} counts={counts} onChange={onChange} />
+        <CommentToggle count={counts.comments} open={open} onClick={() => setOpen((v) => !v)} />
       </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
-        
-        {/* Sol Kolon - Akış */}
-        <div className="lg:col-span-3 space-y-8">
-          
-          {user ? (
-            <form onSubmit={handlePostSubmit} className="bg-[#111216] border-2 border-[#1f2129] p-4 flex flex-col focus-within:border-[#ff5500] transition-colors duration-300 relative group">
-              <div className="absolute -inset-1 bg-[#ff5500]/20 blur-lg opacity-0 group-focus-within:opacity-100 transition-opacity duration-500 -z-10"></div>
-              <textarea 
-                value={content}
-                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setContent(e.target.value)}
-                placeholder="Neler düşünüyorsunuz? Fikrinizi paylaşın..."
-                className="bg-transparent text-white placeholder:text-zinc-600 outline-none resize-none min-h-[100px] text-[16px] font-medium custom-scrollbar"
-                required
-                maxLength={1000}
-              ></textarea>
-              
-              {/* Etiket Seçimi */}
-              <div className="mt-2 mb-4">
-                <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-2">Etiket Ekle (Maks 3)</p>
-                <div className="flex flex-wrap gap-2">
-                  {AVAILABLE_TAGS.map(tag => (
-                    <button
-                      key={tag}
-                      type="button"
-                      onClick={() => toggleTag(tag)}
-                      className={`px-2 py-1 text-[10px] font-black uppercase tracking-widest border-2 transition-colors ${selectedTags.includes(tag) ? 'border-[#ff5500] text-[#ff5500] bg-[#ff5500]/10' : 'border-zinc-800 text-zinc-500 hover:border-zinc-600'}`}
-                    >
-                      {tag}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center border-t-2 border-[#1f2129] pt-4">
-                <div className="flex space-x-4 text-zinc-500">
-                  <span className="text-xs font-bold uppercase tracking-widest">
-                    {user.username} olarak yazıyorsun
-                  </span>
-                </div>
-                <button 
-                  type="submit"
-                  disabled={loading}
-                  className={`px-6 py-2 font-black uppercase tracking-widest flex items-center transition-all border-2 border-black
-                    ${loading ? 'bg-zinc-600 text-zinc-400 cursor-not-allowed' : 'bg-[#ff5500] text-black hover:bg-white hover:-translate-y-1 hover:shadow-[4px_4px_0px_#ff5500]'}`}
-                >
-                  <Send className="w-4 h-4 mr-2" strokeWidth={3} />
-                  {loading ? '...' : 'GÖNDER'}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div className="bg-[#111216] border-2 border-[#1f2129] p-6 text-center">
-              <p className="text-zinc-400 font-bold uppercase tracking-widest">Gönderi paylaşmak için giriş yapmalısınız.</p>
-            </div>
-          )}
-
-          {/* Filtre Temizle */}
-          {activeFilter && (
-            <div className="flex items-center justify-between bg-[#ff5500]/10 border-2 border-[#ff5500]/30 p-3">
-              <span className="text-[#ff5500] font-bold text-sm uppercase tracking-widest">
-                #{activeFilter} etiketine sahip gönderiler listeleniyor
-              </span>
-              <button 
-                onClick={() => setActiveFilter(null)}
-                className="text-xs font-black text-white hover:text-[#ff5500] uppercase tracking-widest underline decoration-2 underline-offset-4"
-              >
-                Filtreyi Temizle
-              </button>
-            </div>
-          )}
-
-          <div className="space-y-6">
-            {initialLoad ? (
-              <div className="flex flex-col items-center justify-center py-20 text-[#ff5500]">
-                <Flame className="w-12 h-12 animate-pulse mb-4" />
-                <span className="font-black uppercase tracking-widest text-lg">MEYDAN YÜKLENİYOR...</span>
-              </div>
-            ) : filteredPosts.length === 0 ? (
-              <div className="text-center text-zinc-500 font-bold uppercase py-10">
-                Bu alanda henüz gönderi yok.
-              </div>
-            ) : (
-              filteredPosts.map((post) => (
-                <div id={"post-" + post.id} key={post.id} className={`bg-[#0b0c10] border-2 p-5 hover:border-[#ff5500]/50 transition-colors ${highlightedPostId === post.id ? 'border-[#ff5500]' : 'border-[#1f2129]'}`}>
-                  
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="flex items-center space-x-3">
-                      <Link to={`/profil/${post.user?.username || post.username}`}>
-                        <img 
-                          src={`https://api.dicebear.com/7.x/bottts/svg?seed=${post.user?.avatarSeed || post.avatarSeed || 'default'}&backgroundColor=transparent`} 
-                          alt="avatar" 
-                          className="w-12 h-12 bg-[#111216] border-2 border-[#1f2129] p-1 rounded-none hover:border-[#ff5500] transition-colors cursor-pointer"
-                        />
-                      </Link>
-                      <div>
-                        <Link to={`/profil/${post.user?.username || post.username}`} className="font-bold text-[16px] text-white flex items-center uppercase tracking-wide hover:text-[#ff5500] transition-colors cursor-pointer">
-                          {post.user?.username || post.username || 'Bilinmeyen Kullanıcı'}
-                        </Link>
-                        <span className="text-xs font-bold text-zinc-500 tracking-wider uppercase">{formatDate(post.createdAt)}</span>
-                      </div>
-                    </div>
-                    {user && (user.id === (post.user?.id || (post as any).userId) || user.role === 'Owner' || user.role === 'Admin') && (
-                      <button
-                        onClick={() => handleDeletePost(post.id)}
-                        className="text-zinc-600 hover:text-red-500 transition-colors p-1"
-                        title="Gönderiyi Sil"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-
-                  <p className="text-zinc-300 font-medium text-[15px] leading-relaxed mb-4 whitespace-pre-wrap">
-                    {post.content}
-                  </p>
-
-                  {/* Post Tags */}
-                  {post.tags && post.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {post.tags.map((t, i) => (
-                        <span 
-                          key={i} 
-                          onClick={() => setActiveFilter(t)}
-                          className="cursor-pointer px-2 py-0.5 text-[10px] font-black text-[#ff5500] uppercase tracking-widest border border-[#ff5500]/30 hover:bg-[#ff5500]/10 transition-colors"
-                        >
-                          #{t}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex items-center space-x-6 border-t-2 border-[#1f2129] pt-4">
-                    <button onClick={() => handleLike(post.id)} className={`flex items-center font-bold transition-colors group ${post.isLikedByCurrentUser ? 'text-[#ff5500]' : 'text-zinc-500 hover:text-[#ff5500]'}`}>
-                      <Heart className={`w-5 h-5 mr-2 group-hover:scale-110 transition-transform ${post.isLikedByCurrentUser ? 'fill-current' : ''}`} />
-                      {post.likes || 0}
-                    </button>
-                    <button onClick={() => setExpandedPostId(expandedPostId === post.id ? null : post.id)} className={`flex items-center font-bold transition-colors group ${expandedPostId === post.id ? 'text-white' : 'text-zinc-500 hover:text-white'}`}><MessageSquare className={`w-5 h-5 mr-2 group-hover:scale-110 transition-transform ${expandedPostId === post.id ? 'fill-white text-white' : ''}`} />{post.commentsCount || 0}</button>
-                    <button className="flex items-center text-zinc-500 hover:text-white font-bold transition-colors group ml-auto">
-                      <Share2 className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                    </button>
-                  </div>
-                  {expandedPostId === post.id && (
-                    <PostComments 
-                      postId={post.id} 
-                      onUpdateCount={(newCount) => {
-                        setPosts(prev => prev.map(p => p.id === post.id ? { ...p, commentsCount: newCount } : p));
-                      }} 
-                    />
-                  )}
-                </div>
-              ))
-            )}
-
-            {hasMore && posts.length > 0 && (
-              <div className="flex justify-center py-6">
-                <Loader2 className="w-6 h-6 animate-spin text-[#ff5500]" />
-              </div>
-            )}
-          </div>
+      {open && (
+        <div className="mt-3 pl-1">
+          <Comments type="post" id={post.id} ownerId={post.user?.id} onCountChange={(n) => onChange({ comments: n })} />
         </div>
-
-        {/* Sağ Kolon - Gündem / Etiketler */}
-        <div className="hidden lg:block lg:col-span-1">
-          <div className="sticky top-24 bg-[#111216] border-2 border-[#1f2129] p-5">
-            <h3 className="text-[14px] font-black text-white uppercase tracking-widest mb-6 flex items-center border-b-2 border-[#1f2129] pb-3">
-              <Hash className="w-5 h-5 mr-2 text-[#ff5500]" />
-              Gündem / Başlıklar
-            </h3>
-            <div className="flex flex-col space-y-1">
-              <button 
-                onClick={() => setActiveFilter(null)}
-                className={`text-left px-3 py-2 text-xs font-bold uppercase tracking-widest transition-colors ${!activeFilter ? 'bg-[#ff5500] text-black' : 'text-zinc-400 hover:bg-[#1f2129] hover:text-white'}`}
-              >
-                Karışık Akış (Tümü)
-              </button>
-              {AVAILABLE_TAGS.map(tag => (
-                <button 
-                  key={tag}
-                  onClick={() => setActiveFilter(tag)}
-                  className={`text-left px-3 py-2 text-xs font-bold uppercase tracking-widest transition-colors ${activeFilter === tag ? 'bg-[#ff5500] text-black' : 'text-zinc-400 hover:bg-[#1f2129] hover:text-white'}`}
-                >
-                  #{tag}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-      </div>
+      )}
     </div>
   );
 }
 
+const MAX_LENGTH = 1000; // Backend sınırıyla aynı
+const PAGE = 20; // bir seferde gösterilen gönderi sayısı
 
+export default function Akis() {
+  const { user } = useAuth();
+  const [params, setParams] = useSearchParams();
+  // Filtre adreste durur: /akis?etiket=arduino&kapsam=takip&sirala=begeni&zaman=hafta (paylaşılabilir, geri tuşu çalışır)
+  const rawTag = params.get('etiket');
+  const tagFilter = rawTag ? normalizeTag(rawTag) : null;
+  const scopeParam = params.get('kapsam');
+  const scope: Scope = user && (scopeParam === 'takip' || scopeParam === 'benim') ? scopeParam : 'hepsi';
+  const sortParam = params.get('sirala');
+  const sort: SortKey = sortParam === 'begeni' || sortParam === 'yorum' ? sortParam : 'yeni';
+  const periodParam = params.get('zaman');
+  const period: Period = periodParam === 'gun' || periodParam === 'hafta' || periodParam === 'ay' ? periodParam : 'tum';
+  const filter: FeedFilterValue = { scope, sort, period, tag: tagFilter };
+  const [trending, setTrending] = useState<{ tag: string; count: number }[]>([]);
+  const [trendingRecent, setTrendingRecent] = useState(true);
+  const [posts, setPosts] = useState<Post[] | null>(null);
+  const [shown, setShown] = useState(PAGE);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [obalar, setObalar] = useState<Oba[]>([]);
+  const [content, setContent] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
+  const setFilter = (patch: Partial<FeedFilterValue>) => {
+    const next = { ...filter, ...patch };
+    const p = new URLSearchParams();
+    if (next.tag) p.set('etiket', next.tag);
+    if (next.scope !== DEFAULT_FILTER.scope) p.set('kapsam', next.scope);
+    if (next.sort !== DEFAULT_FILTER.sort) p.set('sirala', next.sort);
+    if (next.period !== DEFAULT_FILTER.period) p.set('zaman', next.period);
+    setParams(p);
+  };
 
+  useEffect(() => {
+    let cancelled = false;
+    setPosts(null);
+    setShown(PAGE);
+    setLoadFailed(false);
+    const q = new URLSearchParams();
+    if (tagFilter) q.set('etiket', tagFilter);
+    if (scope === 'takip') q.set('kapsam', 'takip');
+    api<Post[]>(`/api/posts${q.size ? `?${q}` : ''}`)
+      .then((data) => !cancelled && setPosts(scope === 'benim' ? data.filter((p) => p.user?.id === user?.id) : data))
+      .catch(() => {
+        if (cancelled) return;
+        setPosts([]);
+        setLoadFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tagFilter, scope, user]);
+
+  useEffect(() => {
+    api<Oba[]>('/api/obalar').then(setObalar).catch(() => {});
+    api<{ recent: boolean; tags: { tag: string; count: number }[] }>('/api/posts/etiketler')
+      .then((d) => {
+        setTrending(d.tags);
+        setTrendingRecent(d.recent);
+      })
+      .catch(() => {});
+  }, []);
+
+  // Yazarken metindeki #etiketler önizlenir (sunucu da aynı kuralla okur)
+  const draftTags = useMemo(() => extractTags(content), [content]);
+
+  const handleContentChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setContent(e.target.value);
+    // Yazdıkça uzayan kutu
+    e.target.style.height = 'auto';
+    e.target.style.height = `${e.target.scrollHeight}px`;
+  };
+
+  const handlePostSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const text = content.trim();
+    if (!text || !user || sending) return;
+
+    setSending(true);
+    setError('');
+    try {
+      const newPost = await api<Post>('/api/posts', {
+        method: 'POST',
+        body: JSON.stringify({ content: text }),
+      });
+      // Süzgeçle uyuşmayan yeni gönderi listeye eklenmez (ör. başka etiket seçiliyken)
+      if (!tagFilter || newPost.tags?.includes(tagFilter)) setPosts((prev) => [newPost, ...(prev ?? [])]);
+      // Gündem: var olan etiketlerin sayısı artar, yeni etiketler sona eklenir
+      setTrending((prev) => {
+        const next = prev.map((t) => (newPost.tags?.includes(t.tag) ? { ...t, count: t.count + 1 } : t));
+        for (const t of newPost.tags ?? []) if (!next.some((x) => x.tag === t)) next.push({ tag: t, count: 1 });
+        return next.sort((a, b) => b.count - a.count).slice(0, 12);
+      });
+      setContent('');
+      if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Gönderi paylaşılamadı.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const social = useSocialCounts('post', (posts ?? []).map((p) => p.id));
+
+  // Zaman ve sıralama istemcide (etiket ve kapsam sunucuda/yüklemede uygulanır)
+  const visible = useMemo(() => {
+    const since = periodStart(period);
+    const list = (posts ?? []).filter((p) => new Date(p.createdAt).getTime() >= since);
+    if (sort === 'yeni') return list;
+    const key = (p: Post) => (sort === 'begeni' ? social.get(p.id).likes : social.get(p.id).comments);
+    return [...list].sort((a, b) => key(b) - key(a) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [posts, period, sort, social]);
+
+  // Bildirimden #gonderi-ID ile gelindiyse o gönderiye kaydır
+  useEffect(() => {
+    if (!posts || !window.location.hash.startsWith('#gonderi-')) return;
+    document.getElementById(window.location.hash.slice(1))?.scrollIntoView({ block: 'start' });
+  }, [posts]);
+
+  const remaining = MAX_LENGTH - content.length;
+
+  return (
+    <div className="pb-16">
+      <PageHeader title="Akış" description="Duyurular, sorular ve kısa paylaşımlar." />
+
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-x-12 gap-y-10">
+
+        {/* Akış sütunu */}
+        <div className="lg:col-span-8 max-w-okuma w-full">
+
+          {/* Yazma kutusu */}
+          {user ? (
+            <form onSubmit={handlePostSubmit} className="flex gap-3 pb-5 border-b border-levha-cizgi">
+              <Avatar name={user.username} />
+              <div className="flex-1 min-w-0">
+                <label htmlFor="akis-yaz" className="sr-only">Yeni gönderi</label>
+                <textarea
+                  id="akis-yaz"
+                  ref={textareaRef}
+                  value={content}
+                  onChange={handleContentChange}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handlePostSubmit(e);
+                  }}
+                  placeholder="Ne üzerinde çalışıyorsun? #etiket yazarak konu aç"
+                  rows={2}
+                  maxLength={MAX_LENGTH}
+                  className="w-full resize-none bg-transparent pt-1.5 text-base leading-relaxed text-tebesir placeholder:text-tebesir-silik focus:outline-none max-h-80"
+                />
+                {error && <p className="text-sm text-hata mb-2" role="alert">{error}</p>}
+                <div className="flex items-center justify-end gap-4 mt-3">
+                  {/* Metinden okunan etiketler */}
+                  {draftTags.length > 0 && (
+                    <span className="mr-auto flex flex-wrap gap-x-2 gap-y-1 text-sm text-isaret/90" aria-label="Etiketler">
+                      {draftTags.map((t) => <span key={t}>#{t}</span>)}
+                    </span>
+                  )}
+                  {content.length > 0 && (
+                    <span className={`veri ${remaining < 50 ? 'text-hata' : ''}`}>
+                      {remaining}
+                    </span>
+                  )}
+                  <button type="submit" disabled={sending || !content.trim()} className="btn-ana">
+                    {sending ? 'Paylaşılıyor…' : 'Paylaş'}
+                  </button>
+                </div>
+              </div>
+            </form>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-lg border border-levha-cizgi">
+              <p className="text-sm text-tebesir-soluk">Akışı herkes okuyabilir; yazmak için giriş yapman yeterli.</p>
+              <Link to="/auth" state={{ from: '/akis' }} className="btn-ikincil">Giriş yap</Link>
+            </div>
+          )}
+
+          {/* Filtre */}
+          <div className="pt-5 pb-1">
+            <FeedFilter value={filter} onChange={setFilter} suggestions={trending.map((t) => t.tag)} signedIn={!!user} />
+          </div>
+          {/* Telefonda gündem: yan sütun gizli olduğundan etiketler burada */}
+          <div className="lg:hidden flex gap-1.5 overflow-x-auto pb-2 -mx-1 px-1">
+            {trending.map((t) => (
+              <TagChip key={t.tag} tag={t.tag} count={t.count} active={tagFilter === t.tag} onClick={() => setFilter({ tag: tagFilter === t.tag ? null : t.tag })} />
+            ))}
+          </div>
+
+          {/* Gönderiler */}
+          {posts === null ? (
+            <div className="divide-y divide-levha-cizgi" aria-hidden="true">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="flex gap-3 py-5">
+                  <div className="w-10 h-10 rounded-full bg-levha-yuzey/60" />
+                  <div className="flex-1 space-y-2.5 pt-1">
+                    <div className="h-3 w-32 rounded bg-levha-yuzey/60" />
+                    <div className="h-3 w-full rounded bg-levha-yuzey/60" />
+                    <div className="h-3 w-2/3 rounded bg-levha-yuzey/60" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : visible.length === 0 ? (
+            <p className="py-12 text-center text-tebesir-silik">
+              {loadFailed
+                ? 'Akış yüklenemedi. Sayfayı yenilemeyi dene.'
+                : posts.length > 0
+                  ? 'Bu zaman aralığında gönderi yok.'
+                : tagFilter
+                  ? `#${tagFilter} etiketiyle henüz gönderi yok.`
+                  : scope === 'benim'
+                    ? 'Henüz bir şey paylaşmadın.'
+                    : scope === 'takip'
+                    ? 'Takip ettiğin kimse henüz paylaşım yapmadı. Profillerden kişileri takip edebilirsin.'
+                    : 'Akış henüz sessiz. İlk paylaşımı sen yap.'}
+            </p>
+          ) : (
+            <>
+            <ul className="divide-y divide-levha-cizgi">
+              {visible.slice(0, shown).map((post) => (
+                <PostItem
+                  key={post.id}
+                  post={post}
+                  onUpdated={(updated) => setPosts((prev) => (prev ?? []).map((p) => (p.id === updated.id ? updated : p)))}
+                  onDeleted={(id) => setPosts((prev) => (prev ?? []).filter((p) => p.id !== id))}
+                  footer={<PostFooter post={post} counts={social.get(post.id)} onChange={(patch) => social.update(post.id, patch)} />}
+                />
+              ))}
+            </ul>
+            {visible.length > shown && (
+              <div className="pt-4 text-center">
+                <button type="button" className="btn-ikincil" onClick={() => setShown((n) => n + PAGE)}>
+                  Daha fazla göster <span className="veri">{visible.length - shown}</span>
+                </button>
+              </div>
+            )}
+            </>
+          )}
+        </div>
+
+        {/* Yan sütun */}
+        <aside className="hidden lg:block lg:col-span-4">
+          <div className="sticky top-24 space-y-8">
+            <section className="rounded-lg border border-levha-cizgi">
+              <h2 className="text-sm font-semibold text-tebesir px-4 pt-4 pb-1">Gündem</h2>
+              <p className="px-4 pb-2 text-xs text-tebesir-silik">{trendingRecent ? 'Son 7 günün etiketleri' : 'En çok kullanılan etiketler'}</p>
+              {trending.length === 0 && (
+                <p className="px-4 pb-4 text-sm text-tebesir-silik">Henüz etiket yok. Gönderine #kelime yazarak bir konu aç.</p>
+              )}
+              <ul className="pb-2">
+                {trending.map((t) => (
+                  <li key={t.tag}>
+                    <button
+                      type="button"
+                      onClick={() => setFilter({ tag: tagFilter === t.tag ? null : t.tag })}
+                      aria-pressed={tagFilter === t.tag}
+                      className={`w-full flex items-center justify-between px-4 py-1.5 text-sm text-left transition-colors hover:bg-levha-yuzey ${
+                        tagFilter === t.tag ? 'text-isaret' : 'text-tebesir-soluk hover:text-tebesir'
+                      }`}
+                    >
+                      <span>#{t.tag}</span>
+                      <span className="veri">{t.count > 0 ? `${t.count} gönderi` : ''}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+
+            <section className="rounded-lg border border-levha-cizgi">
+              <h2 className="text-sm font-semibold text-tebesir px-4 pt-4 pb-2">Obalar</h2>
+              {obalar.length === 0 ? (
+                <p className="px-4 pb-4 text-sm text-tebesir-silik">Henüz oba yok.</p>
+              ) : (
+                <ul>
+                  {obalar.slice(0, 5).map((oba) => (
+                    <li key={oba.id}>
+                      <Link to={`/e-oba/${oba.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-levha-yuzey transition-colors">
+                        <span className="w-8 h-8 shrink-0 rounded-md bg-levha-yuzey border border-levha-cizgi flex items-center justify-center font-display font-bold text-sm text-tebesir">
+                          {oba.name.charAt(0).toLocaleUpperCase('tr')}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-center gap-1.5 text-sm font-medium text-tebesir">
+                            <span className="truncate">{oba.name}</span>
+                            {oba.isPrivate && <Lock className="w-3 h-3 shrink-0 text-tebesir-silik" aria-label="Gizli oba" />}
+                          </span>
+                          <span className="flex items-center gap-1 text-xs text-tebesir-silik">
+                            <Users className="w-3 h-3" aria-hidden="true" />
+                            {oba.memberCount ?? 1} üye
+                          </span>
+                        </span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              <Link to="/e-oba" className="block px-4 py-3 border-t border-levha-cizgi text-sm text-tebesir-soluk hover:text-tebesir transition-colors">
+                Tüm obalar
+              </Link>
+            </section>
+
+            <p className="text-sm leading-relaxed text-tebesir-silik px-1">
+              Uzun sohbetler ve dosya paylaşımı için obaları kullan; akış kısa duyurular ve sorular içindir.
+            </p>
+          </div>
+        </aside>
+      </div>
+    </div>
+  );
+}
