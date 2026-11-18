@@ -326,7 +326,7 @@ namespace Karalevha.API.Controllers
             await _context.SaveChangesAsync();
 
             // Kayıtlar silindikten sonra paylaşılan dosyaları da diskten temizle
-            foreach (var stored in storedFiles) _storage.Delete(stored);
+            foreach (var stored in storedFiles) await _storage.DeleteAsync(stored);
 
             return Ok(new { success = true });
         }

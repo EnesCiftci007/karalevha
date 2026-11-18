@@ -74,9 +74,43 @@ Oba kanallarında mesajla birlikte dosya gönderilebilir (ataş simgesi ya da s�
 Görseller, PDF'ler, metin/kod dosyaları, ses/video ve STL modelleri indirmeden uygulama içinde görüntülenir;
 diğer türler indirilir. Kabul edilen uzantılar `Karalevha.API/Services/ObaFileStorage.cs` içindedir.
 
-Dosyalar `wwwroot` dışında, `Karalevha.API/App_Data/oba-files` klasöründe saklanır ve yetki kontrolünden
-geçerek sunulur (gizli obaların dosyalarını yalnızca üyeleri açabilir). Klasörü değiştirmek için
-`Storage:ObaFilesPath` ayarını kullanın.
+Oba dosyaları herkese açık `/uploads` dışında tutulur ve yetki kontrolünden geçerek sunulur (gizli obaların
+dosyalarını yalnızca üyeleri açabilir). Nerede saklandıkları için aşağıdaki **Dosya deposu** bölümüne bakın.
+
+## 🗄️ Dosya deposu
+
+Yüklenen her şey (3B modeller, baskı fotoğrafları, proje dosyaları, oba dosyaları, Market sipariş dosyaları)
+tek bir depodan geçer: `Karalevha.API/Services/FileStore.cs`. İki seçenek var:
+
+- **Yerel disk** (varsayılan): geliştirmede ayar gerekmez. Herkese açıklar `wwwroot/uploads`, gizliler
+  `App_Data/oba-files` ve `App_Data/market` altındadır. Sunucuda kalıcı bir disk varsa `Storage__LocalRoot`
+  ile o klasörü gösterin.
+- **S3 uyumlu nesne deposu** (canlı için önerilen): Cloudflare R2, AWS S3, Backblaze B2, MinIO. Konteyner
+  yeniden kurulunca dosyalar kaybolmaz.
+
+Hangisi seçilirse seçilsin dosyalar aynı adreslerden (`/uploads/...`) sunulur; veritabanı ve istemci değişmez.
+Gizli dosyalar (oba, sipariş) her zaman yetki denetleyen API uçlarından okunur.
+
+**Cloudflare R2 kurulumu:** R2'de bir kova (bucket) açın, *Manage R2 API Tokens* ile o kovaya okuma-yazma
+izni olan bir anahtar oluşturun ve API'ye şu ortam değişkenlerini verin:
+
+| Değişken | Değer |
+| --- | --- |
+| `Storage__Provider` | `s3` |
+| `Storage__S3__ServiceUrl` | `https://<HESAP_ID>.r2.cloudflarestorage.com` |
+| `Storage__S3__Bucket` | Kovanın adı (ör. `karalevha`) |
+| `Storage__S3__AccessKey` | R2 erişim anahtarı |
+| `Storage__S3__SecretKey` | R2 gizli anahtarı |
+| `Storage__S3__Region` | `auto` (R2), AWS'de kovanın bölgesi |
+
+Kova herkese açık olmak zorunda değildir; dosyaları API sunar.
+
+**Eski dosyaları depoya taşımak:** S3 ayarları tanımlıyken bir kez çalıştırın. Yerel `wwwroot/uploads` ve
+`App_Data` altındaki dosyalar kovaya kopyalanır; kovada olanlar atlanır, yerel dosyalar silinmez.
+
+```bash
+dotnet run --project Karalevha.API -- --depoya-aktar
+```
 
 ## 🛠️ Kulüp özellikleri
 
@@ -125,8 +159,9 @@ Uygulama sunucuya (Render, Railway vb.) yüklendiğinde aşağıdaki ortam deği
 | `ConnectionStrings__DefaultConnection` | Npgsql biçiminde PostgreSQL bağlantı dizeniz |
 | `Cors__Origins__0` | `https://karalevha.vercel.app` (sonda / yok) |
 | `ASPNETCORE_ENVIRONMENT` | `Production` |
-| `Storage__ObaFilesPath` | (İsteğe bağlı) Kalıcı diskteki dosya klasörü |
+| `Storage__Provider` ve `Storage__S3__*` | Yüklenen dosyaların deposu (R2/S3), bkz. **Dosya deposu** |
 | `Admins__0` | (İsteğe bağlı) Kulüp yöneticisinin kullanıcı adı |
 
-> **Not:** Render gibi platformlarda konteyner diski kalıcı değildir; yeniden dağıtımda yüklenen dosyalar
-> (STL'ler ve oba dosyaları) silinir. Canlıda kalıcı bir disk bağlayıp `Storage__ObaFilesPath` ile gösterin.
+> **Not:** Render gibi platformlarda konteyner diski kalıcı değildir; yerel disk deposuyla yeniden dağıtımda
+> yüklenen bütün dosyalar silinir. Canlıda `Storage__Provider=s3` ile R2/S3 kullanın (ya da kalıcı bir disk
+> bağlayıp `Storage__LocalRoot` ile gösterin).

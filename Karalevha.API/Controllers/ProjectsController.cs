@@ -22,13 +22,13 @@ namespace Karalevha.API.Controllers
 
         private readonly AppDbContext _context;
         private readonly CurrentUser _current;
-        private readonly IWebHostEnvironment _env;
+        private readonly IFileStore _store;
 
-        public ProjectsController(AppDbContext context, CurrentUser current, IWebHostEnvironment env)
+        public ProjectsController(AppDbContext context, CurrentUser current, IFileStore store)
         {
             _context = context;
             _current = current;
-            _env = env;
+            _store = store;
         }
 
         /// <summary>Projelerin dalları; Projeler sayfasındaki süzgeçle aynı sırada</summary>
@@ -153,7 +153,7 @@ namespace Karalevha.API.Controllers
                 (c.TargetType == "project" && c.TargetId == id) || (c.TargetType == "model" && modelIds.Contains(c.TargetId))));
             await _context.SaveChangesAsync();
 
-            UploadFiles.Delete(_env, models.Select(m => m.FilePath).Concat(makePhotos).Concat(files));
+            await UploadFiles.DeleteAsync(_store, models.Select(m => m.FilePath).Concat(makePhotos).Concat(files));
             return Ok(new { success = true });
         }
 
@@ -230,13 +230,10 @@ namespace Karalevha.API.Controllers
             var cleanTitle = string.IsNullOrWhiteSpace(title) ? Path.GetFileNameWithoutExtension(originalName) : title.Trim();
             if (cleanTitle.Length > 120) return BadRequest(new { message = "Başlık en fazla 120 karakter olabilir." });
 
-            // Diskte yalnızca GUID adı: yol saldırıları ve ad çakışması olmasın
+            // Depoda yalnızca GUID adı: yol saldırıları ve ad çakışması olmasın
             var stored = $"{Guid.NewGuid()}{extension.ToLowerInvariant()}";
-            var folder = Path.Combine(UploadFiles.WebRoot(_env), "uploads", "projeler");
-            Directory.CreateDirectory(folder);
-            var absolute = Path.Combine(folder, stored);
-            await using (var stream = new FileStream(absolute, FileMode.CreateNew))
-                await file.CopyToAsync(stream);
+            await using (var upload = file.OpenReadStream())
+                await _store.SaveAsync($"uploads/projeler/{stored}", upload, contentType);
 
             var entry = new ProjectFile
             {
@@ -257,7 +254,7 @@ namespace Karalevha.API.Controllers
             }
             catch
             {
-                System.IO.File.Delete(absolute);
+                await _store.DeleteAsync($"uploads/projeler/{stored}");
                 throw;
             }
             return Ok(FileDto(entry, CurrentUser.NameOf(User)));
@@ -274,7 +271,7 @@ namespace Karalevha.API.Controllers
 
             _context.ProjectFiles.Remove(entry);
             await _context.SaveChangesAsync();
-            UploadFiles.Delete(_env, new[] { entry.FilePath });
+            await UploadFiles.DeleteAsync(_store, new[] { entry.FilePath });
             return Ok(new { success = true });
         }
     }
