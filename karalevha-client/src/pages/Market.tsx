@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Check, CircuitBoard, Cpu, Download, File, Inbox, Package, Printer, Scissors, UploadCloud, X, type LucideIcon } from 'lucide-react';
-import { api, API_URL } from '../services/api';
+import { api, apiFetch } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { MarketOrder, MarketService, MarketStatus } from '../types';
 import { formatSize } from '../services/files';
@@ -33,8 +33,7 @@ const money = (n: number) => n.toLocaleString('tr-TR', { style: 'currency', curr
 
 /** Sipariş dosyası herkese açık değil: oturumla indirilir */
 async function downloadOrderFile(order: MarketOrder) {
-  const token = localStorage.getItem('token');
-  const res = await fetch(`${API_URL}/api/market/siparis/${order.id}/dosya`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+  const res = await apiFetch(`/api/market/siparis/${order.id}/dosya`);
   if (!res.ok) throw new Error('Dosya indirilemedi.');
   const url = URL.createObjectURL(await res.blob());
   const a = document.createElement('a');
