@@ -42,10 +42,14 @@ namespace Karalevha.API.Services
 
             var payload = new
             {
-                from = $"Karalevha E-Oba <{fromEmail}>",
+                from = $"KaraLevha <{fromEmail}>",
                 to = new[] { toEmail },
-                subject = "Karalevha - E-posta Adresinizi Doğrulayın",
-                html = $"<p>Karalevha'ya hoş geldiniz!</p><p>Hesabınızı doğrulamak için aşağıdaki bağlantıya tıklayın:</p><p><a href=\"{verificationLink}\">E-postamı Doğrula</a></p>"
+                subject = "KaraLevha: e-posta adresini doğrula",
+                html = $"<p>Merhaba,</p><p>KaraLevha hesabını açmak için e-posta adresini doğrula:</p>"
+                     + $"<p><a href=\"{System.Net.WebUtility.HtmlEncode(verificationLink)}\">E-posta adresimi doğrula</a></p>"
+                     + "<p>Bağlantı 24 saat geçerli. Bu kaydı sen yapmadıysan bu e-postayı yok sayabilirsin.</p>",
+                text = $"KaraLevha hesabını açmak için e-posta adresini doğrula:\n{verificationLink}\n\n"
+                     + "Bağlantı 24 saat geçerli. Bu kaydı sen yapmadıysan bu e-postayı yok sayabilirsin.",
             };
 
             var json = JsonSerializer.Serialize(payload);

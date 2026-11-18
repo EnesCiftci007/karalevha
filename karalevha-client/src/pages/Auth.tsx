@@ -21,6 +21,8 @@ export default function Auth() {
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  // Kayıtta şifre iki kez yazılır: yazım hatasıyla açılıp girilemeyen hesap olmasın
+  const [passwordAgain, setPasswordAgain] = useState('');
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
@@ -35,10 +37,18 @@ export default function Auth() {
     setErrorMsg('');
     setSuccessMsg('');
     setPassword('');
+    setPasswordAgain('');
   };
+
+  // Tekrar alanına yazılmaya başlanınca ve uyuşmuyorsa alanın altında söylenir
+  const mismatch = !isLogin && passwordAgain.length > 0 && passwordAgain !== password;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!isLogin && password !== passwordAgain) {
+      setErrorMsg('Şifreler aynı değil. İkisini de aynı yaz.');
+      return;
+    }
     setLoading(true);
     setErrorMsg('');
     setSuccessMsg('');
@@ -53,13 +63,16 @@ export default function Auth() {
         login(data.user, data.token);
         navigate(returnTo, { replace: true });
       } else {
-        const data = await api<{ message?: string }>('/api/auth/register', {
+        const data = await api<{ message?: string; requiresVerification?: boolean; email?: string }>('/api/auth/register', {
           method: 'POST',
           body: JSON.stringify({ username, email, password }),
         });
         setMode('giris');
         setPassword('');
+        setPasswordAgain('');
         setSuccessMsg(data.message || 'Kayıt başarılı. Şimdi giriş yapabilirsin.');
+        // Doğrulama e-postası gelmezse buradan yeniden istenebilsin
+        if (data.requiresVerification) setUnverifiedEmail(data.email ?? email);
       }
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : 'Sunucuya bağlanılamadı.');
@@ -129,7 +142,14 @@ export default function Auth() {
             </div>
           )}
           {successMsg && (
-            <p className="mt-5 rounded-md border border-basari/40 bg-basari/10 px-3 py-2 text-sm text-basari" role="status">{successMsg}</p>
+            <div className="mt-5 rounded-md border border-basari/40 bg-basari/10 px-3 py-2 text-sm text-basari" role="status">
+              <p>{successMsg}</p>
+              {unverifiedEmail && !errorMsg && (
+                <button type="button" onClick={resendVerification} className="mt-1.5 underline underline-offset-4 text-tebesir hover:text-isaret">
+                  E-posta gelmedi mi? Yeniden gönder
+                </button>
+              )}
+            </div>
           )}
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">
@@ -160,6 +180,20 @@ export default function Auth() {
                 className="girdi"
               />
             </Field>
+            {!isLogin && (
+              <Field id="sifre-tekrar" label="Şifre (tekrar)" error={mismatch ? 'Şifreler aynı değil.' : undefined}>
+                <input
+                  id="sifre-tekrar"
+                  type="password"
+                  required
+                  autoComplete="new-password"
+                  value={passwordAgain}
+                  onChange={(e) => setPasswordAgain(e.target.value)}
+                  aria-invalid={mismatch}
+                  className="girdi"
+                />
+              </Field>
+            )}
             <button type="submit" disabled={loading} className="btn-ana w-full mt-2">
               {loading ? 'Bekle…' : isLogin ? 'Giriş yap' : 'Hesap oluştur'}
             </button>

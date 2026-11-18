@@ -8,6 +8,19 @@ import { Logo, Wordmark } from '../components/brand/Brand';
 export default function VerifyEmail() {
   const [params] = useSearchParams();
   const [state, setState] = useState<{ status: 'bekliyor' | 'tamam' | 'hata'; message: string }>({ status: 'bekliyor', message: '' });
+  const [resent, setResent] = useState<string | null>(null);
+  const email = params.get('email');
+
+  // Süresi dolmuş ya da kullanılmış bağlantı: yenisi buradan istenebilsin
+  const resend = async () => {
+    if (!email) return;
+    try {
+      const d = await api<{ message: string }>('/api/auth/resend-verification', { method: 'POST', body: JSON.stringify({ email }) });
+      setResent(d.message);
+    } catch (err) {
+      setResent(err instanceof Error ? err.message : 'Gönderilemedi.');
+    }
+  };
 
   useEffect(() => {
     const email = params.get('email');
@@ -37,6 +50,15 @@ export default function VerifyEmail() {
           <p role={state.status === 'hata' ? 'alert' : 'status'} className={`mt-3 text-sm ${state.status === 'hata' ? 'text-hata' : 'text-basari'}`}>
             {state.message}
           </p>
+        )}
+        {state.status === 'hata' && email && (
+          resent ? (
+            <p role="status" className="mt-3 text-sm text-tebesir-soluk">{resent}</p>
+          ) : (
+            <button type="button" onClick={resend} className="mt-3 text-sm underline underline-offset-4 text-tebesir hover:text-isaret">
+              Yeni doğrulama bağlantısı gönder
+            </button>
+          )
         )}
         <Link to="/auth" className="btn-ana w-full mt-6">Giriş ekranına git</Link>
       </div>
