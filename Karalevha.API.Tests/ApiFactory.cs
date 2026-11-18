@@ -21,6 +21,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     public const string AdminName = "test_yonetici";
     public const string Password = "Test-Sifre-2026!";
+    public const string JwtKey = "test-anahtari-en-az-otuz-iki-bayt-uzunlugunda-0123456789";
 
     /// <summary>Test sırasında değiştirilebilen ayarlar (ör. Auth:RequireEmailVerification)</summary>
     public Toggles Settings { get; } = new();
@@ -39,7 +40,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         var settings = new Dictionary<string, string>
         {
             ["ConnectionStrings__DefaultConnection"] = connection,
-            ["Jwt__Key"] = "test-anahtari-en-az-otuz-iki-bayt-uzunlugunda-0123456789",
+            ["Jwt__Key"] = JwtKey,
             ["Jwt__Issuer"] = "Karalevha.API",
             ["Jwt__Audience"] = "Karalevha.Client",
             ["Admins__0"] = AdminName,

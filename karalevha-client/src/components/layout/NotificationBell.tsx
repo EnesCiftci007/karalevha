@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell } from 'lucide-react';
 import * as signalR from '@microsoft/signalr';
-import { API_URL, api } from '../../services/api';
+import { API_URL, api, hubOptions } from '../../services/api';
 import { NotificationItem } from '../../types';
 import { fullDate, timeAgo } from '../../utils/time';
 
@@ -36,7 +36,7 @@ export default function NotificationBell() {
   // Canlı bildirimler
   useEffect(() => {
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl(`${API_URL}/notificationhub`, { accessTokenFactory: () => localStorage.getItem('token') ?? '' })
+      .withUrl(`${API_URL}/notificationhub`, hubOptions) // kimlik oturum çerezinden
       .withAutomaticReconnect()
       // Geliştirmede StrictMode ilk bağlantıyı hemen kapatır; bu ve kopmalar sessiz geçsin (yoklama yedekte)
       .configureLogging(signalR.LogLevel.None)

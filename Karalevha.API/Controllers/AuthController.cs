@@ -164,8 +164,32 @@ namespace Karalevha.API.Controllers
             _current.Promote(user);
             if (user.Role != previousRole) await _context.SaveChangesAsync();
 
-            var token = GenerateJwtToken(user);
-            return Ok(new { token, user = UserDto(user) });
+            // Jeton yanıt gövdesinde değil, HttpOnly çerezde: JavaScript onu hiç görmez
+            AuthCookie.Set(HttpContext, GenerateJwtToken(user));
+            return Ok(new { user = UserDto(user) });
+        }
+
+        // POST: api/auth/logout   — oturum çerezini siler
+        [HttpPost("logout")]
+        public IActionResult Logout()
+        {
+            AuthCookie.Clear(HttpContext);
+            return Ok(new { success = true });
+        }
+
+        // POST: api/auth/oturum-tasi
+        // Eski sürüm jetonu localStorage'da tutuyordu. İstemci o jetonla (Authorization başlığı) bir kez
+        // buraya gelir, oturum çereze taşınır ve kişi yeniden giriş yapmak zorunda kalmaz.
+        [HttpPost("oturum-tasi")]
+        [Authorize]
+        public async Task<IActionResult> MoveSessionToCookie()
+        {
+            var id = CurrentUser.IdOf(User);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+            if (user == null) return Unauthorized();
+            if (user.BannedUntil > DateTime.UtcNow) return StatusCode(403, new { message = "Hesap askıda." });
+            AuthCookie.Set(HttpContext, GenerateJwtToken(user));
+            return Ok(new { user = UserDto(user) });
         }
 
         // GET: api/auth/me
@@ -260,7 +284,7 @@ namespace Karalevha.API.Controllers
                 issuer: jwtIssuer,
                 audience: jwtAudience,
                 claims: claims,
-                expires: DateTime.UtcNow.AddDays(7),
+                expires: DateTime.UtcNow.Add(AuthCookie.Lifetime),
                 signingCredentials: creds
             );
 

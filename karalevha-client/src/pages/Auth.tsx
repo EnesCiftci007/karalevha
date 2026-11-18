@@ -60,7 +60,7 @@ export default function Auth() {
           method: 'POST',
           body: JSON.stringify({ usernameOrEmail: email, password }),
         });
-        login(data.user, data.token);
+        login(data.user);
         navigate(returnTo, { replace: true });
       } else {
         const data = await api<{ message?: string; requiresVerification?: boolean; email?: string }>('/api/auth/register', {
