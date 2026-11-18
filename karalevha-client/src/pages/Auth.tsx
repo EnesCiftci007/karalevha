@@ -53,13 +53,15 @@ export default function Auth() {
         login(data.user, data.token);
         navigate(returnTo, { replace: true });
       } else {
-        const data = await api<{ message?: string }>('/api/auth/register', {
+        const data = await api<{ message?: string; requiresVerification?: boolean; email?: string }>('/api/auth/register', {
           method: 'POST',
           body: JSON.stringify({ username, email, password }),
         });
         setMode('giris');
         setPassword('');
         setSuccessMsg(data.message || 'Kayıt başarılı. Şimdi giriş yapabilirsin.');
+        // Doğrulama e-postası gelmezse buradan yeniden istenebilsin
+        if (data.requiresVerification) setUnverifiedEmail(data.email ?? email);
       }
     } catch (error) {
       setErrorMsg(error instanceof Error ? error.message : 'Sunucuya bağlanılamadı.');
@@ -129,7 +131,14 @@ export default function Auth() {
             </div>
           )}
           {successMsg && (
-            <p className="mt-5 rounded-md border border-basari/40 bg-basari/10 px-3 py-2 text-sm text-basari" role="status">{successMsg}</p>
+            <div className="mt-5 rounded-md border border-basari/40 bg-basari/10 px-3 py-2 text-sm text-basari" role="status">
+              <p>{successMsg}</p>
+              {unverifiedEmail && !errorMsg && (
+                <button type="button" onClick={resendVerification} className="mt-1.5 underline underline-offset-4 text-tebesir hover:text-isaret">
+                  E-posta gelmedi mi? Yeniden gönder
+                </button>
+              )}
+            </div>
           )}
 
           <form onSubmit={handleSubmit} className="mt-6 space-y-4">

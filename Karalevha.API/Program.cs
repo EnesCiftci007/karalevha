@@ -54,6 +54,13 @@ builder.Services.AddHttpClient<RepoService>();
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// E-posta doğrulaması açık ama gönderecek anahtar yoksa kimse kayıt olamaz: sunucu açılmadan söylesin
+if (builder.Configuration.GetValue("Auth:RequireEmailVerification", false) && !builder.Environment.IsDevelopment()
+    && string.IsNullOrWhiteSpace(builder.Configuration["Resend:ApiKey"]))
+{
+    throw new InvalidOperationException("Auth:RequireEmailVerification açık ama Resend:ApiKey tanımlı değil. Anahtarı verin ya da doğrulamayı kapatın.");
+}
+
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key is missing from configuration.");
 if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
 {
