@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Flag, Pencil, Trash2 } from 'lucide-react';
+import { useReport } from '../ui/Report';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { Post } from '../../types';
@@ -67,6 +68,7 @@ export default function PostItem({ post, onUpdated, onDeleted, footer }: PostIte
 
   const name = post.user?.username || 'Bilinmeyen';
   const isAuthor = user?.id === post.user?.id;
+  const report = useReport();
   const canDelete = isAuthor || !!user?.isAdmin;
 
   const save = async () => {
@@ -103,6 +105,7 @@ export default function PostItem({ post, onUpdated, onDeleted, footer }: PostIte
               actions={[
                 ...(isAuthor ? [{ label: 'Düzenle', icon: Pencil, onSelect: () => { setDraft(post.content); setEditing(true); } }] : []),
                 ...(canDelete ? [{ label: 'Sil', icon: Trash2, danger: true, onSelect: () => setConfirmDelete(true) }] : []),
+                ...(user && !isAuthor ? [{ label: 'Bildir', icon: Flag, onSelect: () => report('post', post.id, `${post.user?.username ?? 'Bir üyenin'} gönderisi`) }] : []),
               ]}
             />
           )}

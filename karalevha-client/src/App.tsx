@@ -1,4 +1,5 @@
 import { Suspense, lazy } from 'react';
+import { ReportProvider } from './components/ui/Report';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import MainLayout from './components/layout/MainLayout';
@@ -12,6 +13,7 @@ const Akis = lazy(() => import('./pages/Akis'));
 const Market = lazy(() => import('./pages/Market'));
 const ModelYonlendir = lazy(() => import('./pages/ModelYonlendir'));
 const ObaDavet = lazy(() => import('./pages/ObaDavet'));
+const Yonetim = lazy(() => import('./pages/Yonetim'));
 const Auth = lazy(() => import('./pages/Auth'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const Projeler = lazy(() => import('./pages/Projeler'));
@@ -28,6 +30,7 @@ const page = (el: React.ReactNode) => <Suspense fallback={null}>{el}</Suspense>;
 function App() {
   return (
     <AuthProvider>
+      <ReportProvider>
       <BrowserRouter>
         <Routes>
           <Route path="/auth" element={page(<Auth />)} />
@@ -51,6 +54,7 @@ function App() {
             <Route path="etkinlikler/:id" element={page(<EtkinlikDetay />)} />
             <Route path="u/:username" element={page(<Profil />)} />
             <Route path="ara" element={page(<Ara />)} />
+            <Route path="yonetim" element={page(<Yonetim />)} />
             <Route path="tasarim" element={page(<Tasarim />)} />
           </Route>
 
@@ -58,6 +62,7 @@ function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
+      </ReportProvider>
     </AuthProvider>
   );
 }

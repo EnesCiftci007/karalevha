@@ -3,7 +3,8 @@ import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom'
 import * as signalR from '@microsoft/signalr';
 import { api, apiFetch, API_URL, hubOptions } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Hash, Send, ChevronLeft, MessageSquare, Lock, Menu, X, Paperclip, FolderOpen, Trash2, Plus, Pencil, LogOut, Link2 } from 'lucide-react';
+import { Hash, Send, ChevronLeft, MessageSquare, Lock, Menu, X, Paperclip, FolderOpen, Trash2, Plus, Pencil, LogOut, Link2, Flag } from 'lucide-react';
+import { useReport } from '../components/ui/Report';
 import InviteModal from '../components/oba/InviteModal';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import UserLink from '../components/ui/UserLink';
@@ -63,6 +64,7 @@ export default function ObaDetay() {
   const [showInvite, setShowInvite] = useState(false);
   const navigate = useNavigate();
   const [toDelete, setToDelete] = useState<Message | null>(null);
+  const report = useReport();
   const [, setSearchParams] = useSearchParams();
   // Kanal formu: yeni kanal (bölümüyle) ya da düzenlenen kanal
   const [channelForm, setChannelForm] = useState<{ category?: string; channel?: ChannelDetail } | null>(null);
@@ -613,16 +615,29 @@ export default function ObaDetay() {
                 const canDelete = !!user && msg.id > 0 && (user.id === msg.user.id || user.username === obaOwner || !!user.isAdmin);
                 return (
                   <li key={msg.id} className={`group relative flex gap-3 px-2 py-1 rounded-md hover:bg-levha-yuzey/50 ${first && idx > 0 ? 'mt-3' : ''}`}>
-                    {canDelete && (
-                      <button
-                        type="button"
-                        onClick={() => setToDelete(msg)}
-                        className="absolute right-2 top-1 p-1.5 rounded-md text-tebesir-silik hover:text-hata hover:bg-levha opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
-                        aria-label="Mesajı sil"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    )}
+                    <span className="absolute right-2 top-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                      {!!user && msg.id > 0 && user.id !== msg.user.id && (
+                        <button
+                          type="button"
+                          onClick={() => report('obamessage', msg.id, `${msg.user.username} adlı kişinin mesajı`)}
+                          className="p-1.5 rounded-md text-tebesir-silik hover:text-tebesir hover:bg-levha"
+                          aria-label="Mesajı bildir"
+                          title="Bildir"
+                        >
+                          <Flag className="w-4 h-4" />
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => setToDelete(msg)}
+                          className="p-1.5 rounded-md text-tebesir-silik hover:text-hata hover:bg-levha"
+                          aria-label="Mesajı sil"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </span>
                     <div className="w-8 shrink-0">
                       {first ? (
                         <Avatar name={msg.user.username} size="sm" />

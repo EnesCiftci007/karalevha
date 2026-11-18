@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart, MessageSquare, Reply, Trash2 } from 'lucide-react';
+import { Flag, Heart, MessageSquare, Reply, Trash2 } from 'lucide-react';
+import { useReport } from '../ui/Report';
 import { api } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { CommentItem, SocialCounts } from '../../types';
@@ -219,6 +220,7 @@ export function Comments({ type, id, ownerId, onCountChange }: { type: TargetTyp
   const [comments, setComments] = useState<CommentItem[] | null>(null);
   // Hangi ana yorumun altında yanıt kutusu açık, kutu hangi metinle başlıyor
   const [replying, setReplying] = useState<{ parentId: number; initial: string } | null>(null);
+  const report = useReport();
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -264,11 +266,18 @@ export function Comments({ type, id, ownerId, onCountChange }: { type: TargetTyp
           <div className="flex items-baseline gap-2">
             <UserLink username={c.username} className="text-sm font-semibold text-tebesir" />
             <time dateTime={c.createdAt} title={fullDate(c.createdAt)} className="text-xs text-tebesir-silik">{timeAgo(c.createdAt)}</time>
-            {canDelete && (
-              <button type="button" onClick={() => remove(c.id)} className="ml-auto p-1 rounded text-tebesir-silik hover:text-hata opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity" aria-label={c.parentId ? 'Yanıtı sil' : 'Yorumu ve yanıtlarını sil'}>
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            )}
+            <span className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+              {user && user.id !== c.userId && (
+                <button type="button" onClick={() => report('comment', c.id, `${c.username} adlı kişinin yorumu`)} className="p-1 rounded text-tebesir-silik hover:text-tebesir" aria-label="Yorumu bildir" title="Bildir">
+                  <Flag className="w-3.5 h-3.5" />
+                </button>
+              )}
+              {canDelete && (
+                <button type="button" onClick={() => remove(c.id)} className="p-1 rounded text-tebesir-silik hover:text-hata" aria-label={c.parentId ? 'Yanıtı sil' : 'Yorumu ve yanıtlarını sil'}>
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </span>
           </div>
           <div className="text-sm [&_p]:text-sm"><PostText text={c.content} /></div>
           <div className="mt-1 flex items-center gap-4">

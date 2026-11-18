@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Box, Download, Heart, MessageSquare, Pencil, Plus, Trash2, UploadCloud, X } from 'lucide-react';
+import { Box, Download, Flag, Heart, MessageSquare, Pencil, Plus, Trash2, UploadCloud, X } from 'lucide-react';
+import { useReport } from '../ui/Report';
 import { api, API_URL } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { PrintModel } from '../../types';
@@ -51,6 +52,7 @@ export default function ProjectModels({ projectId, canEdit, onCountChange }: Pro
   const [showUpload, setShowUpload] = useState(false);
   const [editing, setEditing] = useState<PrintModel | null>(null);
   const [deleting, setDeleting] = useState<PrintModel | null>(null);
+  const report = useReport();
 
   // Yükleme formu
   const [title, setTitle] = useState('');
@@ -254,6 +256,7 @@ export default function ProjectModels({ projectId, canEdit, onCountChange }: Pro
                     actions={[
                       ...(user?.id === preview.userId ? [{ label: 'Düzenle', icon: Pencil, onSelect: () => setEditing(preview) }] : []),
                       ...(user?.id === preview.userId || user?.isAdmin ? [{ label: 'Sil', icon: Trash2, danger: true, onSelect: () => setDeleting(preview) }] : []),
+                      ...(user && user.id !== preview.userId ? [{ label: 'Bildir', icon: Flag, onSelect: () => report('model', preview.id, preview.title) }] : []),
                     ]}
                   />
                 </div>

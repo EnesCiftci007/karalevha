@@ -137,6 +137,15 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1),
                 PermitLimit = Limit(20)
             }));
+    // Şikâyet: kişi başına dakikada 10 (yanlışlıkla art arda basma ve kötüye kullanım)
+    options.AddPolicy("ReportLimiter", ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = Limit(10)
+            }));
     options.AddPolicy("JoinLimiter", ctx =>
         RateLimitPartition.GetFixedWindowLimiter(
             ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",

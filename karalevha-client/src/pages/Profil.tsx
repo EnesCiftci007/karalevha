@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { Box, FolderGit2, MessagesSquare, Pencil, UserRound } from 'lucide-react';
+import { Box, Flag, FolderGit2, MessagesSquare, Pencil, UserRound } from 'lucide-react';
+import { useReport } from '../components/ui/Report';
 import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { timeAgo } from '../utils/time';
@@ -37,6 +38,7 @@ type Tab = 'projeler' | 'modeller' | 'baskilar' | 'paylasimlar';
 export default function Profil() {
   const { username = '' } = useParams();
   const { user } = useAuth();
+  const report = useReport();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [failed, setFailed] = useState(false);
   const [tab, setTab] = useState<Tab>('projeler');
@@ -212,6 +214,12 @@ export default function Profil() {
         <aside className="lg:col-span-4">
           {isMe && profile.bannedUntil && (
             <p className="kart p-4 mb-8 text-sm text-hata">Hesabın askıda. Paylaşım yapamazsın.</p>
+          )}
+          {!isMe && user && (
+            <button type="button" onClick={() => report('user', profile.id, profile.username)} className="mb-6 inline-flex items-center gap-1.5 text-xs text-tebesir-silik hover:text-tebesir">
+              <Flag className="w-3.5 h-3.5" aria-hidden="true" />
+              Kullanıcıyı bildir
+            </button>
           )}
           {!isMe && user?.isAdmin && (
             <AdminPanel

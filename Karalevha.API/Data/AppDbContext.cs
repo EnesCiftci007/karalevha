@@ -29,6 +29,7 @@ namespace Karalevha.API.Data
         public DbSet<Like> Likes { get; set; }
         public DbSet<Comment> Comments { get; set; }
         public DbSet<Notification> Notifications { get; set; }
+        public DbSet<Report> Reports { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -65,6 +66,9 @@ namespace Karalevha.API.Data
             modelBuilder.Entity<ProjectFile>().HasIndex(f => f.ProjectId);
             modelBuilder.Entity<MarketOrder>().HasIndex(o => new { o.UserId, o.CreatedAt });
             modelBuilder.Entity<MarketOrder>().HasIndex(o => o.Status);
+            // Şikâyetler içeriğe ve duruma göre aranır (yönetim sayfası, "zaten bildirdin")
+            modelBuilder.Entity<Report>().HasIndex(r => new { r.TargetType, r.TargetId, r.Status });
+            modelBuilder.Entity<Report>().HasIndex(r => r.Status);
             modelBuilder.Entity<Oba>().HasIndex(o => o.InviteCode).IsUnique();
 
             // Bir kişi bir obaya bir kez üye olur; bir kişiyi bir kez takip eder

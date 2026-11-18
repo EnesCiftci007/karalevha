@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { LogOut, Menu, Search, X } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import NotificationBell from './NotificationBell';
+import AdminLink from './AdminLink';
 import { Logo, Wordmark } from '../brand/Brand';
 import { lastObaPath } from '../../utils/lastOba';
 
@@ -123,6 +124,7 @@ export default function Navbar({ fluid = false }: { fluid?: boolean }) {
         <div className="flex items-center gap-1">
           {user ? (
             <>
+              {user.isAdmin && <AdminLink />}
               <NotificationBell />
               <Link to={`/u/${encodeURIComponent(user.username)}`} className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-md hover:bg-levha-yuzey transition-colors" title="Profilin">
                 <span className="w-7 h-7 rounded-full bg-isaret/15 text-isaret border border-isaret/40 flex items-center justify-center font-display font-bold text-sm" aria-hidden="true">

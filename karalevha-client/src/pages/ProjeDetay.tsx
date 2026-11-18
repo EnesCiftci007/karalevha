@@ -2,7 +2,8 @@ import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 
 const CodeViewer = lazy(() => import('../components/kod/CodeViewer'));
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Box, ChevronLeft, CircuitBoard, Code2, FolderGit2, PenTool, Pencil, Trash2 } from 'lucide-react';
+import { Box, ChevronLeft, CircuitBoard, Code2, Flag, FolderGit2, PenTool, Pencil, Trash2 } from 'lucide-react';
+import { useReport } from '../components/ui/Report';
 import ProjectModels from '../components/proje/ProjectModels';
 import ProjectFiles from '../components/proje/ProjectFiles';
 import { categoryOf } from '../utils/projectCategories';
@@ -27,6 +28,7 @@ export default function ProjeDetay() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const report = useReport();
   const [editing, setEditing] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const social = useSocialCounts('project', id ? [Number(id)] : []);
@@ -152,6 +154,7 @@ export default function ProjeDetay() {
             actions={[
               ...(isOwner ? [{ label: 'Düzenle', icon: Pencil, onSelect: () => setEditing(true) }] : []),
               ...(isOwner || user?.isAdmin ? [{ label: 'Sil', icon: Trash2, danger: true, onSelect: () => setConfirmDelete(true) }] : []),
+              ...(user && !isOwner ? [{ label: 'Bildir', icon: Flag, onSelect: () => report('project', project.id, project.title) }] : []),
             ]}
           />
         </div>
