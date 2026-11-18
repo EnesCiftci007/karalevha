@@ -1,0 +1,65 @@
+name: CI
+
+# Her PR'da ve main'e her gönderimde: API testleri (gerçek PostgreSQL), istemci denetimi ve derlemesi,
+# canlıya giden Docker imajının derlenmesi.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API testleri
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      KARALEVHA_TEST_DB: Host=localhost;Port=5432;Database=karalevha_test;Username=postgres;Password=postgres
+      DOTNET_NOLOGO: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - name: Testler
+        run: dotnet test Karalevha.API.Tests --logger "console;verbosity=normal"
+
+  client:
+    name: İstemci denetimi ve derleme
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: karalevha-client
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: karalevha-client/package-lock.json
+      - run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Tip denetimi ve derleme
+        run: npm run build
+
+  docker:
+    name: Docker imajı
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: API imajını derle
+        run: docker build -t karalevha-api .

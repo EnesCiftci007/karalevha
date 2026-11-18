@@ -90,6 +90,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
+// Testlerde (RateLimits:Disabled) sınırlar fiilen kapanır; canlıda her zaman açık
+var rateLimitsOff = builder.Configuration.GetValue<bool>("RateLimits:Disabled");
+int Limit(int permits) => rateLimitsOff ? 1_000_000 : permits;
+
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -100,7 +104,7 @@ builder.Services.AddRateLimiter(options =>
             _ => new FixedWindowRateLimiterOptions
             {
                 Window = TimeSpan.FromMinutes(1),
-                PermitLimit = 5
+                PermitLimit = Limit(5)
             }));
 
     options.AddPolicy("UploadLimiter", ctx =>
@@ -109,7 +113,7 @@ builder.Services.AddRateLimiter(options =>
             _ => new FixedWindowRateLimiterOptions
             {
                 Window = TimeSpan.FromMinutes(1),
-                PermitLimit = 2
+                PermitLimit = Limit(2)
             }));
 
     // Gizli oba şifresi denemeleri: kişi başına dakikada 5
@@ -120,7 +124,7 @@ builder.Services.AddRateLimiter(options =>
             _ => new FixedWindowRateLimiterOptions
             {
                 Window = TimeSpan.FromMinutes(1),
-                PermitLimit = 20
+                PermitLimit = Limit(20)
             }));
     options.AddPolicy("JoinLimiter", ctx =>
         RateLimitPartition.GetFixedWindowLimiter(
@@ -128,7 +132,7 @@ builder.Services.AddRateLimiter(options =>
             _ => new FixedWindowRateLimiterOptions
             {
                 Window = TimeSpan.FromMinutes(1),
-                PermitLimit = 5
+                PermitLimit = Limit(5)
             }));
 
     // Sohbete dosya gönderme: STL yüklemeden daha sık olur ama yine de sınırlı
@@ -138,7 +142,7 @@ builder.Services.AddRateLimiter(options =>
             _ => new FixedWindowRateLimiterOptions
             {
                 Window = TimeSpan.FromMinutes(1),
-                PermitLimit = 10
+                PermitLimit = Limit(10)
             }));
 });
 
@@ -185,3 +189,6 @@ app.Map("/error", () => Results.Problem("Beklenmeyen bir hata oluştu.")).AllowA
 
 app.Run();
 return 0;
+
+/// <summary>Entegrasyon testleri (WebApplicationFactory) için görünür</summary>
+public partial class Program { }
