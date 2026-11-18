@@ -20,14 +20,22 @@ public sealed class TestClient
         Id = id;
     }
 
+    /// <summary>Tarayıcı gibi: oturum çerezini saklar (CreateClient varsayılanı), güvenlik başlığını gönderir</summary>
+    public static HttpClient Browser(ApiFactory api)
+    {
+        var http = api.CreateClient();
+        http.DefaultRequestHeaders.Add("X-KaraLevha", "1");
+        return http;
+    }
+
     /// <summary>Girişsiz ziyaretçi</summary>
-    public static TestClient Guest(ApiFactory api) => new(api.CreateClient(), "misafir", 0);
+    public static TestClient Guest(ApiFactory api) => new(Browser(api), "misafir", 0);
 
     /// <summary>Yeni bir hesap açar ve giriş yapar. Ad verilmezse benzersiz bir ad üretilir.</summary>
     public static async Task<TestClient> Register(ApiFactory api, string? username = null)
     {
         username ??= "t_" + Guid.NewGuid().ToString("N")[..10];
-        var http = api.CreateClient();
+        var http = Browser(api);
         var reg = await http.PostAsJsonAsync("/api/auth/register", new { username, email = $"{username}@example.test", password = ApiFactory.Password });
         if (reg.StatusCode != HttpStatusCode.OK && reg.StatusCode != HttpStatusCode.Created && reg.StatusCode != HttpStatusCode.Conflict && reg.StatusCode != HttpStatusCode.BadRequest)
             throw new InvalidOperationException($"Kayıt olmadı: {reg.StatusCode} {await reg.Content.ReadAsStringAsync()}");
@@ -35,7 +43,7 @@ public sealed class TestClient
         var login = await http.PostAsJsonAsync("/api/auth/login", new { usernameOrEmail = username, password = ApiFactory.Password });
         var body = JsonNode.Parse(await login.Content.ReadAsStringAsync())!;
         if (!login.IsSuccessStatusCode) throw new InvalidOperationException($"Giriş olmadı: {body}");
-        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", body["token"]!.GetValue<string>());
+        // Oturum, yanıtın koyduğu HttpOnly çerezde; istemci onu kendisi taşır
         return new TestClient(http, username, body["user"]!["id"]!.GetValue<int>());
     }
 

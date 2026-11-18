@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate, useSearchParams } from 'react-router-dom';
 import * as signalR from '@microsoft/signalr';
-import { api, API_URL } from '../services/api';
+import { api, apiFetch, API_URL, hubOptions } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Hash, Send, ChevronLeft, MessageSquare, Lock, Menu, X, Paperclip, FolderOpen, Trash2, Plus, Pencil, LogOut, Link2 } from 'lucide-react';
 import InviteModal from '../components/oba/InviteModal';
@@ -35,7 +35,7 @@ interface Message {
 
 export default function ObaDetay() {
   const { id } = useParams();
-  const { user, token } = useAuth();
+  const { user } = useAuth();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -77,10 +77,8 @@ export default function ObaDetay() {
   // Misafirler de bağlanır: açık obaları canlı olarak (salt okunur) izleyebilirler.
   useEffect(() => {
     const newConnection = new signalR.HubConnectionBuilder()
-      .withUrl(`${import.meta.env.VITE_API_URL || API_URL}/chathub`, {
-        // Gizli obaların kanalları için kimlik; her (yeniden) bağlanışta güncel jeton okunur
-        accessTokenFactory: () => localStorage.getItem('token') ?? '',
-      })
+      // Gizli obaların kanalları için kimlik oturum çerezinden gelir
+      .withUrl(`${API_URL}/chathub`, hubOptions)
       .withAutomaticReconnect()
       .build();
 
@@ -136,7 +134,7 @@ export default function ObaDetay() {
 
   useEffect(() => {
     fetchChannels();
-  }, [id, token]);
+  }, [id, user?.id]);
 
   // Başlıkta göstermek için obanın adı ve kişinin üyeliği (liste herkese açık)
   useEffect(() => {
@@ -153,7 +151,7 @@ export default function ObaDetay() {
     return () => {
       cancelled = true;
     };
-  }, [id, token]);
+  }, [id, user?.id]);
 
   const joinPublic = async () => {
     setJoining(true);
@@ -223,9 +221,7 @@ export default function ObaDetay() {
 
   const fetchChannels = async (selectId?: number) => {
     try {
-      const res = await fetch(`${API_URL}/api/obachannels/${id}`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : undefined
-      });
+      const res = await apiFetch(`/api/obachannels/${id}`);
 
       // Gizli oba + giriş yapılmamış: önce giriş gerekli
       if (res.status === 401) {
@@ -326,18 +322,11 @@ export default function ObaDetay() {
         const form = new FormData();
         form.append('file', currentFile);
         if (currentText) form.append('content', currentText);
-        res = await fetch(`${API_URL}/api/obamessages/${activeChannel.id}/file`, {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: form
-        });
+        res = await apiFetch(`/api/obamessages/${activeChannel.id}/file`, { method: 'POST', body: form });
       } else {
-        res = await fetch(`${API_URL}/api/obamessages/${activeChannel.id}`, {
+        res = await apiFetch(`/api/obamessages/${activeChannel.id}`, {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ content: currentText })
         });
       }

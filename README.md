@@ -60,7 +60,8 @@ npm install
 npm run dev
 ```
 
-Site http://localhost:5173 adresinde açılır. Farklı bir API adresi için `VITE_API_URL` tanımlayın.
+Site http://localhost:5173 adresinde açılır. Farklı bir API adresi için `VITE_API_URL` tanımlayın (yerelde
+varsayılan `http://localhost:5114`; localhost'un portları aynı site sayıldığı için oturum çerezi yine çalışır).
 
 ## ✅ Testler
 
@@ -178,6 +179,20 @@ Uygulama sunucuya (Render, Railway vb.) yüklendiğinde aşağıdaki ortam deği
 | `ASPNETCORE_ENVIRONMENT` | `Production` |
 | `Storage__Provider` ve `Storage__S3__*` | Yüklenen dosyaların deposu (R2/S3), bkz. **Dosya deposu** |
 | `Admins__0` | (İsteğe bağlı) Kulüp yöneticisinin kullanıcı adı |
+| `Proxy__ForwardLimit` | `2` (site Vercel üzerinden yönlendiriyorsa; bkz. aşağı) |
+
+### Site ve API aynı adreste (oturum çerezi)
+
+Oturum, tarayıcıda JavaScript'in okuyamadığı bir çerezde (`HttpOnly`) tutulur. Çerezin Safari dahil her
+tarayıcıda çalışması için site ve API tarayıcıya **aynı adres** gibi görünmelidir: Vercel, `/api`, `/uploads`,
+`/chathub` ve `/notificationhub` yollarını API'ye yönlendirir (`karalevha-client/vercel.json`).
+
+- API başka bir adreste çalışıyorsa `vercel.json` içindeki `https://karalevha.onrender.com` adreslerini değiştirin.
+- Vercel'de `VITE_API_URL` **tanımlamayın**; istemci canlıda API'ye kendi adresinden (`/api/...`) gider.
+- API'de `Proxy__ForwardLimit=2` verin (Vercel → Render iki vekil): yoksa istek sınırları ziyaretçinin değil
+  Vercel'in IP'sine göre işler ve örneğin dakikada 5 giriş denemesi herkes için ortak olur.
+- Vercel bu yönlendirmede WebSocket taşımaz; canlı sohbet ve bildirimler SignalR'ın yedek yöntemiyle
+  (Server-Sent Events / long polling) kendiliğinden çalışır. Vercel yönlendirilen isteklere 120 saniye süre tanır.
 
 > **Not:** Render gibi platformlarda konteyner diski kalıcı değildir; yerel disk deposuyla yeniden dağıtımda
 > yüklenen bütün dosyalar silinir. Canlıda `Storage__Provider=s3` ile R2/S3 kullanın (ya da kalıcı bir disk

@@ -1,4 +1,4 @@
-import { API_URL } from './api';
+import { apiFetch } from './api';
 import { formatOf } from '../utils/loadModel';
 
 export interface ObaFile {
@@ -47,10 +47,8 @@ export function formatSize(bytes: number): string {
  * ile açılamaz (token gönderilemez), bu yüzden her şey blob üzerinden gider.
  */
 export async function fetchObaFile(messageId: number): Promise<Blob> {
-  const token = localStorage.getItem('token');
-  const res = await fetch(`${API_URL}/api/obamessages/file/${messageId}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-  });
+  // Oturum çerezi gider; gizli obaların dosyaları yalnızca üyelere açılır
+  const res = await apiFetch(`/api/obamessages/file/${messageId}`);
   if (!res.ok) {
     throw new Error(
       res.status === 401 || res.status === 403

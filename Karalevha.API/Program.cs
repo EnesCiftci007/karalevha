@@ -19,6 +19,10 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
     options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
+    // Kaç vekil sunucudan geçildiği: Render tek başına 1; site Vercel üzerinden API'ye yönlendiriyorsa
+    // (Vercel → Render) 2. Yanlışsa ziyaretçinin IP'si yerine vekilin IP'si görünür ve istek sınırları
+    // (ör. dakikada 5 giriş denemesi) herkes için ortak işler.
+    options.ForwardLimit = builder.Configuration.GetValue("Proxy:ForwardLimit", 1);
 });
 
 var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>()
@@ -81,10 +85,10 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnMessageReceived = context =>
             {
-                var token = context.Request.Query["access_token"];
-                var path = context.HttpContext.Request.Path;
-                if (!string.IsNullOrEmpty(token) && (path.StartsWithSegments("/chathub") || path.StartsWithSegments("/notificationhub")))
-                    context.Token = token;
+                // Authorization başlığı yoksa jeton HttpOnly oturum çerezinden okunur (tarayıcı; hub'lar dahil)
+                if (string.IsNullOrEmpty(context.Request.Headers.Authorization) &&
+                    context.Request.Cookies.TryGetValue(AuthCookie.Name, out var cookie) && !string.IsNullOrEmpty(cookie))
+                    context.Token = cookie;
                 return Task.CompletedTask;
             }
         };
@@ -176,6 +180,8 @@ app.UseCors("AllowReact");
 // Yüklenen dosyalar diskte değil depoda (IFileStore): /uploads/... adresleri UploadsEndpoint'ten sunulur.
 // wwwroot'ta başka statik dosya yok, statik dosya sunucusu gerekmiyor.
 
+// Çerezle gelen değiştirici isteklerde X-KaraLevha başlığı zorunlu (sahte istek / CSRF koruması)
+app.UseCsrfGuard();
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();

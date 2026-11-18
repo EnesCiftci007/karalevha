@@ -19,6 +19,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     public const string AdminName = "test_yonetici";
     public const string Password = "Test-Sifre-2026!";
+    public const string JwtKey = "test-anahtari-en-az-otuz-iki-bayt-uzunlugunda-0123456789";
 
     private readonly string _storageRoot = Path.Combine(Path.GetTempPath(), "karalevha-test-" + Guid.NewGuid().ToString("N")[..8]);
 
@@ -31,7 +32,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         var settings = new Dictionary<string, string>
         {
             ["ConnectionStrings__DefaultConnection"] = connection,
-            ["Jwt__Key"] = "test-anahtari-en-az-otuz-iki-bayt-uzunlugunda-0123456789",
+            ["Jwt__Key"] = JwtKey,
             ["Jwt__Issuer"] = "Karalevha.API",
             ["Jwt__Audience"] = "Karalevha.Client",
             ["Admins__0"] = AdminName,
