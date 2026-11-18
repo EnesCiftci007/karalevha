@@ -1,8 +1,16 @@
 export const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5114';
 
+/** Sunucunun hata yanıtı: mesajın yanında durum kodu ve gövde (ör. requiresVerification) */
+export class ApiError extends Error {
+  constructor(message: string, public status: number, public body: Record<string, unknown> | null) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('token');
-  
+
   const headers = new Headers(options.headers);
   if (!(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
@@ -23,13 +31,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     throw new Error('Çok fazla deneme yaptınız, biraz bekleyin.');
   }
   if (!res.ok) {
-    const rawText = await res.text().catch(() => '');
-    let body: any = null;
-    try {
-      body = rawText ? JSON.parse(rawText) : null;
-    } catch {
-      body = null;
-    }
+    const body = await res.json().catch(() => null);
     let errorMsg = body?.message;
     if (!errorMsg && body?.errors && typeof body.errors === 'object') {
       const firstKey = Object.keys(body.errors)[0];
@@ -40,15 +42,8 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     if (!errorMsg && body?.title) {
       errorMsg = body.title;
     }
-    if (!errorMsg && rawText && !rawText.trimStart().startsWith('<') && rawText.length < 300) {
-      errorMsg = rawText.trim();
-    }
-    throw new Error(errorMsg ?? `İstek başarısız (${res.status})`);
+    throw new ApiError(errorMsg ?? `İstek başarısız (${res.status})`, res.status, body);
   }
-  
-  if (res.status === 204) {
-    return {} as T;
-  }
-  
-  return res.json().catch(() => ({} as T)) as Promise<T>;
+
+  return res.json() as Promise<T>;
 }

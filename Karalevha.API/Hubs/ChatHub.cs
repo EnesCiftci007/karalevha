@@ -1,61 +1,50 @@
-using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.SignalR;
-using System.Threading.Tasks;
 using Karalevha.API.Data;
+using Karalevha.API.Services;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using System.Security.Claims;
 
 namespace Karalevha.API.Hubs
 {
-    [Authorize]
+    /// <summary>
+    /// Oba kanallarının canlı mesaj yayını. Bağlantı isteğe bağlı olarak JWT taşır
+    /// (?access_token=..., Program.cs). Açık obaların kanallarını herkes dinleyebilir;
+    /// gizli obaların kanallarına yalnızca kurucu ve üyeler katılabilir.
+    /// </summary>
     public class ChatHub : Hub
     {
         private readonly AppDbContext _context;
+        private readonly ObaAccess _access;
 
-        public ChatHub(AppDbContext context)
+        public ChatHub(AppDbContext context, ObaAccess access)
         {
             _context = context;
+            _access = access;
         }
 
         public async Task JoinChannel(string channelId)
         {
-            if (int.TryParse(channelId, out int cid))
-            {
-                var channel = await _context.ObaChannels.FindAsync(cid);
-                if (channel != null)
-                {
-                    var oba = await _context.Obalar.FindAsync(channel.ObaId);
-                    if (oba != null)
-                    {
-                        var userIdClaim = Context.UserIdentifier ?? Context.User?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-                        if (userIdClaim != null && int.TryParse(userIdClaim, out int userId))
-                        {
-                            var bannedUntil = await _context.Users
-                                .Where(u => u.Id == userId)
-                                .Select(u => u.BannedUntil)
-                                .FirstOrDefaultAsync();
+            if (!int.TryParse(channelId, out var id))
+                throw new HubException("Geçersiz kanal.");
 
-                            if (bannedUntil.HasValue && bannedUntil.Value > DateTime.UtcNow)
-                            {
-                                throw new HubException($"Hesabınız {bannedUntil.Value:dd.MM.yyyy HH:mm} tarihine kadar askıya alınmıştır.");
-                            }
-                            if (oba.IsPrivate)
-                            {
-                                var isMember = await _context.ObaMembers.AnyAsync(m => m.ObaId == oba.Id && m.UserId == userId);
-                                if (!isMember) throw new HubException("Bu kanala erişim yetkiniz yok.");
-                            }
-                            await Groups.AddToGroupAsync(Context.ConnectionId, channelId);
-                            return;
-                        }
-                    }
-                }
-            }
-            throw new HubException("Geçersiz kanal veya yetkisiz erişim.");
+            var channel = await _context.ObaChannels
+                .AsNoTracking()
+                .Include(c => c.Oba)
+                .FirstOrDefaultAsync(c => c.Id == id);
+            if (channel?.Oba == null)
+                throw new HubException("Kanal bulunamadı.");
+
+            var userId = Context.User == null ? null : CurrentUser.IdOf(Context.User);
+            var (canRead, _) = await _access.ChannelAsync(channel, userId);
+            if (!canRead)
+                throw new HubException("Bu kanalı dinleme yetkin yok.");
+
+            await Groups.AddToGroupAsync(Context.ConnectionId, id.ToString());
         }
 
         public async Task LeaveChannel(string channelId)
         {
-            await Groups.RemoveFromGroupAsync(Context.ConnectionId, channelId);
+            if (int.TryParse(channelId, out var id))
+                await Groups.RemoveFromGroupAsync(Context.ConnectionId, id.ToString());
         }
     }
 }

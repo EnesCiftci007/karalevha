@@ -1,13 +1,11 @@
-using System.Text;
-using Karalevha.API.Filters;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
-using Karalevha.API.DTOs;
-using Karalevha.API.Extensions;
 using Karalevha.API.Models;
+using System.Security.Claims;
 using Microsoft.AspNetCore.RateLimiting;
+using Karalevha.API.Services;
 
 namespace Karalevha.API.Controllers
 {
@@ -15,94 +13,207 @@ namespace Karalevha.API.Controllers
     [ApiController]
     public class PrintModelsController : ControllerBase
     {
+        private const long MaxFileSize = 50_000_000; // 50 MB
+
+        // Tek dosyadan oluşan 3B biçimler. .gltf kabul edilmez: dokuları ve verisi ayrı dosyalarda durur.
+        private static readonly HashSet<string> AllowedExtensions = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ".stl", ".3mf", ".obj", ".fbx", ".glb"
+        };
+
+        private static readonly HashSet<string> Categories = new() { "baski", "oyun" };
+
         private readonly AppDbContext _context;
         private readonly IWebHostEnvironment _env;
+        private readonly CurrentUser _current;
 
-        public PrintModelsController(AppDbContext context, IWebHostEnvironment env)
+        public PrintModelsController(AppDbContext context, IWebHostEnvironment env, CurrentUser current)
         {
             _context = context;
             _env = env;
+            _current = current;
         }
 
-        // GET: api/printmodels
+        private string WebRoot => _env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+
+        public class UpdateModelDto
+        {
+            public string Title { get; set; } = string.Empty;
+            public string? Description { get; set; }
+            public string Category { get; set; } = "baski";
+        }
+
+        // PUT: api/printmodels/{id}
+        [HttpPut("{id:int}")]
+        [Authorize]
+        public async Task<IActionResult> UpdateModel(int id, UpdateModelDto dto)
+        {
+            var model = await _context.PrintModels.FindAsync(id);
+            if (model == null) return NotFound(new { message = "Model bulunamadı." });
+            if (CurrentUser.IdOf(User) != model.UserId) return StatusCode(403, new { message = "Bu modeli düzenleyemezsin." });
+
+            var title = dto.Title?.Trim() ?? string.Empty;
+            if (title.Length == 0 || title.Length > 100) return BadRequest(new { message = "Model adı 1-100 karakter olmalı." });
+            var description = string.IsNullOrWhiteSpace(dto.Description) ? null : dto.Description.Trim();
+            if (description?.Length > 500) return BadRequest(new { message = "Açıklama en fazla 500 karakter olabilir." });
+            if (!Categories.Contains(dto.Category)) return BadRequest(new { message = "Geçersiz kategori." });
+
+            model.Title = title;
+            model.Description = description;
+            model.Category = dto.Category;
+            await _context.SaveChangesAsync();
+            return Ok(new { success = true });
+        }
+
+        // DELETE: api/printmodels/{id}
+        [HttpDelete("{id:int}")]
+        [Authorize]
+        public async Task<IActionResult> DeleteModel(int id)
+        {
+            var model = await _context.PrintModels.FindAsync(id);
+            if (model == null) return NotFound(new { message = "Model bulunamadı." });
+            if (!_current.CanManage(User, model.UserId)) return StatusCode(403, new { message = "Bu modeli silemezsin." });
+
+            // "Bunu bastım" fotoğrafları kayıtla birlikte (cascade) silinir; dosyalarını önceden topla
+            var makePhotos = await _context.PrintMakes.Where(m => m.PrintModelId == id).Select(m => m.PhotoPath).ToListAsync();
+
+            _context.PrintModels.Remove(model);
+            _context.Likes.RemoveRange(_context.Likes.Where(l => l.TargetType == "model" && l.TargetId == id));
+            _context.Comments.RemoveRange(_context.Comments.Where(c => c.TargetType == "model" && c.TargetId == id));
+            await _context.SaveChangesAsync();
+
+            // Kayıt silindikten sonra dosyaları da kaldır. Yol yalnızca /uploads altındaysa ve dışarı taşmıyorsa.
+            var uploads = Path.GetFullPath(Path.Combine(WebRoot, "uploads"));
+            foreach (var relative in makePhotos.Append(model.FilePath))
+            {
+                var path = Path.GetFullPath(Path.Combine(WebRoot, relative.TrimStart('/')));
+                if (path.StartsWith(uploads + Path.DirectorySeparatorChar) && System.IO.File.Exists(path))
+                    System.IO.File.Delete(path);
+            }
+
+            return Ok(new { success = true });
+        }
+
+        // GET: api/printmodels/{id}   — tek model (eski /baski-istasyonu?model= bağlantılarını projeye yönlendirmek için)
+        [HttpGet("{id:int}")]
+        public async Task<IActionResult> GetModel(int id)
+        {
+            var model = await _context.PrintModels.AsNoTracking().Where(m => m.Id == id)
+                .Select(m => new { m.Id, m.Title, m.ProjectId }).FirstOrDefaultAsync();
+            return model == null ? NotFound(new { message = "Model bulunamadı." }) : Ok(model);
+        }
+
+        // GET: api/printmodels?projectId=3&category=oyun
         [HttpGet]
-        public async Task<IActionResult> GetModels([FromQuery] int skip = 0, [FromQuery] int take = 50)
+        public async Task<IActionResult> GetModels([FromQuery] int skip = 0, [FromQuery] int take = 50, [FromQuery] string? category = null, [FromQuery] int? projectId = null)
         {
             skip = Math.Max(skip, 0);
             take = Math.Clamp(take, 1, 100);
 
-            var models = await _context.PrintModels
+            var query = _context.PrintModels.AsNoTracking();
+            if (!string.IsNullOrEmpty(category) && Categories.Contains(category))
+                query = query.Where(m => m.Category == category);
+            if (projectId != null)
+                query = query.Where(m => m.ProjectId == projectId);
+
+            var models = await query
                 .OrderByDescending(m => m.UploadedAt)
                 .Skip(skip)
                 .Take(take)
-                .Select(m => new PrintModelDto
+                .Select(m => new
                 {
-                    Id = m.Id,
-                    Title = m.Title,
-                    Description = m.Description,
-                    FileName = m.FileName,
-                    FileUrl = $"/uploads/stl/{m.FileName}",
-                    UploadedAt = m.UploadedAt,
-                    Uploader = m.User != null ? m.User.Username : "Bilinmeyen"
+                    m.Id,
+                    m.Title,
+                    m.Description,
+                    m.FileName,
+                    // Eski kayıtların FilePath'i de /uploads/stl/... biçiminde; doğrudan kullanılabilir
+                    FileUrl = m.FilePath,
+                    m.Category,
+                    m.UploadedAt,
+                    m.UserId,
+                    Uploader = m.User!.Username,
+                    m.ProjectId,
+                    ProjectTitle = m.Project != null ? m.Project.Title : null,
                 })
                 .ToListAsync();
 
-            return Ok(models);
+            return Ok(models.Select(m => new
+            {
+                m.Id,
+                m.Title,
+                m.Description,
+                m.FileName,
+                m.FileUrl,
+                m.Category,
+                Format = Path.GetExtension(m.FileName).TrimStart('.').ToLowerInvariant(),
+                m.UploadedAt,
+                m.UserId,
+                m.Uploader,
+                m.ProjectId,
+                m.ProjectTitle,
+            }));
         }
 
         // POST: api/printmodels
         [HttpPost]
         [Authorize]
-        [CheckBanned]
-        [EnableRateLimiting("UploadLimiter")]
-        [RequestSizeLimit(50_000_000)] // 50 MB sınır
-        [RequestFormLimits(MultipartBodyLengthLimit = 50_000_000)]
-        public async Task<IActionResult> UploadModel([FromForm] string title, [FromForm] string? description, IFormFile file)
+        [EnableRateLimiting("PartUploadLimiter")]
+        [RequestSizeLimit(MaxFileSize + 1_000_000)]
+        [RequestFormLimits(MultipartBodyLengthLimit = MaxFileSize + 1_000_000)]
+        public async Task<IActionResult> UploadModel([FromForm] string title, [FromForm] string? description, [FromForm] string? category, [FromForm] int? projectId, IFormFile file)
         {
-            if (string.IsNullOrWhiteSpace(title) || title.Trim().Length > 100)
-                return BadRequest(new { message = "Başlık boş olamaz ve en fazla 100 karakter olabilir." });
-
-            if (description != null && description.Length > 500)
-                return BadRequest(new { message = "Açıklama en fazla 500 karakter olabilir." });
+            // Modeller projelerin içinde durur: proje zorunlu ve yalnızca sahibi ekler
+            if (projectId == null) return BadRequest(new { message = "Model bir projeye eklenmeli." });
+            var project = await _context.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.Id == projectId);
+            if (project == null) return NotFound(new { message = "Proje bulunamadı." });
+            if (CurrentUser.IdOf(User) != project.UserId) return StatusCode(403, new { message = "Bu projeye yalnızca sahibi model ekleyebilir." });
 
             if (file == null || file.Length == 0)
-                return BadRequest(new { message = "Lütfen bir STL dosyası seçin." });
+                return BadRequest(new { message = "Lütfen bir model dosyası seçin." });
 
-            if (file.Length > 50_000_000)
-                return BadRequest(new { message = "Dosya boyutu en fazla 50 MB olabilir." });
+            if (file.Length > MaxFileSize)
+                return BadRequest(new { message = "Dosya en fazla 50 MB olabilir." });
 
-            if (!file.FileName.EndsWith(".stl", StringComparison.OrdinalIgnoreCase))
-                return BadRequest(new { message = "Sadece .stl uzantılı dosyalar kabul edilir." });
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!AllowedExtensions.Contains(extension))
+                return BadRequest(new { message = "Desteklenen biçimler: STL, 3MF, OBJ, FBX, GLB." });
 
-            if (!await IsValidStlFileAsync(file))
-                return BadRequest(new { message = "Geçersiz STL dosya içeriği." });
+            title = title?.Trim() ?? string.Empty;
+            if (title.Length == 0 || title.Length > 100)
+                return BadRequest(new { message = "Model adı 1-100 karakter olmalı." });
 
-            var userId = User.GetRequiredUserId();
-            var username = User.FindFirst(System.Security.Claims.ClaimTypes.Name)?.Value ?? "Bilinmeyen";
+            description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+            if (description?.Length > 500)
+                return BadRequest(new { message = "Açıklama en fazla 500 karakter olabilir." });
+
+            category = string.IsNullOrEmpty(category) ? "baski" : category;
+            if (!Categories.Contains(category))
+                return BadRequest(new { message = "Geçersiz kategori." });
+
+            if (!int.TryParse(User.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var userId))
+                return Unauthorized();
 
             // Dosya ismi zafiyetlerini (Path Traversal) ve URL bozulmalarını önlemek için sadece GUID kullan
-            var safeFileName = $"{Guid.NewGuid()}.stl";
-            
-            var uploadsFolder = Path.Combine(_env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", "stl");
-            
-            if (!Directory.Exists(uploadsFolder))
-                Directory.CreateDirectory(uploadsFolder);
+            var safeFileName = $"{Guid.NewGuid()}{extension}";
+            var uploadsFolder = Path.Combine(_env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", "models");
+            Directory.CreateDirectory(uploadsFolder);
 
             var absoluteFilePath = Path.Combine(uploadsFolder, safeFileName);
-            var relativeFilePath = $"/uploads/stl/{safeFileName}"; // Veritabanına mutlak (C:\...) yol yazılmaz
 
-            await using (var stream = new FileStream(absoluteFilePath, FileMode.Create))
+            await using (var stream = new FileStream(absoluteFilePath, FileMode.CreateNew))
             {
                 await file.CopyToAsync(stream);
             }
 
             var printModel = new PrintModel
             {
-                Title = title.Trim(), // Kullanıcının girdiği orijinal isim başlıkta saklanır
-                Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim(),
-                FilePath = relativeFilePath, 
+                Title = title,
+                Description = description,
+                FilePath = $"/uploads/models/{safeFileName}", // Veritabanına mutlak (C:\...) yol yazılmaz
                 FileName = safeFileName,
+                Category = category,
                 UserId = userId,
+                ProjectId = projectId,
                 UploadedAt = DateTime.UtcNow
             };
 
@@ -121,80 +232,7 @@ namespace Karalevha.API.Controllers
                 throw;
             }
 
-            return Ok(new PrintModelDto
-            {
-                Id = printModel.Id,
-                Title = printModel.Title,
-                Description = printModel.Description,
-                FileName = printModel.FileName,
-                FileUrl = relativeFilePath,
-                UploadedAt = printModel.UploadedAt,
-                Uploader = username
-            });
-        }
-
-        // DELETE: api/printmodels/{id}
-        [HttpDelete("{id}")]
-        [Authorize]
-        [CheckBanned]
-        public async Task<IActionResult> DeleteModel(int id)
-        {
-            var userId = User.GetRequiredUserId();
-
-            var model = await _context.PrintModels.FirstOrDefaultAsync(m => m.Id == id);
-            if (model == null)
-                return NotFound(new { message = "Model bulunamadı." });
-
-            var currentUser = await _context.Users.FindAsync(userId);
-            bool isOwnerOrAdmin = currentUser != null && (currentUser.Role == "Owner" || currentUser.Role == "Admin");
-            if (model.UserId != userId && !isOwnerOrAdmin)
-                return StatusCode(StatusCodes.Status403Forbidden, new { message = "Bu modeli silme yetkiniz yok." });
-
-            _context.PrintModels.Remove(model);
-            await _context.SaveChangesAsync();
-
-            var uploadsFolder = Path.Combine(_env.WebRootPath ?? Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"), "uploads", "stl");
-            var safeName = Path.GetFileName(model.FileName);
-            if (!string.IsNullOrEmpty(safeName))
-            {
-                var absoluteFilePath = Path.Combine(uploadsFolder, safeName);
-                if (System.IO.File.Exists(absoluteFilePath))
-                {
-                    try { System.IO.File.Delete(absoluteFilePath); } catch { /* ignore file lock errors */ }
-                }
-            }
-
-            return Ok(new { message = "Model başarıyla silindi." });
-        }
-
-        private static async Task<bool> IsValidStlFileAsync(IFormFile file)
-        {
-            if (file.Length < 15) return false;
-
-            var targetLen = (int)Math.Min(256, file.Length);
-            var buffer = new byte[targetLen];
-            await using var stream = file.OpenReadStream();
-            int totalRead = 0;
-            while (totalRead < targetLen)
-            {
-                var read = await stream.ReadAsync(buffer.AsMemory(totalRead, targetLen - totalRead));
-                if (read == 0) break;
-                totalRead += read;
-            }
-            if (totalRead < 15) return false;
-
-            // PE (.exe/.dll) imzası ("MZ") kontrolü
-            if (buffer[0] == 0x4D && buffer[1] == 0x5A) return false;
-
-            var headAscii = Encoding.ASCII.GetString(buffer, 0, totalRead).TrimStart();
-            // HTML / Script / XML / PHP içeriklerini reddet
-            if (headAscii.StartsWith("<", StringComparison.Ordinal)) return false;
-
-            // ASCII STL "solid" ile başlar; Binary STL ise en az 84 bayttır (80 bayt başlık + 4 bayt üçgen sayısı)
-            bool isAsciiStl = headAscii.StartsWith("solid", StringComparison.OrdinalIgnoreCase);
-            if (!isAsciiStl && file.Length < 84) return false;
-
-            return true;
+            return Ok(new { message = "Model yüklendi.", printModel.Id });
         }
     }
 }

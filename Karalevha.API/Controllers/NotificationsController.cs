@@ -2,14 +2,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
-using Karalevha.API.DTOs;
-using Karalevha.API.Extensions;
+using Karalevha.API.Services;
 
 namespace Karalevha.API.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("api/notifications")]
     [ApiController]
     [Authorize]
+    [Karalevha.API.Filters.AllowWhileBanned] // askıdaki hesap da bildirimlerini okuyabilir
     public class NotificationsController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -19,88 +19,46 @@ namespace Karalevha.API.Controllers
             _context = context;
         }
 
+        // GET: api/notifications   — son 30 bildirim
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<NotificationDto>>> GetNotifications([FromQuery] int skip = 0, [FromQuery] int take = 50)
+        public async Task<IActionResult> GetNotifications()
         {
-            skip = Math.Max(0, skip);
-            take = Math.Clamp(take, 1, 50);
-            var currentUserId = User.GetUserId();
-            if (currentUserId == null) return Unauthorized();
-            var userId = currentUserId.Value;
-
-            var notifications = await _context.Notifications
-                .Where(n => n.RecipientUserId == userId)
+            var userId = CurrentUser.IdOf(User);
+            var list = await _context.Notifications.AsNoTracking()
+                .Where(n => n.UserId == userId)
                 .OrderByDescending(n => n.CreatedAt)
-                .Skip(skip)
-                .Take(take)
-                .Select(n => new NotificationDto
-                {
-                    Id = n.Id,
-                    Type = n.Type,
-                    PostId = n.PostId,
-                    CommentId = n.CommentId,
-                    IsRead = n.IsRead,
-                    CreatedAt = n.CreatedAt,
-                    Actor = new NotificationActorDto
-                    {
-                        Id = n.ActorUser!.Id,
-                        Username = n.ActorUser.Username,
-                        AvatarSeed = n.ActorUser.AvatarSeed
-                    }
-                })
+                .Take(30)
+                .Select(n => new { n.Id, n.Text, n.Link, n.IsRead, n.CreatedAt, Actor = n.Actor != null ? n.Actor.Username : null })
                 .ToListAsync();
-
-            return Ok(notifications);
+            return Ok(list);
         }
 
+        // GET: api/notifications/unread-count
         [HttpGet("unread-count")]
-        public async Task<ActionResult<int>> GetUnreadCount()
+        public async Task<IActionResult> GetUnreadCount()
         {
-            var currentUserId = User.GetUserId();
-            if (currentUserId == null) return Unauthorized();
-            var userId = currentUserId.Value;
-
-            var count = await _context.Notifications
-                .Where(n => n.RecipientUserId == userId && !n.IsRead)
-                .CountAsync();
-
-            return Ok(count);
+            var userId = CurrentUser.IdOf(User);
+            return Ok(new { count = await _context.Notifications.CountAsync(n => n.UserId == userId && !n.IsRead) });
         }
 
-        [HttpPatch("{id}/read")]
-        public async Task<IActionResult> MarkAsRead(int id)
+        // POST: api/notifications/read   — hepsini okundu say
+        [HttpPost("read")]
+        public async Task<IActionResult> MarkAllRead()
         {
-            var currentUserId = User.GetUserId();
-            if (currentUserId == null) return Unauthorized();
-            var userId = currentUserId.Value;
-
-            var notification = await _context.Notifications.FindAsync(id);
-            if (notification == null) return NotFound();
-            
-            if (notification.RecipientUserId != userId) return Forbid();
-
-            if (!notification.IsRead)
-            {
-                notification.IsRead = true;
-                await _context.SaveChangesAsync();
-            }
-
-            return NoContent();
-        }
-
-        [HttpPatch("read-all")]
-        public async Task<IActionResult> MarkAllAsRead()
-        {
-            var currentUserId = User.GetUserId();
-            if (currentUserId == null) return Unauthorized();
-            var userId = currentUserId.Value;
-
-            await _context.Notifications
-                .Where(n => n.RecipientUserId == userId && !n.IsRead)
+            var userId = CurrentUser.IdOf(User);
+            await _context.Notifications.Where(n => n.UserId == userId && !n.IsRead)
                 .ExecuteUpdateAsync(s => s.SetProperty(n => n.IsRead, true));
+            return Ok(new { success = true });
+        }
 
-            return NoContent();
+        // POST: api/notifications/{id}/read
+        [HttpPost("{id:int}/read")]
+        public async Task<IActionResult> MarkRead(int id)
+        {
+            var userId = CurrentUser.IdOf(User);
+            await _context.Notifications.Where(n => n.Id == id && n.UserId == userId)
+                .ExecuteUpdateAsync(s => s.SetProperty(n => n.IsRead, true));
+            return Ok(new { success = true });
         }
     }
 }
-

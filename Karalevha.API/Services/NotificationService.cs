@@ -1,73 +1,68 @@
-﻿using Karalevha.API.Data;
+using Karalevha.API.Data;
+using Karalevha.API.Hubs;
 using Karalevha.API.Models;
 using Microsoft.AspNetCore.SignalR;
-using Karalevha.API.Hubs;
-using Microsoft.Extensions.Logging;
-using Microsoft.EntityFrameworkCore;
 
 namespace Karalevha.API.Services
 {
-    public interface INotificationService
-    {
-        Task SendNotificationAsync(int recipientUserId, int actorUserId, string type, int? postId, int? commentId);
-    }
-
-    public class NotificationService : INotificationService
+    /// <summary>
+    /// Bildirim ekler. Kayıt çağıranın SaveChanges'i ile birlikte yazılır, böylece
+    /// asıl işlem başarısız olursa yarım bildirim kalmaz. Kayıt başarılı olunca bildirim
+    /// alıcının açık sekmelerine SignalR ile (/notificationhub) anında gönderilir.
+    /// </summary>
+    public class NotificationService
     {
         private readonly AppDbContext _context;
-        private readonly IHubContext<NotificationHub> _hubContext;
+        private readonly IHubContext<NotificationHub> _hub;
         private readonly ILogger<NotificationService> _logger;
+        private readonly List<Notification> _pending = new();
 
-        public NotificationService(AppDbContext context, IHubContext<NotificationHub> hubContext, ILogger<NotificationService> logger)
+        public NotificationService(AppDbContext context, IHubContext<NotificationHub> hub, ILogger<NotificationService> logger)
         {
             _context = context;
-            _hubContext = hubContext;
+            _hub = hub;
             _logger = logger;
+            _context.SavedChanges += (_, _) => Push();
         }
 
-        public async Task SendNotificationAsync(int recipientUserId, int actorUserId, string type, int? postId, int? commentId)
+        public void Add(int userId, int? actorId, string text, string link)
         {
-            if (recipientUserId == actorUserId) return;
-
-            try
+            if (userId == actorId) return; // kişi kendi eylemi için bildirim almaz
+            var notification = new Notification
             {
-                // Beğen/geri al/tekrar beğen döngüsü bildirim spam'ine dönüşmesin:
-                // aynı kişinin aynı gönderi için önceden oluşmuş beğeni bildirimi varsa yenisini ekleme
-                if (type == "Like" && postId.HasValue)
-                {
-                    var alreadyNotified = await _context.Notifications.AnyAsync(n =>
-                        n.Type == "Like" &&
-                        n.RecipientUserId == recipientUserId &&
-                        n.ActorUserId == actorUserId &&
-                        n.PostId == postId);
-                    if (alreadyNotified) return;
-                }
+                UserId = userId,
+                ActorId = actorId,
+                Text = text.Length > 300 ? text[..297] + "…" : text,
+                Link = link,
+                CreatedAt = DateTime.UtcNow
+            };
+            _context.Notifications.Add(notification);
+            _pending.Add(notification);
+        }
 
-                var notification = new Notification
+        /// <summary>Kaydedilen bildirimleri alıcılarına gönderir. Gönderim hatası asıl işlemi bozmaz.</summary>
+        private void Push()
+        {
+            var saved = _pending.Where(n => n.Id > 0).ToList();
+            if (saved.Count == 0) return;
+            _pending.RemoveAll(saved.Contains);
+
+            var actorIds = saved.Where(n => n.ActorId != null).Select(n => n.ActorId!.Value).Distinct().ToList();
+            var actors = _context.Users.Local.Where(u => actorIds.Contains(u.Id)).ToDictionary(u => u.Id, u => u.Username);
+
+            foreach (var n in saved)
+            {
+                var dto = new
                 {
-                    RecipientUserId = recipientUserId,
-                    ActorUserId = actorUserId,
-                    Type = type,
-                    PostId = postId,
-                    CommentId = commentId,
-                    CreatedAt = DateTime.UtcNow
+                    n.Id,
+                    n.Text,
+                    n.Link,
+                    n.IsRead,
+                    n.CreatedAt,
+                    Actor = n.ActorId is int a && actors.TryGetValue(a, out var name) ? name : null,
                 };
-
-                _context.Notifications.Add(notification);
-                await _context.SaveChangesAsync();
-
-                try 
-                {
-                    await _hubContext.Clients.User(recipientUserId.ToString()).SendAsync("ReceiveNotification");
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to send SignalR notification to User {UserId}", recipientUserId);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to save Notification for User {UserId}", recipientUserId);
+                _ = _hub.Clients.User(n.UserId.ToString()).SendAsync("Bildirim", dto)
+                    .ContinueWith(t => _logger.LogWarning(t.Exception, "Bildirim canlı gönderilemedi"), TaskContinuationOptions.OnlyOnFaulted);
             }
         }
     }

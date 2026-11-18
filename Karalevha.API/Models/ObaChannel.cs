@@ -14,7 +14,7 @@ namespace Karalevha.API.Models
 
         [Required]
         [MaxLength(20)]
-        public string Type { get; set; } = "text"; // "text" veya "voice"
+        public string Type { get; set; } = "text"; // Yalnızca metin kanalı var (ses kanalları kaldırıldı)
 
         [Required]
         [MaxLength(50)]
@@ -26,5 +26,11 @@ namespace Karalevha.API.Models
         public Oba? Oba { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        /// <summary>Kanalı açan kişi. Obayla birlikte gelen varsayılan kanallarda boş.</summary>
+        public int? CreatedById { get; set; }
+
+        /// <summary>Gizli kanalı yalnızca eklenen kişiler, kanalı açan ve oba kurucusu görür.</summary>
+        public bool IsPrivate { get; set; } = false;
     }
 }

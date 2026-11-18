@@ -8,6 +8,8 @@ interface AuthContextType {
   loading: boolean;
   login: (userData: User, userToken: string) => void;
   logout: () => void;
+  /** Rol ve askı durumunu sunucudan tazeler */
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -46,6 +48,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.setItem('token', userToken);
   }, []);
 
+  // Rol ve askı oturum boyunca değişebilir; açılışta ve istendiğinde sunucudan okunur
+  const refreshUser = useCallback(async () => {
+    if (!localStorage.getItem('token')) return;
+    try {
+      const fresh = await api<User>('/api/auth/me');
+      setUser(fresh);
+      localStorage.setItem('user', JSON.stringify(fresh));
+    } catch {
+      // Ağ hatası: kayıtlı bilgiyle devam; jeton geçersizse api() zaten çıkış yaptırır
+    }
+  }, []);
+
   useEffect(() => {
     try {
       const savedUser = localStorage.getItem('user');
@@ -53,16 +67,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       if (savedUser && savedToken && !isTokenExpired(savedToken)) {
         setUser(JSON.parse(savedUser) as User);
         setToken(savedToken);
-
-        // Kayıtlı kullanıcı bilgisi eskimiş olabilir (rol değişikliği, ban vb.); sunucudan tazele.
-        // 401 dönerse api() zaten 'auth:unauthorized' olayıyla çıkış yaptırır.
-        api<User>('/api/auth/me')
-          .then(fresh => {
-            if (!fresh?.id || localStorage.getItem('token') !== savedToken) return;
-            setUser(fresh);
-            localStorage.setItem('user', JSON.stringify(fresh));
-          })
-          .catch(() => { /* ağ hatası: kayıtlı bilgiyle devam et */ });
+        refreshUser();
       } else {
         logout();
       }
@@ -82,11 +87,11 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       window.removeEventListener('auth:unauthorized', onUnauthorized);
       window.removeEventListener('storage', onStorage);
     };
-  }, [logout]);
+  }, [logout, refreshUser]);
 
   const value = useMemo(
-    () => ({ user, token, loading, login, logout }),
-    [user, token, loading, login, logout]
+    () => ({ user, token, loading, login, logout, refreshUser }),
+    [user, token, loading, login, logout, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

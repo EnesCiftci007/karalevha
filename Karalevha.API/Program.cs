@@ -1,6 +1,7 @@
 using System.Text;
 using System.Threading.RateLimiting;
 using Karalevha.API.Data;
+using Karalevha.API.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
@@ -8,6 +9,8 @@ using Microsoft.IdentityModel.Tokens;
 using System.Security.Claims;
 
 Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "stl"));
+Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "models"));
+Directory.CreateDirectory(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "makes"));
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,7 +21,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownProxies.Clear();
 });
 
-var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>() 
+var allowedOrigins = builder.Configuration.GetSection("Cors:Origins").Get<string[]>()
                      ?? (builder.Environment.IsDevelopment()
                         ? new[] { "http://localhost:5173" }
                         : new[] { "https://karalevha.vercel.app" });
@@ -34,11 +37,17 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddControllers();
+// Askıdaki hesaplar okuyabilir ama yazamaz (Filters/BanFilter.cs)
+builder.Services.AddControllers(options => options.Filters.Add<Karalevha.API.Filters.BanFilter>());
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks();
-builder.Services.AddHttpClient<Karalevha.API.Services.IEmailService, Karalevha.API.Services.EmailService>();
-builder.Services.AddScoped<Karalevha.API.Services.INotificationService, Karalevha.API.Services.NotificationService>();
+builder.Services.AddSingleton<ObaFileStorage>();
+builder.Services.AddSingleton<CurrentUser>();
+builder.Services.AddScoped<NotificationService>();
+builder.Services.AddScoped<ObaAccess>();
+builder.Services.AddHttpClient<IEmailService, EmailService>();
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<RepoService>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -46,7 +55,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT Key is missing from configuration.");
 if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
 {
-    throw new InvalidOperationException("Jwt:Key en az 32 bayt olmalıdır. (HS256 için gerekli minimum uzunluk)");
+    throw new InvalidOperationException("Jwt:Key en az 32 bayt olmalı. (HS256 için gerekli minimum uzunluk)");
 }
 
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? throw new InvalidOperationException("Jwt:Issuer missing");
@@ -65,17 +74,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
+        // WebSocket bağlantıları başlık gönderemez; SignalR jetonu sorgu dizesinde taşır
         options.Events = new JwtBearerEvents
         {
             OnMessageReceived = context =>
             {
-                var accessToken = context.Request.Query["access_token"];
+                var token = context.Request.Query["access_token"];
                 var path = context.HttpContext.Request.Path;
-                if (!string.IsNullOrEmpty(accessToken) &&
-                    (path.StartsWithSegments("/chathub") || path.StartsWithSegments("/notificationhub")))
-                {
-                    context.Token = accessToken;
-                }
+                if (!string.IsNullOrEmpty(token) && (path.StartsWithSegments("/chathub") || path.StartsWithSegments("/notificationhub")))
+                    context.Token = token;
                 return Task.CompletedTask;
             }
         };
@@ -102,6 +109,35 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1),
                 PermitLimit = 2
             }));
+
+    // Gizli oba şifresi denemeleri: kişi başına dakikada 5
+    // Proje parçaları (model, çizim, devre, kod): proje kurulurken birkaç dosya art arda yüklenir
+    options.AddPolicy("PartUploadLimiter", ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ctx.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "anon",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 20
+            }));
+    options.AddPolicy("JoinLimiter", ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 5
+            }));
+
+    // Sohbete dosya gönderme: STL yüklemeden daha sık olur ama yine de sınırlı
+    options.AddPolicy("ChatFileLimiter", ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = 10
+            }));
 });
 
 var app = builder.Build();
@@ -112,40 +148,39 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
 
-    // Platform sahibi yalnızca yapılandırmayla belirlenir (örn. Render'da OwnerUsername=SERO).
-    // Kodda varsayılan bir kullanıcı adı OLMAMALI: aksi halde o adı ilk kaydeden kişi Owner olurdu.
-    var ownerUsername = (app.Configuration["OwnerUsername"] ?? app.Configuration["Admin:OwnerUsername"])?
-        .Trim()
-        .ToLowerInvariant();
-    if (!string.IsNullOrEmpty(ownerUsername))
-    {
-        var ownerUser = db.Users.FirstOrDefault(u => u.NormalizedUsername == ownerUsername);
-        if (ownerUser == null)
-        {
-            app.Logger.LogWarning("OwnerUsername '{Owner}' olarak ayarlı ama bu kullanıcı bulunamadı.", ownerUsername);
-        }
-        else if (ownerUser.Role != "Owner")
-        {
-            ownerUser.Role = "Owner";
-            db.SaveChanges();
-            app.Logger.LogInformation("{Owner} kullanıcısına Owner rolü atandı.", ownerUser.Username);
-        }
-    }
+    // Yapılandırmadaki Owner/Admin rollerini veritabanına yaz, yöneticileri belleğe al
+    await app.Services.GetRequiredService<CurrentUser>().LoadAsync(db);
+
+    // Eski sürümlerde oba şifreleri düz metin saklanıyordu; kalanları bir kerelik BCrypt özetine çevir
+    var plainPasswords = db.Obalar.Where(o => o.JoinPassword != null && !o.JoinPassword.StartsWith("$2")).ToList();
+    foreach (var oba in plainPasswords)
+        oba.JoinPassword = BCrypt.Net.BCrypt.HashPassword(oba.JoinPassword!.Trim());
+    if (plainPasswords.Count > 0) db.SaveChanges();
 }
 
 app.UseForwardedHeaders();
-app.UseCors("AllowReact");
 app.UseExceptionHandler("/error");
-if (app.Environment.IsDevelopment())
-{
-    app.UseHttpsRedirection();
-}
+app.UseHttpsRedirection();
+app.UseCors("AllowReact");
 
 var provider = new Microsoft.AspNetCore.StaticFiles.FileExtensionContentTypeProvider();
-provider.Mappings[".stl"] = "application/octet-stream";
+// 3B model biçimleri: varsayılan tabloda olmayanlar statik olarak sunulmaz, bu yüzden açıkça eklenir
+foreach (var ext in new[] { ".stl", ".obj", ".fbx", ".3mf" })
+    provider.Mappings[ext] = "application/octet-stream";
+provider.Mappings[".glb"] = "model/gltf-binary";
+// Proje dosyaları (CAD, devre, kod): görsel ve PDF kendi türüyle, kod düz metin, gerisi indirme olarak
+foreach (var ext in Karalevha.API.Services.ProjectFileTypes.All)
+    provider.Mappings[ext] = Karalevha.API.Services.ProjectFileTypes.ContentTypeOf(ext);
 app.UseStaticFiles(new StaticFileOptions
 {
-    ContentTypeProvider = provider
+    ContentTypeProvider = provider,
+    // Kullanıcı dosyası doğrudan açılırsa (ör. SVG) içindeki betik çalışmasın, tür tahmin edilmesin
+    OnPrepareResponse = ctx =>
+    {
+        if (!ctx.Context.Request.Path.StartsWithSegments("/uploads")) return;
+        ctx.Context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        ctx.Context.Response.Headers["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'";
+    }
 });
 
 app.UseAuthentication();
@@ -159,9 +194,3 @@ app.MapHealthChecks("/health");
 app.Map("/error", () => Results.Problem("Beklenmeyen bir hata oluştu.")).AllowAnonymous();
 
 app.Run();
-
-
-
-
-
-

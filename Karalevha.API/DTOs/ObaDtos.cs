@@ -15,27 +15,11 @@ namespace Karalevha.API.DTOs
         public string Color { get; set; } = "#39ff14";
         
         public bool IsPrivate { get; set; } = false;
+
+        /// <summary>Listede görünmeyen, yalnızca davetle girilen oba (şifre gerekmez)</summary>
+        public bool IsUnlisted { get; set; } = false;
         
-        [MaxLength(72, ErrorMessage = "Oba şifresi en fazla 72 karakter olabilir.")]
+        [MaxLength(72)] // BCrypt en fazla 72 baytı dikkate alır
         public string? JoinPassword { get; set; }
-    }
-
-    public class JoinObaDto
-    {
-        [MaxLength(72)]
-        public string? Password { get; set; }
-    }
-
-    public class CreateChannelDto
-    {
-        [Required]
-        [MaxLength(50)]
-        public string Name { get; set; } = string.Empty;
-
-        [RegularExpression("^(text|voice)$", ErrorMessage = "Kanal türü 'text' veya 'voice' olmalıdır.")]
-        public string Type { get; set; } = "text";
-
-        [MaxLength(50)]
-        public string? Category { get; set; }
     }
 }

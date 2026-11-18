@@ -25,25 +25,36 @@ namespace Karalevha.API.Models
         
         public string? AvatarSeed { get; set; } // Dicebear bottts için
         
-        public string? Bio { get; set; }
-        
-        public List<string> Interests { get; set; } = new List<string>();
-
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-        public ICollection<UserFollow> Followers { get; set; } = new List<UserFollow>();
-        public ICollection<UserFollow> Following { get; set; } = new List<UserFollow>();
 
-        public ICollection<PostLike> PostLikes { get; set; } = new List<PostLike>();
-        public ICollection<PostComment> PostComments { get; set; } = new List<PostComment>();
+        /// <summary>Profildeki kısa tanıtım</summary>
+        [MaxLength(300)]
+        public string? Bio { get; set; }
 
-        public bool EmailConfirmed { get; set; } = false;
-        public string? EmailVerificationToken { get; set; }
-        public DateTime? EmailVerificationTokenExpiresAt { get; set; }
+        /// <summary>İlgi alanları: akışta bu etiketli yeni gönderiler öne çıkar</summary>
+        public List<string> Interests { get; set; } = new();
 
+        /// <summary>"User", "Admin" ya da "Owner". Owner rolleri dağıtır; Admin ve Owner kulüp yöneticisidir.</summary>
         [Required]
         [MaxLength(20)]
-        public string Role { get; set; } = "User";
+        public string Role { get; set; } = Roles.User;
 
+        /// <summary>Bu ana kadar hesap askıda: giriş yapamaz, bir şey yazamaz</summary>
         public DateTime? BannedUntil { get; set; }
+
+        // E-posta doğrulama (Auth:RequireEmailVerification açıksa kullanılır)
+        public bool EmailConfirmed { get; set; } = true;
+        [MaxLength(100)]
+        public string? EmailVerificationToken { get; set; }
+        public DateTime? EmailVerificationTokenExpiresAt { get; set; }
+    }
+
+    public static class Roles
+    {
+        public const string User = "User";
+        public const string Admin = "Admin";
+        public const string Owner = "Owner";
+
+        public static bool IsStaff(string? role) => role == Admin || role == Owner;
     }
 }

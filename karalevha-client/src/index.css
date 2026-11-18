@@ -3,7 +3,167 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    @apply bg-[#0b0c10] text-white;
+  /* Koyu tema: tarayıcının kendi parçaları (kaydırma çubuğu, tarih seçici, seçim kutuları) da koyu çizilsin */
+  html {
+    color-scheme: dark;
+    scrollbar-color: #3a3a37 transparent; /* Firefox ve yeni Chromium: başparmak, yol */
+    /* Kaydırma çubuğunun yeri her zaman ayrılır: kısa ve uzun sayfalar arasında geçerken içerik yana kaymaz.
+       both-edges aynı boşluğu sola da bırakır, site ekranın tam ortasında kalır. */
+    scrollbar-gutter: stable both-edges;
   }
+  /* Kendi içinde kayan tam ekran sayfalar (oba sohbeti): sayfanın kaydırması yok, boşluk da gerekmez */
+  html.tam-ekran {
+    scrollbar-gutter: auto;
+  }
+
+  /* Eski Chromium/Edge/Safari: ince, sitenin çizgi rengiyle uyumlu çubuk */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track,
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background-color: #3a3a37;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: #55554f;
+  }
+
+  body {
+    @apply bg-levha text-tebesir font-sans text-base antialiased;
+    /* Beton dokusu: çok hafif kumlanma; okunurluğu etkilemez */
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 .05 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+
+
+  /* Klavyeyle gezenler için her yerde aynı, görünür odak çizgisi */
+  :focus-visible {
+    @apply outline outline-2 outline-offset-2 outline-isaret;
+  }
+
+  /* Hareket istemeyen kullanıcılar için geçişleri kapat */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      transition-duration: 0.01ms !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
+}
+
+@layer components {
+  /* Küçük yardımcı metin: bölüm üst yazısı, ipucu. Büyük harf ve aralık yok. */
+  .etiket {
+    @apply text-xs font-medium text-tebesir-silik;
+  }
+
+  /* Veri: sayı, boyut, adres. Mono yazı yalnızca burada kullanılır. */
+  .veri {
+    @apply font-mono text-xs text-tebesir-silik tabular-nums;
+  }
+
+  /* Butonlar (React tarafında <Button> bileşeni bunları kullanır) */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 h-9 px-4 rounded-md text-sm font-semibold whitespace-nowrap transition-colors disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-ana {
+    @apply btn bg-isaret text-levha-koyu hover:bg-isaret-acik;
+  }
+  .btn-ikincil {
+    @apply btn border border-levha-cizgi text-tebesir hover:border-tebesir-silik hover:bg-levha-yuzey;
+  }
+  .btn-sade {
+    @apply btn px-3 text-tebesir-soluk hover:text-tebesir hover:bg-levha-yuzey;
+  }
+  .btn-tehlike {
+    @apply btn border border-levha-cizgi text-hata hover:border-hata hover:bg-hata/10;
+  }
+
+  /* Kart: çerçeveli kutu. Gölge yok; ayrım kenarlıkla yapılır. */
+  .kart {
+    @apply rounded-lg border border-levha-cizgi bg-levha;
+  }
+
+  /* Form alanları */
+  .girdi {
+    @apply w-full h-9 rounded-md bg-levha-koyu border border-levha-cizgi px-3 text-sm text-tebesir placeholder:text-tebesir-silik transition-colors focus:border-isaret focus:outline-none disabled:opacity-50;
+  }
+  textarea.girdi {
+    @apply h-auto py-2 leading-relaxed;
+  }
+  .alan-etiketi {
+    @apply block mb-1.5 text-sm font-medium text-tebesir;
+  }
+
+  /* Fotokopi/afiş yarım tonu: nokta deseni, aşağı doğru solar */
+  .kareli {
+    background-image: radial-gradient(rgb(236 235 230 / 0.09) 1px, transparent 1.4px);
+    background-size: 9px 9px;
+    -webkit-mask-image: linear-gradient(to bottom, black 30%, transparent);
+    mask-image: linear-gradient(to bottom, black 30%, transparent);
+  }
+
+  /* Etkin menü öğesinin altındaki elle çekilmiş sprey çizgisi */
+  .sprey-alti::after {
+    content: '';
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    bottom: -13px;
+    height: 7px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 8' preserveAspectRatio='none'%3E%3Cpath d='M2 5.5c14-3 26-2.5 38-1.5s27 1.6 40-1.2c6-1.2 11-1 18 .4' fill='none' stroke='%23d4ff3d' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  }
+
+  /* Kod görüntüleyici: satır üzerine gelme, seçili satır, tıklanabilir satır numarası */
+  .kod-satir {
+    display: block;
+    padding-right: 1rem;
+  }
+  .kod-satir:hover {
+    background: rgb(236 235 230 / 0.03);
+  }
+  .kod-satir-secili,
+  .kod-satir-secili:hover {
+    background: rgb(212 255 61 / 0.09);
+    box-shadow: inset 2px 0 0 #d4ff3d;
+  }
+  .kod-satir .linenumber {
+    cursor: pointer;
+  }
+  .kod-satir .linenumber:hover {
+    color: #d4ff3d !important;
+  }
+
+  /* README ve diğer markdown dosyaları */
+  .md-icerik {
+    @apply text-base leading-relaxed text-tebesir break-words;
+  }
+  .md-icerik > * + * {
+    @apply mt-4;
+  }
+  .md-icerik h1 { @apply font-display font-bold text-xl text-tebesir pb-2 border-b border-levha-cizgi; }
+  .md-icerik h2 { @apply font-display font-semibold text-lg text-tebesir pt-2 pb-1.5 border-b border-levha-cizgi; }
+  .md-icerik h3,
+  .md-icerik h4 { @apply font-display font-semibold text-base text-tebesir pt-1; }
+  .md-icerik a { @apply text-isaret underline underline-offset-2 decoration-isaret/40 hover:decoration-isaret; }
+  .md-icerik ul { @apply list-disc pl-6 space-y-1; }
+  .md-icerik ol { @apply list-decimal pl-6 space-y-1; }
+  .md-icerik li > ul,
+  .md-icerik li > ol { @apply mt-1; }
+  .md-icerik code { @apply font-mono text-sm bg-levha-koyu border border-levha-cizgi rounded px-1 py-0.5; }
+  .md-icerik pre { @apply font-mono text-sm bg-levha-koyu border border-levha-cizgi rounded-lg p-4 overflow-x-auto leading-relaxed; }
+  .md-icerik pre code { @apply bg-transparent border-0 p-0; }
+  .md-icerik blockquote { @apply border-l-2 border-levha-cizgi pl-4 text-tebesir-soluk; }
+  .md-icerik img { @apply inline max-w-full rounded; }
+  .md-icerik hr { @apply border-levha-cizgi; }
+  .md-icerik table { @apply block w-full overflow-x-auto text-sm border-collapse; }
+  .md-icerik th,
+  .md-icerik td { @apply border border-levha-cizgi px-3 py-1.5 text-left; }
+  .md-icerik th { @apply bg-levha-yuzey font-semibold; }
 }

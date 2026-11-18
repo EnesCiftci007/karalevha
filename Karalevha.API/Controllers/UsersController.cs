@@ -1,197 +1,207 @@
-using Karalevha.API.Filters;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
+using Karalevha.API.Services;
 using Karalevha.API.Models;
-using Karalevha.API.DTOs;
-using Karalevha.API.Extensions;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Karalevha.API.Controllers
 {
-    [Route("api/[controller]")]
+    /// <summary>Herkese açık profil ve sitenin genel araması.</summary>
+    [Route("api")]
     [ApiController]
     public class UsersController : ControllerBase
     {
         private readonly AppDbContext _context;
+        private readonly CurrentUser _current;
+        private readonly NotificationService _notifications;
 
-        public UsersController(AppDbContext context)
+        public UsersController(AppDbContext context, CurrentUser current, NotificationService notifications)
         {
             _context = context;
+            _current = current;
+            _notifications = notifications;
         }
 
-        // GET: api/users/search?q={query}
-        [HttpGet("search")]
-        public async Task<IActionResult> Search([FromQuery] string q)
+        private Task<User?> FindByName(string username)
         {
-            if (string.IsNullOrWhiteSpace(q) || q.Trim().Length < 2)
-            {
-                return Ok(new List<object>());
-            }
-
-            var normalizedQuery = q.Trim().ToLowerInvariant();
-
-            var users = await _context.Users
-                .Where(u => u.NormalizedUsername.Contains(normalizedQuery) || u.Username.ToLower().Contains(normalizedQuery))
-                .Select(u => new
-                {
-                    u.Username,
-                    u.AvatarSeed
-                })
-                .Take(10)
-                .ToListAsync();
-
-            return Ok(users);
+            var normalized = username.Trim().ToLowerInvariant();
+            return _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == normalized);
         }
 
         // GET: api/users/{username}
-        [HttpGet("{username}")]
+        [HttpGet("users/{username}")]
         public async Task<IActionResult> GetProfile(string username)
         {
-            var currentUserId = User.GetUserId() ?? -1;
-            var normalizedUsername = username.Trim().ToLowerInvariant();
-
-            var user = await _context.Users
-                .AsNoTracking()
-                .FirstOrDefaultAsync(u => u.NormalizedUsername == normalizedUsername);
-
+            var normalized = username.Trim().ToLowerInvariant();
+            var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.NormalizedUsername == normalized);
             if (user == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
 
-            var followerCount = await _context.UserFollows.CountAsync(f => f.FollowingId == user.Id);
-            var followingCount = await _context.UserFollows.CountAsync(f => f.FollowerId == user.Id);
-            var isFollowing = currentUserId != -1 && await _context.UserFollows.AnyAsync(f => f.FollowerId == currentUserId && f.FollowingId == user.Id);
-
-            var projects = await _context.Projects
-                .Where(p => p.UserId == user.Id)
+            var projects = await _context.Projects.AsNoTracking().Where(p => p.UserId == user.Id)
                 .OrderByDescending(p => p.CreatedAt)
-                .Take(50)
-                .Select(p => new
-                {
-                    p.Id,
-                    p.Title,
-                    p.Description,
-                    p.RepoUrl,
-                    p.Stars,
-                    p.Forks,
-                    p.CreatedAt,
-                    Owner = user.Username
-                })
+                .Select(p => new { p.Id, p.Title, p.Description, p.RepoUrl, p.CreatedAt })
+                .ToListAsync();
+            var models = await _context.PrintModels.AsNoTracking().Where(m => m.UserId == user.Id)
+                .OrderByDescending(m => m.UploadedAt)
+                .Select(m => new { m.Id, m.Title, m.Category, m.FileName, FileUrl = m.FilePath, m.UploadedAt })
+                .ToListAsync();
+            var posts = await _context.Posts.AsNoTracking().Where(p => p.UserId == user.Id)
+                .OrderByDescending(p => p.CreatedAt).Take(20)
+                .Select(p => new { p.Id, p.Content, p.CreatedAt })
+                .ToListAsync();
+            var makes = await _context.PrintMakes.AsNoTracking().Where(m => m.UserId == user.Id)
+                .OrderByDescending(m => m.CreatedAt).Take(24)
+                .Select(m => new { m.Id, m.PhotoPath, m.PrintModelId, ModelTitle = m.PrintModel!.Title, m.CreatedAt })
+                .ToListAsync();
+            // Yalnızca herkese açık obalar listelenir
+            var obalar = await _context.ObaMembers.AsNoTracking()
+                .Where(m => m.UserId == user.Id && !m.Oba!.IsPrivate)
+                .Select(m => new { m.Oba!.Id, m.Oba.Name })
                 .ToListAsync();
 
-            var printModels = await _context.PrintModels
-                .Where(p => p.UserId == user.Id)
-                .OrderByDescending(p => p.UploadedAt)
-                .Take(50)
-                .Select(m => new PrintModelDto
-                {
-                    Id = m.Id,
-                    Title = m.Title,
-                    Description = m.Description,
-                    FileName = m.FileName,
-                    FileUrl = $"/uploads/stl/{m.FileName}",
-                    UploadedAt = m.UploadedAt,
-                    Uploader = user.Username
-                })
-                .ToListAsync();
+            var me = CurrentUser.IdOf(User);
+            var followers = await _context.UserFollows.CountAsync(f => f.FollowingId == user.Id);
+            var following = await _context.UserFollows.CountAsync(f => f.FollowerId == user.Id);
+            var isFollowing = me != null && await _context.UserFollows.AnyAsync(f => f.FollowerId == me && f.FollowingId == user.Id);
 
             return Ok(new
             {
                 user.Id,
                 user.Username,
+                JoinedAt = user.CreatedAt,
                 user.Bio,
                 user.Interests,
-                user.AvatarSeed,
-                user.CreatedAt,
                 user.Role,
-                BannedUntil = (user.BannedUntil.HasValue && user.BannedUntil.Value > DateTime.UtcNow) ? user.BannedUntil : null,
-                FollowerCount = followerCount,
-                FollowingCount = followingCount,
+                IsAdmin = Roles.IsStaff(user.Role),
+                // Askı bilgisi yalnızca kişinin kendisine ve yöneticilere gösterilir
+                BannedUntil = user.BannedUntil > DateTime.UtcNow && (me == user.Id || _current.IsAdmin(User)) ? user.BannedUntil : null,
+                FollowerCount = followers,
+                FollowingCount = following,
                 IsFollowing = isFollowing,
                 Projects = projects,
-                PrintModels = printModels
+                Models = models.Select(m => new { m.Id, m.Title, m.Category, m.FileUrl, Format = Path.GetExtension(m.FileName).TrimStart('.').ToLowerInvariant(), m.UploadedAt }),
+                Posts = posts,
+                Makes = makes,
+                Obalar = obalar
             });
         }
 
         // POST: api/users/{username}/follow
-        [HttpPost("{username}/follow")]
+        [HttpPost("users/{username}/follow")]
         [Authorize]
-        [CheckBanned]
         public async Task<IActionResult> Follow(string username)
         {
-            var currentUserId = User.GetRequiredUserId();
-            var normalizedUsername = username.Trim().ToLowerInvariant();
-            var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == normalizedUsername);
-            
-            if (targetUser == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
-            if (targetUser.Id == currentUserId) return BadRequest(new { message = "Kendinizi takip edemezsiniz." });
+            var me = CurrentUser.IdOf(User)!.Value;
+            var target = await FindByName(username);
+            if (target == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
+            if (target.Id == me) return BadRequest(new { message = "Kendini takip edemezsin." });
 
-            var existingFollow = await _context.UserFollows
-                .FirstOrDefaultAsync(f => f.FollowerId == currentUserId && f.FollowingId == targetUser.Id);
-
-            if (existingFollow == null)
+            if (!await _context.UserFollows.AnyAsync(f => f.FollowerId == me && f.FollowingId == target.Id))
             {
+                _context.UserFollows.Add(new UserFollow { FollowerId = me, FollowingId = target.Id });
+                var name = CurrentUser.NameOf(User);
+                _notifications.Add(target.Id, me, $"{name} seni takip etmeye başladı.", $"/u/{name}");
                 try
                 {
-                    _context.UserFollows.Add(new UserFollow { FollowerId = currentUserId, FollowingId = targetUser.Id });
                     await _context.SaveChangesAsync();
                 }
-                catch (DbUpdateException)
+                catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "23505" })
                 {
-                    return StatusCode(409, new { message = "Kullanıcı zaten takip ediliyor." });
+                    // Aynı anda iki istek: zaten takip ediliyor
                 }
             }
-
-            return Ok(new { message = "Takip edildi" });
+            return Ok(new { isFollowing = true, followerCount = await _context.UserFollows.CountAsync(f => f.FollowingId == target.Id) });
         }
 
-        // POST: api/users/{username}/unfollow
-        [HttpPost("{username}/unfollow")]
+        // DELETE: api/users/{username}/follow
+        [HttpDelete("users/{username}/follow")]
         [Authorize]
-        [CheckBanned]
         public async Task<IActionResult> Unfollow(string username)
         {
-            var currentUserId = User.GetRequiredUserId();
-            var normalizedUsername = username.Trim().ToLowerInvariant();
-            var targetUser = await _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == normalizedUsername);
-            
-            if (targetUser == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
+            var me = CurrentUser.IdOf(User)!.Value;
+            var target = await FindByName(username);
+            if (target == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
 
-            var existingFollow = await _context.UserFollows
-                .FirstOrDefaultAsync(f => f.FollowerId == currentUserId && f.FollowingId == targetUser.Id);
+            await _context.UserFollows.Where(f => f.FollowerId == me && f.FollowingId == target.Id).ExecuteDeleteAsync();
+            return Ok(new { isFollowing = false, followerCount = await _context.UserFollows.CountAsync(f => f.FollowingId == target.Id) });
+        }
 
-            if (existingFollow != null)
-            {
-                _context.UserFollows.Remove(existingFollow);
-                await _context.SaveChangesAsync();
-            }
+        // GET: api/users/{username}/takip?yon=takipci|takip
+        // Takipçiler ya da takip edilenler (en fazla 200)
+        [HttpGet("users/{username}/takip")]
+        public async Task<IActionResult> FollowList(string username, [FromQuery] string yon = "takipci")
+        {
+            var target = await FindByName(username);
+            if (target == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
 
-            return Ok(new { message = "Takipten çıkıldı" });
+            var query = yon == "takip"
+                ? _context.UserFollows.Where(f => f.FollowerId == target.Id).Select(f => new { f.CreatedAt, f.Following!.Username })
+                : _context.UserFollows.Where(f => f.FollowingId == target.Id).Select(f => new { f.CreatedAt, f.Follower!.Username });
+            return Ok(await query.OrderByDescending(f => f.CreatedAt).Take(200).Select(f => f.Username).ToListAsync());
+        }
+
+        public class UpdateProfileDto
+        {
+            public string? Bio { get; set; }
+            public List<string>? Interests { get; set; }
         }
 
         // PUT: api/users/me
-        [HttpPut("me")]
+        [HttpPut("users/me")]
         [Authorize]
-        [CheckBanned]
-        public async Task<IActionResult> UpdateProfile([FromBody] UpdateProfileDto dto)
+        public async Task<IActionResult> UpdateProfile(UpdateProfileDto dto)
         {
-            var currentUserId = User.GetRequiredUserId();
-            var user = await _context.Users.FindAsync(currentUserId);
-            
-            if (user == null) return NotFound();
+            var user = await _context.Users.FindAsync(CurrentUser.IdOf(User));
+            if (user == null) return Unauthorized();
 
-            if (dto.Interests != null && dto.Interests.Any(i => string.IsNullOrWhiteSpace(i) || i.Length > 30))
-                return BadRequest(new { message = "İlgi alanları boş olamaz ve en fazla 30 karakter olabilir." });
+            var bio = string.IsNullOrWhiteSpace(dto.Bio) ? null : dto.Bio.Trim();
+            if (bio?.Length > 300) return BadRequest(new { message = "Tanıtım en fazla 300 karakter olabilir." });
 
-            user.Bio = string.IsNullOrWhiteSpace(dto.Bio) ? null : dto.Bio.Trim();
-            if (dto.Interests != null)
-            {
-                user.Interests = dto.Interests.Select(i => i.Trim()).Distinct().ToList();
-            }
-
+            user.Bio = bio;
+            if (dto.Interests != null) user.Interests = PostTags.Clean(dto.Interests, PostTags.All.Length);
             await _context.SaveChangesAsync();
-
             return Ok(new { user.Bio, user.Interests });
+        }
+
+        // GET: api/search?q=...
+        [HttpGet("search")]
+        public async Task<IActionResult> Search([FromQuery] string? q)
+        {
+            var term = (q ?? string.Empty).Trim();
+            if (term.Length < 2) return Ok(new { projects = Array.Empty<object>(), models = Array.Empty<object>(), obalar = Array.Empty<object>(), users = Array.Empty<object>(), events = Array.Empty<object>(), posts = Array.Empty<object>() });
+            if (term.Length > 100) term = term[..100];
+
+            // ILIKE için % ve _ kaçışlanır; büyük/küçük harf duyarsız arama
+            var pattern = "%" + term.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
+            const int take = 6;
+
+            var projects = await _context.Projects.AsNoTracking()
+                .Where(p => EF.Functions.ILike(p.Title, pattern, "\\") || EF.Functions.ILike(p.Description, pattern, "\\"))
+                .OrderByDescending(p => p.CreatedAt).Take(take)
+                .Select(p => new { p.Id, p.Title, Owner = p.User!.Username }).ToListAsync();
+            var models = await _context.PrintModels.AsNoTracking()
+                .Where(m => EF.Functions.ILike(m.Title, pattern, "\\") || (m.Description != null && EF.Functions.ILike(m.Description, pattern, "\\")))
+                .OrderByDescending(m => m.UploadedAt).Take(take)
+                .Select(m => new { m.Id, m.Title, m.Category, Uploader = m.User!.Username }).ToListAsync();
+            var obalar = await _context.Obalar.AsNoTracking()
+                .Where(o => !o.IsUnlisted) // görünmeyen obalar aramada çıkmaz
+                .Where(o => EF.Functions.ILike(o.Name, pattern, "\\") || (!o.IsPrivate && o.Description != null && EF.Functions.ILike(o.Description, pattern, "\\")))
+                .OrderByDescending(o => o.MemberCount).Take(take)
+                .Select(o => new { o.Id, o.Name, o.IsPrivate, o.MemberCount }).ToListAsync();
+            var users = await _context.Users.AsNoTracking()
+                .Where(u => EF.Functions.ILike(u.Username, pattern, "\\"))
+                .OrderBy(u => u.Username).Take(take)
+                .Select(u => new { u.Username }).ToListAsync();
+            var events = await _context.Events.AsNoTracking()
+                .Where(e => EF.Functions.ILike(e.Title, pattern, "\\") || (e.Location != null && EF.Functions.ILike(e.Location, pattern, "\\")))
+                .OrderByDescending(e => e.StartsAt).Take(take)
+                .Select(e => new { e.Id, e.Title, e.StartsAt, e.Location }).ToListAsync();
+            var posts = await _context.Posts.AsNoTracking()
+                .Where(p => EF.Functions.ILike(p.Content, pattern, "\\"))
+                .OrderByDescending(p => p.CreatedAt).Take(take)
+                .Select(p => new { p.Id, p.Content, p.CreatedAt, Username = p.User!.Username }).ToListAsync();
+
+            return Ok(new { projects, models, obalar, users, events, posts });
         }
     }
 }
-
