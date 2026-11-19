@@ -43,6 +43,8 @@ namespace Karalevha.API.Controllers
             o.Note,
             o.FileName,
             o.FileSize,
+            o.ProjectId,
+            o.SourceLabel,
             o.Status,
             StatusLabel = MarketStatus.Label(o.Status),
             o.Price,
@@ -53,19 +55,61 @@ namespace Karalevha.API.Controllers
             Username = username,
         };
 
+        /// <summary>Projedeki bir model ya da dosya: siparişe yeniden yüklemeden eklenir</summary>
+        private sealed record OrderSource(string Key, string FileName, int ProjectId, string ProjectTitle);
+
+        private async Task<OrderSource?> ResolveSource(string? type, int? id)
+        {
+            if (id == null) return null;
+            if (type == "model")
+            {
+                var m = await _context.PrintModels.AsNoTracking().Where(x => x.Id == id && x.ProjectId != null)
+                    .Select(x => new { x.FilePath, x.FileName, x.Title, ProjectId = x.ProjectId!.Value, ProjectTitle = x.Project!.Title })
+                    .FirstOrDefaultAsync();
+                // Modelin diskteki adı GUID; siparişte modelin adı ve uzantısı görünsün
+                return m == null || FileKeys.FromPublicPath(m.FilePath) is not { } key ? null
+                    : new OrderSource(key, $"{m.Title}{Path.GetExtension(m.FileName).ToLowerInvariant()}", m.ProjectId, m.ProjectTitle);
+            }
+            if (type == "dosya")
+            {
+                var f = await _context.ProjectFiles.AsNoTracking().Where(x => x.Id == id)
+                    .Select(x => new { x.FilePath, x.FileName, x.ProjectId, ProjectTitle = x.Project!.Title })
+                    .FirstOrDefaultAsync();
+                return f == null || FileKeys.FromPublicPath(f.FilePath) is not { } key ? null
+                    : new OrderSource(key, f.FileName, f.ProjectId, f.ProjectTitle);
+            }
+            return null;
+        }
+
+        private static string[] ServicesFor(string fileName)
+        {
+            var ext = Path.GetExtension(fileName).ToLowerInvariant();
+            return MarketCatalog.Services.Where(s => s.Extensions.Contains(ext)).Select(s => s.Id).ToArray();
+        }
+
+        // GET: api/market/kaynak?tur=model|dosya&id=5   — "Ürettir" bağlantısının ön bilgisi
+        [HttpGet("kaynak")]
+        public async Task<IActionResult> GetSource([FromQuery] string? tur, [FromQuery] int? id)
+        {
+            var source = await ResolveSource(tur, id);
+            if (source == null) return NotFound(new { message = "Projedeki dosya bulunamadı." });
+            return Ok(new { source.FileName, source.ProjectId, source.ProjectTitle, Services = ServicesFor(source.FileName) });
+        }
+
         // GET: api/market/hizmetler
         [HttpGet("hizmetler")]
         public IActionResult GetServices() =>
             Ok(MarketCatalog.Services.Select(s => new { s.Id, s.Name, s.Description, s.Materials, s.Extensions, s.Hint }));
 
-        // POST: api/market/siparis   (multipart: service, material, quantity, dimensions?, note?, file)
+        // POST: api/market/siparis   (multipart: service, material, quantity, dimensions?, note?, file | sourceType+sourceId)
         [HttpPost("siparis")]
         [Authorize]
         [EnableRateLimiting("UploadLimiter")]
         [RequestSizeLimit(MaxFileSize + 1_000_000)]
         [RequestFormLimits(MultipartBodyLengthLimit = MaxFileSize + 1_000_000)]
         public async Task<IActionResult> CreateOrder([FromForm] string service, [FromForm] string material, [FromForm] int quantity,
-            [FromForm] string? dimensions, [FromForm] string? note, IFormFile file)
+            [FromForm] string? dimensions, [FromForm] string? note, IFormFile? file,
+            [FromForm] string? sourceType, [FromForm] int? sourceId)
         {
             var def = MarketCatalog.Find(service ?? string.Empty);
             if (def == null) return BadRequest(new { message = "Geçersiz hizmet." });
@@ -76,16 +120,41 @@ namespace Karalevha.API.Controllers
             note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
             if (note?.Length > 1000) return BadRequest(new { message = "Not en fazla 1000 karakter olabilir." });
 
-            if (file == null || file.Length == 0) return BadRequest(new { message = "Tasarım dosyanı ekle." });
-            if (file.Length > MaxFileSize) return BadRequest(new { message = "Dosya en fazla 50 MB olabilir." });
-            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            // Dosya ya yüklenir ya da projedeki bir model/dosyadan alınır (yeniden yüklemeden)
+            var source = file == null && sourceType != null ? await ResolveSource(sourceType, sourceId) : null;
+            if (file == null && sourceType != null && source == null) return NotFound(new { message = "Projedeki dosya bulunamadı." });
+            if (file == null && source == null) return BadRequest(new { message = "Tasarım dosyanı ekle." });
+            if (file != null && (file.Length == 0 || file.Length > MaxFileSize)) return BadRequest(new { message = "Dosya boş olamaz ve en fazla 50 MB olabilir." });
+
+            var originalName = file != null ? Path.GetFileName(file.FileName) : source!.FileName;
+            var extension = Path.GetExtension(originalName).ToLowerInvariant();
             if (!def.Extensions.Contains(extension))
                 return BadRequest(new { message = $"{def.Name} için kabul edilen dosyalar: {string.Join(", ", def.Extensions).ToUpperInvariant()}" });
 
-            // Sipariş dosyaları herkese açık değil: "market/" yalnızca bu controller'dan okunur
+            // Sipariş dosyaları herkese açık değil: "market/" yalnızca bu controller'dan okunur.
+            // Projeden alınan dosya kopyalanır: proje sonradan değişse de sipariş kendi dosyasıyla kalır.
             var stored = $"{Guid.NewGuid()}{extension}";
-            await using (var upload = file.OpenReadStream())
+            long size;
+            if (file != null)
+            {
+                await using var upload = file.OpenReadStream();
                 await _store.SaveAsync($"market/{stored}", upload, "application/octet-stream");
+                size = file.Length;
+            }
+            else
+            {
+                var opened = await _store.OpenAsync(source!.Key, HttpContext.RequestAborted);
+                if (opened == null) return NotFound(new { message = "Projedeki dosya depoda bulunamadı." });
+                await using (opened.Content)
+                {
+                    await using var counted = new MemoryStream();
+                    await opened.Content.CopyToAsync(counted, HttpContext.RequestAborted);
+                    if (counted.Length == 0 || counted.Length > MaxFileSize) return BadRequest(new { message = "Dosya boş olamaz ve en fazla 50 MB olabilir." });
+                    counted.Position = 0;
+                    await _store.SaveAsync($"market/{stored}", counted, "application/octet-stream");
+                    size = counted.Length;
+                }
+            }
 
             var userId = CurrentUser.IdOf(User)!.Value;
             var order = new MarketOrder
@@ -96,9 +165,11 @@ namespace Karalevha.API.Controllers
                 Quantity = quantity,
                 Dimensions = dimensions,
                 Note = note,
-                FileName = Path.GetFileName(file.FileName) is var n && n.Length > 255 ? n[^255..] : Path.GetFileName(file.FileName),
+                FileName = originalName.Length > 255 ? originalName[^255..] : originalName,
                 StoredName = stored,
-                FileSize = file.Length,
+                FileSize = size,
+                ProjectId = source?.ProjectId,
+                SourceLabel = source == null ? null : $"{source.ProjectTitle} · {source.FileName}" is var label && label.Length > 300 ? label[..300] : $"{source.ProjectTitle} · {source.FileName}",
             };
             _context.MarketOrders.Add(order);
 

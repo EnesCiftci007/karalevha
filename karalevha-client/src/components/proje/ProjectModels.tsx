@@ -245,11 +245,17 @@ export default function ProjectModels({ projectId, canEdit, onCountChange }: Pro
               <div className="flex items-center gap-2">
                 <LikeButton type="model" id={preview.id} counts={social.get(preview.id)} onChange={(p) => social.update(preview.id, p)} />
                 {preview.category === 'baski' && (
-                  <>
-                    <Link to={`/atolye?model=${preview.id}`} className="btn-ikincil">Yazıcı ayır</Link>
-                    <Link to={`/market?hizmet=baski`} className="btn-sade">Bastır</Link>
-                  </>
+                  <Link to={`/atolye?model=${preview.id}`} className="btn-ikincil">Yazıcı ayır</Link>
                 )}
+                {/* Market'e bu modelle git: dosya hazır gelir, yeniden yüklenmez */}
+                <Link
+                  to={user ? `/market?kaynak=model:${preview.id}` : '/auth'}
+                  state={user ? undefined : { from: `/market?kaynak=model:${preview.id}` }}
+                  className="btn-sade"
+                  title="Atölyeye 3B baskı ya da CNC siparişi ver"
+                >
+                  Ürettir
+                </Link>
                 <div className="ml-auto">
                   <ItemMenu
                     label="Model seçenekleri"

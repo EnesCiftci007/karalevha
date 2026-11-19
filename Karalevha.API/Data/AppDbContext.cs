@@ -66,6 +66,8 @@ namespace Karalevha.API.Data
             modelBuilder.Entity<ProjectFile>().HasIndex(f => f.ProjectId);
             modelBuilder.Entity<MarketOrder>().HasIndex(o => new { o.UserId, o.CreatedAt });
             modelBuilder.Entity<MarketOrder>().HasIndex(o => o.Status);
+            // Proje silinince sipariş geçmişi kalır, yalnızca bağlantı boşalır
+            modelBuilder.Entity<MarketOrder>().HasOne(o => o.Project).WithMany().HasForeignKey(o => o.ProjectId).OnDelete(DeleteBehavior.SetNull);
             // Şikâyetler içeriğe ve duruma göre aranır (yönetim sayfası, "zaten bildirdin")
             modelBuilder.Entity<Report>().HasIndex(r => new { r.TargetType, r.TargetId, r.Status });
             modelBuilder.Entity<Report>().HasIndex(r => r.Status);

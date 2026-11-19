@@ -112,6 +112,9 @@ export interface MarketOrder {
   note?: string | null;
   fileName: string;
   fileSize: number;
+  /** Projedeki bir model/dosyadan verildiyse */
+  projectId?: number | null;
+  sourceLabel?: string | null;
   status: MarketStatus;
   statusLabel: string;
   price?: number | null;

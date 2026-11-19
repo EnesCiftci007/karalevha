@@ -1,5 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import { Box, CircuitBoard, Code2, Download, File, FileCode2, FileText, Image as ImageIcon, Loader2, PenTool, Plus, Trash2, UploadCloud, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../../context/AuthContext';
+import { Box, CircuitBoard, Factory, Code2, Download, File, FileCode2, FileText, Image as ImageIcon, Loader2, PenTool, Plus, Trash2, UploadCloud, X } from 'lucide-react';
 import { api, API_URL } from '../../services/api';
 import { ProjectFile } from '../../types';
 import { formatSize } from '../../services/files';
@@ -31,6 +33,13 @@ const isKicad = (f: ProjectFile) => /\.kicad_(sch|pcb)$/i.test(f.fileName) && f.
 /** Gerber katmanı ya da Elektronik bölümündeki ZIP (üretim dosyaları): kart görünümü */
 const isGerber = (f: ProjectFile) =>
   f.kind === 'elektronik' && (/\.(gbr|ger|gtl|gbl|gto|gbo|gts|gbs|gtp|gbp|gko|gm1|gml)$/i.test(f.fileName) || /\.zip$/i.test(f.fileName));
+/**
+ * Market'te üretilebilecek dosyalar: çizimlerden lazer/CNC/baskı (DXF, SVG, STEP, STL, Fusion, PDF, ZIP),
+ * elektronikten kart (Gerber ZIP, KiCad PCB, Eagle BRD). Hangi hizmetin uyduğuna sunucu karar verir.
+ */
+const canProduce = (f: ProjectFile) =>
+  (f.kind === 'cizim' && /\.(dxf|svg|step|stp|stl|3mf|obj|f3d|pdf|zip)$/i.test(f.fileName)) ||
+  (f.kind === 'elektronik' && /\.(zip|gbr|kicad_pcb|brd)$/i.test(f.fileName));
 const isCad = (f: ProjectFile) => !!cadFormatOf(f.fileName) && f.size <= 60 * 1024 * 1024;
 const isText = (f: ProjectFile) => f.contentType === 'text/plain' && f.size <= MAX_CODE_VIEW;
 const extOf = (f: ProjectFile) => (f.fileName.includes('.') ? f.fileName.slice(f.fileName.lastIndexOf('.') + 1) : '').toUpperCase();
@@ -120,6 +129,7 @@ export default function ProjectFiles({ projectId, kind, canEdit, canDelete, onCo
   const [viewing, setViewing] = useState<ProjectFile | null>(null);
   const [viewing3d, setViewing3d] = useState<ProjectFile | null>(null);
   const [viewingCircuit, setViewingCircuit] = useState<ProjectFile | null>(null);
+  const { user } = useAuth();
   const [deleting, setDeleting] = useState<ProjectFile | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -240,6 +250,16 @@ export default function ProjectFiles({ projectId, kind, canEdit, canDelete, onCo
                       {f.fileName} · {formatSize(f.size)} · <time dateTime={f.uploadedAt} title={fullDate(f.uploadedAt)}>{timeAgo(f.uploadedAt)}</time>
                     </span>
                   </span>
+                  {canProduce(f) && (
+                    <Link
+                      to={user ? `/market?kaynak=dosya:${f.id}` : '/auth'}
+                      state={user ? undefined : { from: `/market?kaynak=dosya:${f.id}` }}
+                      className="btn-sade h-7 px-2 text-xs shrink-0"
+                      title="Bu dosyayla atölyeye üretim siparişi ver"
+                    >
+                      <Factory className="w-3.5 h-3.5" aria-hidden="true" />Ürettir
+                    </Link>
+                  )}
                   {(isKicad(f) || isGerber(f)) && (
                     <button type="button" onClick={() => setViewingCircuit(f)} className="btn-sade h-7 px-2 text-xs shrink-0" title={isKicad(f) ? 'Şemayı ya da kartı sitede aç' : 'Kartın üst ve alt yüzünü gör'}>
                       <CircuitBoard className="w-3.5 h-3.5" aria-hidden="true" />{isKicad(f) ? 'Görüntüle' : 'Kart'}

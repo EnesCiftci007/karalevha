@@ -235,6 +235,9 @@ namespace Karalevha.API.Migrations
                     b.Property<decimal?>("Price")
                         .HasColumnType("numeric(10,2)");
 
+                    b.Property<int?>("ProjectId")
+                        .HasColumnType("integer");
+
                     b.Property<int>("Quantity")
                         .HasColumnType("integer");
 
@@ -242,6 +245,10 @@ namespace Karalevha.API.Migrations
                         .IsRequired()
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)");
+
+                    b.Property<string>("SourceLabel")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
 
                     b.Property<string>("StaffNote")
                         .HasMaxLength(1000)
@@ -264,6 +271,8 @@ namespace Karalevha.API.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ProjectId");
 
                     b.HasIndex("Status");
 
@@ -995,11 +1004,18 @@ namespace Karalevha.API.Migrations
 
             modelBuilder.Entity("Karalevha.API.Models.MarketOrder", b =>
                 {
+                    b.HasOne("Karalevha.API.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Karalevha.API.Models.User", "User")
                         .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Project");
 
                     b.Navigation("User");
                 });

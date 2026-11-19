@@ -69,6 +69,16 @@ function OrderMeta({ order }: { order: MarketOrder }) {
     <p className="text-xs text-tebesir-silik">
       {order.material} · {order.quantity} adet{order.dimensions ? ` · ${order.dimensions}` : ''} ·{' '}
       <time dateTime={order.createdAt} title={fullDate(order.createdAt)}>{timeAgo(order.createdAt)}</time>
+      {order.sourceLabel && (
+        <>
+          {' · '}
+          {order.projectId ? (
+            <Link to={`/projeler/${order.projectId}`} className="text-tebesir-soluk hover:underline">Proje: {order.sourceLabel}</Link>
+          ) : (
+            <span>Proje: {order.sourceLabel}</span>
+          )}
+        </>
+      )}
     </p>
   );
 }
@@ -92,8 +102,28 @@ function FileButton({ order }: { order: MarketOrder }) {
 
 /* ---------------- Sipariş formu ---------------- */
 
-function OrderModal({ service, onClose, onCreated }: { service: MarketService; onClose: () => void; onCreated: (o: MarketOrder) => void }) {
-  const [material, setMaterial] = useState(service.materials[0]);
+/** Projedeki model ya da dosya: siparişe yeniden yüklemeden eklenir */
+export interface OrderSource {
+  type: 'model' | 'dosya';
+  id: number;
+  fileName: string;
+  projectId: number;
+  projectTitle: string;
+}
+
+interface OrderModalProps {
+  /** Seçilebilecek hizmetler (projeden gelen dosyaya uyanlar) ve ilk seçili olan */
+  choices: MarketService[];
+  initial: MarketService;
+  source?: OrderSource;
+  onClose: () => void;
+  onCreated: (o: MarketOrder) => void;
+}
+
+function OrderModal({ choices, initial, source, onClose, onCreated }: OrderModalProps) {
+  const [service, setService] = useState(initial);
+  const [useSource, setUseSource] = useState(!!source);
+  const [material, setMaterial] = useState(initial.materials[0]);
   const [quantity, setQuantity] = useState(1);
   const [dimensions, setDimensions] = useState('');
   const [note, setNote] = useState('');
@@ -112,9 +142,19 @@ function OrderModal({ service, onClose, onCreated }: { service: MarketService; o
     setFile(f);
   };
 
+  const chooseService = (id: string) => {
+    const next = choices.find((c) => c.id === id);
+    if (!next) return;
+    setService(next);
+    setMaterial(next.materials[0]);
+    setError('');
+  };
+
+  const fromProject = useSource && source;
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!file || saving) return;
+    if ((!file && !fromProject) || saving) return;
     setSaving(true);
     setError('');
     const form = new FormData();
@@ -123,7 +163,12 @@ function OrderModal({ service, onClose, onCreated }: { service: MarketService; o
     form.append('quantity', String(quantity));
     if (dimensions.trim()) form.append('dimensions', dimensions.trim());
     if (note.trim()) form.append('note', note.trim());
-    form.append('file', file);
+    if (fromProject) {
+      form.append('sourceType', source.type);
+      form.append('sourceId', String(source.id));
+    } else if (file) {
+      form.append('file', file);
+    }
     try {
       onCreated(await api<MarketOrder>('/api/market/siparis', { method: 'POST', body: form }));
       onClose();
@@ -136,9 +181,25 @@ function OrderModal({ service, onClose, onCreated }: { service: MarketService; o
   return (
     <Modal title={`${service.name} siparişi`} onClose={() => !saving && onClose()}>
       <form onSubmit={submit} className="p-5 space-y-4">
+        {choices.length > 1 && (
+          <Field id="m-hizmet" label="Hizmet">
+            <select id="m-hizmet" value={service.id} onChange={(e) => chooseService(e.target.value)} className="girdi">
+              {choices.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </Field>
+        )}
         <p className="text-sm text-tebesir-soluk">{service.hint}</p>
         <input ref={inputRef} type="file" accept={service.extensions.join(',')} className="hidden" onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ''; }} />
-        {file ? (
+        {fromProject ? (
+          <div className="flex items-center gap-3 rounded-md border border-isaret/40 bg-isaret/5 px-3 py-2.5">
+            <File className="w-5 h-5 shrink-0 text-isaret" aria-hidden="true" />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-tebesir truncate">{source.fileName}</span>
+              <span className="block text-xs text-tebesir-silik truncate">Projeden: {source.projectTitle}</span>
+            </span>
+            <button type="button" onClick={() => setUseSource(false)} className="btn-sade h-7 px-2 text-xs shrink-0">Başka dosya yükle</button>
+          </div>
+        ) : file ? (
           <div className="flex items-center gap-3 rounded-md border border-levha-cizgi bg-levha-koyu px-3 py-2.5">
             <File className="w-5 h-5 shrink-0 text-tebesir-silik" aria-hidden="true" />
             <span className="min-w-0 flex-1">
@@ -181,7 +242,7 @@ function OrderModal({ service, onClose, onCreated }: { service: MarketService; o
         {error && <p className="text-sm text-hata" role="alert">{error}</p>}
         <div className="flex justify-end gap-3">
           <button type="button" onClick={onClose} disabled={saving} className="btn-ikincil">Vazgeç</button>
-          <button type="submit" disabled={saving || !file} className="btn-ana">{saving ? 'Gönderiliyor…' : 'Sipariş ver'}</button>
+          <button type="submit" disabled={saving || (!file && !fromProject)} className="btn-ana">{saving ? 'Gönderiliyor…' : 'Sipariş ver'}</button>
         </div>
       </form>
     </Modal>
@@ -249,7 +310,7 @@ export default function Market() {
   const [mine, setMine] = useState<MarketOrder[] | null>(null);
   const [incoming, setIncoming] = useState<MarketOrder[] | null>(null);
   const [filter, setFilter] = useState<'acik' | MarketStatus | ''>('acik');
-  const [ordering, setOrdering] = useState<MarketService | null>(null);
+  const [ordering, setOrdering] = useState<{ choices: MarketService[]; initial: MarketService; source?: OrderSource } | null>(null);
   const [cancelling, setCancelling] = useState<MarketOrder | null>(null);
   const [actionError, setActionError] = useState('');
 
@@ -276,8 +337,31 @@ export default function Market() {
     const id = params.get('hizmet');
     if (!id || !services || !user) return;
     const s = services.find((x) => x.id === id);
-    if (s) setOrdering(s);
+    if (s) setOrdering({ choices: [s], initial: s });
     setParams((p) => { const n = new URLSearchParams(p); n.delete('hizmet'); return n; }, { replace: true });
+  }, [params, services, user, setParams]);
+
+  // ?kaynak=model:5 ya da dosya:7 — projedeki "Ürettir": dosya hazır, uygun hizmetler seçilebilir
+  useEffect(() => {
+    const raw = params.get('kaynak');
+    if (!raw || !services || !user) return;
+    setParams((p) => { const n = new URLSearchParams(p); n.delete('kaynak'); return n; }, { replace: true });
+    const [type, idText] = raw.split(':');
+    if ((type !== 'model' && type !== 'dosya') || !Number(idText)) return;
+    api<{ fileName: string; projectId: number; projectTitle: string; services: string[] }>(`/api/market/kaynak?tur=${type}&id=${Number(idText)}`)
+      .then((info) => {
+        const choices = services.filter((s) => info.services.includes(s.id));
+        if (choices.length === 0) {
+          setActionError(`${info.fileName} için Market'te uygun bir hizmet yok.`);
+          return;
+        }
+        setOrdering({
+          choices,
+          initial: choices[0],
+          source: { type, id: Number(idText), fileName: info.fileName, projectId: info.projectId, projectTitle: info.projectTitle },
+        });
+      })
+      .catch((err) => setActionError(err instanceof Error ? err.message : 'Projedeki dosya bulunamadı.'));
   }, [params, services, user, setParams]);
 
   const replaceMine = (o: MarketOrder) => setMine((prev) => (prev ?? []).map((x) => (x.id === o.id ? o : x)));
@@ -304,6 +388,7 @@ export default function Market() {
     <div>
       <PageHeader title="Market" description="Atölyeden CNC, lazer kesim, 3B baskı ve devre kartı siparişi ver. Ekip fiyat verir, onaylarsan üretilir." />
 
+      {actionError && <p className="mb-4 text-sm text-hata" role="alert">{actionError}</p>}
       <div className="flex items-center gap-1 mb-6 border-b border-levha-cizgi" role="tablist">
         {tabs.map((t) => (
           <button
@@ -338,7 +423,7 @@ export default function Market() {
                   <p className="mt-1 text-xs text-tebesir-silik font-mono">{s.extensions.join(' ')}</p>
                   <div className="mt-auto pt-4">
                     {user ? (
-                      <button type="button" onClick={() => setOrdering(s)} className="btn-ikincil">Sipariş ver</button>
+                      <button type="button" onClick={() => setOrdering({ choices: [s], initial: s })} className="btn-ikincil">Sipariş ver</button>
                     ) : (
                       <Link to="/auth" state={{ from: `/market?hizmet=${s.id}` }} className="btn-ikincil">Sipariş için giriş yap</Link>
                     )}
@@ -357,7 +442,6 @@ export default function Market() {
           <EmptyState icon={Inbox} title="Henüz siparişin yok" description="Hizmetler sekmesinden dosyanı yükleyip sipariş verebilirsin." action={<button type="button" onClick={() => setTab('hizmetler')} className="btn-ikincil">Hizmetlere bak</button>} />
         ) : (
           <>
-            {actionError && <p className="mb-3 text-sm text-hata" role="alert">{actionError}</p>}
             <ul className="space-y-3">
               {mine.map((o) => (
                 <li key={o.id} className="kart p-4">
@@ -412,7 +496,9 @@ export default function Market() {
 
       {ordering && (
         <OrderModal
-          service={ordering}
+          choices={ordering.choices}
+          initial={ordering.initial}
+          source={ordering.source}
           onClose={() => setOrdering(null)}
           onCreated={(o) => {
             setMine((prev) => [o, ...(prev ?? [])]);

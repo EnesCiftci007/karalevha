@@ -43,6 +43,15 @@ namespace Karalevha.API.Models
         public string StoredName { get; set; } = string.Empty;
         public long FileSize { get; set; }
 
+        /// <summary>Sipariş bir projenin modelinden ya da dosyasından verildiyse o proje (silinirse boşalır)</summary>
+        public int? ProjectId { get; set; }
+        [ForeignKey("ProjectId")]
+        public Project? Project { get; set; }
+
+        /// <summary>Kaynağın o anki adı, ör. "Robot kol · govde.step"; proje silinse de sipariş geçmişinde kalır</summary>
+        [MaxLength(300)]
+        public string? SourceLabel { get; set; }
+
         /// <summary>alindi → fiyatlandi → onaylandi → uretimde → hazir → teslim; ya da iptal</summary>
         [Required]
         [MaxLength(20)]
