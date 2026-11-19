@@ -171,6 +171,7 @@ namespace Karalevha.API.Controllers
 
         // GET: api/search?q=...
         [HttpGet("search")]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("SearchLimiter")]
         public async Task<IActionResult> Search([FromQuery] string? q)
         {
             var term = (q ?? string.Empty).Trim();

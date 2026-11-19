@@ -1,5 +1,6 @@
 using System.Text;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Karalevha.API.Data;
@@ -10,6 +11,7 @@ namespace Karalevha.API.Controllers
     /// <summary>Projelerin kod görüntüleyicisi: depo ağacı, dosya içeriği ve ham dosya.</summary>
     [Route("api/projects/{id:int}/kod")]
     [ApiController]
+    [EnableRateLimiting("CodeLimiter")]
     public class CodeController : ControllerBase
     {
         private readonly AppDbContext _context;
@@ -52,7 +54,7 @@ namespace Karalevha.API.Controllers
 
         // GET: api/projects/{id}/kod/dosya?yol=src/main.cpp   — metin dosyası içeriği
         [HttpGet("dosya")]
-        public async Task<IActionResult> GetFile(int id, [FromQuery] string yol, CancellationToken ct)
+        public async Task<IActionResult> GetFile(int id, [FromQuery] string? yol, CancellationToken ct)
         {
             if (string.IsNullOrWhiteSpace(yol) || yol.Length > 500) return BadRequest(new { message = "Geçersiz dosya yolu." });
             var (repo, error) = await Resolve(id);
@@ -78,7 +80,7 @@ namespace Karalevha.API.Controllers
 
         // GET: api/projects/{id}/kod/ham?yol=img/robot.png   — görsel ve 3B modeller için ham baytlar
         [HttpGet("ham")]
-        public async Task<IActionResult> GetRaw(int id, [FromQuery] string yol, CancellationToken ct)
+        public async Task<IActionResult> GetRaw(int id, [FromQuery] string? yol, CancellationToken ct)
         {
             if (string.IsNullOrWhiteSpace(yol) || yol.Length > 500) return BadRequest(new { message = "Geçersiz dosya yolu." });
             var (repo, error) = await Resolve(id);

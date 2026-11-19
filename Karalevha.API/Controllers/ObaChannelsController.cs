@@ -53,14 +53,14 @@ namespace Karalevha.API.Controllers
         {
             var userId = UserId;
             var oba = await _context.Obalar.FindAsync(obaId);
-            if (oba == null) return NotFound("Oba bulunamadı");
+            if (oba == null) return NotFound(new { message = "Oba bulunamadı." });
 
             if (oba.IsPrivate && !await _access.IsInsideAsync(oba, userId))
             {
                 // Görünmeyen oba: varlığını da belli etme, davet olmadan girilmez
-                if (oba.IsUnlisted) return NotFound("Oba bulunamadı");
+                if (oba.IsUnlisted) return NotFound(new { message = "Oba bulunamadı." });
                 if (userId == null) return Unauthorized();
-                return StatusCode(403, "Bu gizli bir oba, katılmak için şifre girmelisiniz.");
+                return StatusCode(403, new { message = "Bu gizli bir oba, katılmak için şifre girmelisiniz." });
             }
 
             var channels = await _access.VisibleChannels(oba, userId)

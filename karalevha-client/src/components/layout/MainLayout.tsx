@@ -26,6 +26,27 @@ export default function MainLayout() {
     if (!hash) window.scrollTo(0, 0);
   }, [pathname, hash]);
 
+  // Sekme başlığını geçerli bölüme göre güncelle (okunmamış bildirim önekini koru)
+  useEffect(() => {
+    const prefix = document.title.match(/^\(\d+\+?\) /)?.[0] ?? '';
+    const map: [RegExp, string][] = [
+      [/^\/$/, 'KaraLevha'],
+      [/^\/akis/, 'Akış · KaraLevha'],
+      [/^\/projeler/, 'Projeler · KaraLevha'],
+      [/^\/market/, 'Market · KaraLevha'],
+      [/^\/e-oba/, 'E-Oba · KaraLevha'],
+      [/^\/atolye/, 'Atölye · KaraLevha'],
+      [/^\/etkinlikler/, 'Etkinlikler · KaraLevha'],
+      [/^\/ara/, 'Arama · KaraLevha'],
+      [/^\/yonetim/, 'Yönetim · KaraLevha'],
+      [/^\/gizlilik/, 'Gizlilik ve KVKK · KaraLevha'],
+      [/^\/kurulum/, 'Kurulum · KaraLevha'],
+      [/^\/u\/([^/]+)/, 'Profil · KaraLevha'],
+    ];
+    const matched = map.find(([re]) => re.test(pathname))?.[1] ?? 'KaraLevha';
+    document.title = `${prefix}${matched}`;
+  }, [pathname]);
+
   // Tam ekran sayfada kaydırma çubuğu için boşluk ayrılmasın (index.css: html.tam-ekran)
   useEffect(() => {
     document.documentElement.classList.toggle('tam-ekran', fullScreen);

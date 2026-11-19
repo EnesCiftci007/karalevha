@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ApiError, api } from '../services/api';
@@ -14,9 +14,11 @@ export default function Auth() {
   const [mode, setMode] = useState<Mode>('giris');
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { user, login } = useAuth();
   // Giriş gerektiren bir yerden gelindiyse girişten sonra oraya dön
   const returnTo = (location.state as { from?: string } | null)?.from ?? '/';
+
+  if (user) return <Navigate to={returnTo} replace />;
 
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');

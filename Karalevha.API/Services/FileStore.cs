@@ -24,6 +24,10 @@ namespace Karalevha.API.Services
         Task SaveAsync(string key, Stream content, string contentType, CancellationToken ct = default);
         /// <summary>Dosya yoksa null</summary>
         Task<StoredFile?> OpenAsync(string key, CancellationToken ct = default);
+        /// <summary>Dosyanın bayt boyutunu içeriği indirmeden döner; yoksa null</summary>
+        Task<long?> GetLengthAsync(string key, CancellationToken ct = default);
+        /// <summary>Dosyayı depoda başka bir anahtara kopyalar (RAM tamponu olmadan); kaynak yoksa null, sınırı aşarsa -1</summary>
+        Task<long?> CopyAsync(string sourceKey, string destKey, string contentType, long maxBytes, CancellationToken ct = default);
         Task DeleteAsync(string key, CancellationToken ct = default);
         Task<bool> ExistsAsync(string key, CancellationToken ct = default);
     }
@@ -98,6 +102,26 @@ namespace Karalevha.API.Services
             return Task.FromResult<StoredFile?>(new StoredFile(stream, stream.Length));
         }
 
+        public Task<long?> GetLengthAsync(string key, CancellationToken ct = default)
+        {
+            var path = PathOf(key);
+            return Task.FromResult<long?>(File.Exists(path) ? new FileInfo(path).Length : null);
+        }
+
+        public async Task<long?> CopyAsync(string sourceKey, string destKey, string contentType, long maxBytes, CancellationToken ct = default)
+        {
+            var src = PathOf(sourceKey);
+            if (!File.Exists(src)) return null;
+            var len = new FileInfo(src).Length;
+            if (len == 0 || len > maxBytes) return -1;
+            var dst = PathOf(destKey);
+            Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
+            await using var input = new FileStream(src, FileMode.Open, FileAccess.Read, FileShare.Read, 64 * 1024, useAsync: true);
+            await using var output = new FileStream(dst, FileMode.CreateNew, FileAccess.Write, FileShare.None, 64 * 1024, useAsync: true);
+            await input.CopyToAsync(output, ct);
+            return len;
+        }
+
         public Task DeleteAsync(string key, CancellationToken ct = default)
         {
             var path = PathOf(key);
@@ -158,6 +182,36 @@ namespace Karalevha.API.Services
             {
                 return null;
             }
+        }
+
+        public async Task<long?> GetLengthAsync(string key, CancellationToken ct = default)
+        {
+            try
+            {
+                var meta = await _client.GetObjectMetadataAsync(_bucket, FileKeys.Require(key), ct);
+                return meta.ContentLength;
+            }
+            catch (AmazonS3Exception e) when (e.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+        }
+
+        public async Task<long?> CopyAsync(string sourceKey, string destKey, string contentType, long maxBytes, CancellationToken ct = default)
+        {
+            var len = await GetLengthAsync(sourceKey, ct);
+            if (len == null) return null;
+            if (len == 0 || len > maxBytes) return -1;
+            await _client.CopyObjectAsync(new CopyObjectRequest
+            {
+                SourceBucket = _bucket,
+                SourceKey = FileKeys.Require(sourceKey),
+                DestinationBucket = _bucket,
+                DestinationKey = FileKeys.Require(destKey),
+                ContentType = contentType,
+                MetadataDirective = S3MetadataDirective.REPLACE,
+            }, ct);
+            return len;
         }
 
         public async Task DeleteAsync(string key, CancellationToken ct = default) =>

@@ -18,23 +18,32 @@ const menuItems = [
 ];
 
 /** Üst menüdeki arama kutusu; Enter ile /ara sayfasına gider. "/" tuşu kutuya odaklanır. */
-function SearchBox({ onDone }: { onDone?: () => void }) {
+function SearchBox({ id = 'genel-arama', shortcut = false, onDone }: { id?: string; shortcut?: boolean; onDone?: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [q, setQ] = useState(() => (location.pathname === '/ara' ? new URLSearchParams(location.search).get('q') ?? '' : ''));
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
+    if (location.pathname === '/ara') {
+      setQ(new URLSearchParams(location.search).get('q') ?? '');
+    }
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!shortcut) return;
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (e.key === '/' && !['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) && !target.isContentEditable) {
-        e.preventDefault();
-        inputRef.current?.focus();
+        if (inputRef.current && inputRef.current.offsetParent !== null) {
+          e.preventDefault();
+          inputRef.current.focus();
+        }
       }
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, []);
+  }, [shortcut]);
 
   return (
     <form
@@ -50,9 +59,9 @@ function SearchBox({ onDone }: { onDone?: () => void }) {
       className="relative w-full"
     >
       <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-tebesir-silik pointer-events-none" aria-hidden="true" />
-      <label htmlFor="genel-arama" className="sr-only">Sitede ara</label>
+      <label htmlFor={id} className="sr-only">Sitede ara</label>
       <input
-        id="genel-arama"
+        id={id}
         ref={inputRef}
         type="search"
         value={q}
@@ -60,7 +69,7 @@ function SearchBox({ onDone }: { onDone?: () => void }) {
         placeholder="Ara"
         className="girdi h-8 pl-8 pr-8 bg-levha-yuzey"
       />
-      <kbd className="hidden xl:block absolute right-2 top-1/2 -translate-y-1/2 veri px-1.5 rounded border border-levha-cizgi" aria-hidden="true">/</kbd>
+      {shortcut && <kbd className="hidden xl:block absolute right-2 top-1/2 -translate-y-1/2 veri px-1.5 rounded border border-levha-cizgi" aria-hidden="true">/</kbd>}
     </form>
   );
 }
@@ -117,7 +126,7 @@ export default function Navbar({ fluid = false }: { fluid?: boolean }) {
 
         {/* Arama */}
         <div className="hidden md:block w-48 lg:w-56">
-          <SearchBox />
+          <SearchBox id="genel-arama" shortcut />
         </div>
 
         {/* Hesap */}
@@ -155,7 +164,7 @@ export default function Navbar({ fluid = false }: { fluid?: boolean }) {
       {/* Dar ekran menüsü */}
       {menuOpen && (
         <nav className="xl:hidden border-t border-levha-cizgi bg-levha px-4 py-3 space-y-3" aria-label="Bölümler">
-          <div className="md:hidden"><SearchBox onDone={() => setMenuOpen(false)} /></div>
+          <div className="md:hidden"><SearchBox id="genel-arama-mobil" onDone={() => setMenuOpen(false)} /></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4">
             {menuItems.map((item) => (
               <Link

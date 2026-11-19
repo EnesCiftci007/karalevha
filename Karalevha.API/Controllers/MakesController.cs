@@ -68,7 +68,7 @@ namespace Karalevha.API.Controllers
 
             var header = new byte[12];
             await using (var head = photo.OpenReadStream())
-                _ = await head.ReadAsync(header);
+                _ = await head.ReadAtLeastAsync(header, header.Length, throwOnEndOfStream: false);
             var ext = ImageSignatures.FirstOrDefault(sig => header.Take(sig.Magic.Length).SequenceEqual(sig.Magic)).Ext;
             if (ext == ".webp" && !(header[8] == 'W' && header[9] == 'E' && header[10] == 'B' && header[11] == 'P')) ext = null;
             if (ext == null) return BadRequest(new { message = "Fotoğraf JPG, PNG ya da WebP olmalı." });

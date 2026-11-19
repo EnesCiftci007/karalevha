@@ -124,6 +124,7 @@ export default function FileViewer({ messageId, file, onClose }: FileViewerProps
               type="button"
               onClick={() => downloadObaFile(messageId, file.name, blob ?? undefined).catch((e: Error) => setError(e.message))}
               className="btn-ana h-8 px-3"
+              aria-label="İndir"
             >
               <Download className="w-4 h-4 sm:mr-2" strokeWidth={3} />
               <span className="hidden sm:inline">İndir</span>

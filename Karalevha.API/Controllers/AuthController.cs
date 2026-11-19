@@ -154,7 +154,11 @@ namespace Karalevha.API.Controllers
                 return Unauthorized(new { message = "Hatalı kullanıcı adı veya şifre." });
 
             if (user.BannedUntil > DateTime.UtcNow)
-                return StatusCode(403, new { message = $"Hesabın {user.BannedUntil.Value.ToLocalTime():dd.MM.yyyy HH:mm} tarihine kadar askıya alındı.", bannedUntil = user.BannedUntil });
+            {
+                var tr = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
+                var untilTr = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(user.BannedUntil.Value, DateTimeKind.Utc), tr);
+                return StatusCode(403, new { message = $"Hesabın {untilTr:dd.MM.yyyy HH:mm} tarihine kadar askıya alındı.", bannedUntil = user.BannedUntil });
+            }
 
             if (RequireEmailVerification && !user.EmailConfirmed)
                 return StatusCode(403, new { requiresVerification = true, email = user.Email, message = "Devam etmek için e-posta adresini doğrulaman gerekiyor." });
@@ -169,6 +173,7 @@ namespace Karalevha.API.Controllers
 
         // POST: api/auth/logout   — oturum çerezini siler
         [HttpPost("logout")]
+        [Karalevha.API.Filters.AllowWhileBanned]
         public IActionResult Logout()
         {
             AuthCookie.Clear(HttpContext);
@@ -199,6 +204,7 @@ namespace Karalevha.API.Controllers
         // Şifre yeniden istenir: açık unutulmuş bir oturumdan hesap silinemesin.
         [HttpPost("hesabi-sil")]
         [Authorize]
+        [Karalevha.API.Filters.AllowWhileBanned]
         [EnableRateLimiting("AuthLimiter")]
         public async Task<IActionResult> DeleteAccount(DeleteAccountDto dto, [FromServices] AccountDeletion deletion,
             [FromServices] ChatConnections connections, [FromServices] ChannelAccessGuard guard)
@@ -295,7 +301,8 @@ namespace Karalevha.API.Controllers
         [EnableRateLimiting("AuthLimiter")]
         public async Task<IActionResult> VerifyEmail(VerifyEmailDto dto)
         {
-            var email = dto.Email.Trim().ToLowerInvariant();
+            var email = (dto.Email ?? string.Empty).Trim().ToLowerInvariant();
+            if (email.Length == 0) return BadRequest(new { message = "Geçersiz bağlantı." });
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             if (user == null) return BadRequest(new { message = "Geçersiz bağlantı." });
             if (user.EmailConfirmed) return Ok(new { message = "E-posta adresin zaten doğrulanmış." });
@@ -324,7 +331,8 @@ namespace Karalevha.API.Controllers
         public async Task<IActionResult> ResendVerification(ResendVerificationDto dto)
         {
             const string reply = "Bu adres kayıtlıysa doğrulama bağlantısı gönderildi.";
-            var email = dto.Email.Trim().ToLowerInvariant();
+            var email = (dto.Email ?? string.Empty).Trim().ToLowerInvariant();
+            if (email.Length == 0) return Ok(new { message = reply });
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Email == email);
             if (user == null || user.EmailConfirmed || !RequireEmailVerification) return Ok(new { message = reply });
 

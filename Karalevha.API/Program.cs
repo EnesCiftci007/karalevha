@@ -168,6 +168,25 @@ builder.Services.AddRateLimiter(options =>
                 Window = TimeSpan.FromMinutes(1),
                 PermitLimit = Limit(10)
             }));
+
+    // Kod görüntüleyici (GitHub/GitLab proxy) ve genel arama için IP/kullanıcı başına dakika sınırı
+    options.AddPolicy("CodeLimiter", ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = Limit(60)
+            }));
+
+    options.AddPolicy("SearchLimiter", ctx =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            ctx.User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? ctx.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                Window = TimeSpan.FromMinutes(1),
+                PermitLimit = Limit(60)
+            }));
 });
 
 var app = builder.Build();
@@ -194,7 +213,20 @@ using (var scope = app.Services.CreateScope())
 
 app.UseForwardedHeaders();
 app.UseExceptionHandler("/error");
+if (!app.Environment.IsDevelopment())
+    app.UseHsts();
 app.UseHttpsRedirection();
+app.Use(async (ctx, next) =>
+{
+    ctx.Response.OnStarting(() =>
+    {
+        ctx.Response.Headers.TryAdd("X-Content-Type-Options", "nosniff");
+        ctx.Response.Headers.TryAdd("X-Frame-Options", "DENY");
+        ctx.Response.Headers.TryAdd("Referrer-Policy", "no-referrer");
+        return Task.CompletedTask;
+    });
+    await next();
+});
 app.UseCors("AllowReact");
 
 // Yüklenen dosyalar diskte değil depoda (IFileStore): /uploads/... adresleri UploadsEndpoint'ten sunulur.
@@ -211,7 +243,7 @@ app.MapUploads();
 app.MapHub<Karalevha.API.Hubs.ChatHub>("/chathub");
 app.MapHub<Karalevha.API.Hubs.NotificationHub>("/notificationhub");
 app.MapHealthChecks("/health");
-app.Map("/error", () => Results.Problem("Beklenmeyen bir hata oluştu.")).AllowAnonymous();
+app.Map("/error", () => Results.Json(new { message = "Beklenmeyen bir hata oluştu." }, statusCode: 500)).AllowAnonymous();
 
 app.Run();
 return 0;

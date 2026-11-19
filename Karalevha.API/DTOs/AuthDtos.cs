@@ -11,7 +11,7 @@ namespace Karalevha.API.DTOs
 
         [Required]
         [EmailAddress(ErrorMessage = "Geçerli bir e-posta adresi giriniz.")]
-        [StringLength(200)]
+        [StringLength(100)]
         public string Email { get; set; } = string.Empty;
 
         [Required]
@@ -26,7 +26,7 @@ namespace Karalevha.API.DTOs
         public string UsernameOrEmail { get; set; } = string.Empty;
 
         [Required]
-        [StringLength(72)]
+        [StringLength(128)]
         public string Password { get; set; } = string.Empty;
     }
 }

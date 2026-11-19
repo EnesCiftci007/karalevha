@@ -42,7 +42,7 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     window.dispatchEvent(new Event('auth:unauthorized'));
   }
   if (res.status === 429) {
-    throw new Error('Çok fazla deneme yaptınız, biraz bekleyin.');
+    throw new ApiError('Çok fazla deneme yaptınız, biraz bekleyin.', 429, null);
   }
   if (!res.ok) {
     const body = await res.json().catch(() => null);
@@ -59,5 +59,8 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     throw new ApiError(errorMsg ?? `İstek başarısız (${res.status})`, res.status, body);
   }
 
+  if (res.status === 204 || res.headers.get('content-length') === '0') {
+    return undefined as T;
+  }
   return res.json() as Promise<T>;
 }

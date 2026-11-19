@@ -83,13 +83,18 @@ function OrderMeta({ order }: { order: MarketOrder }) {
   );
 }
 
-function FileButton({ order }: { order: MarketOrder }) {
+function FileButton({ order, onError }: { order: MarketOrder; onError?: (msg: string) => void }) {
   const [busy, setBusy] = useState(false);
   return (
     <button
       type="button"
       disabled={busy}
-      onClick={() => { setBusy(true); downloadOrderFile(order).catch(() => {}).finally(() => setBusy(false)); }}
+      onClick={() => {
+        setBusy(true);
+        downloadOrderFile(order)
+          .catch((err) => onError?.(err instanceof Error ? err.message : 'Dosya indirilemedi.'))
+          .finally(() => setBusy(false));
+      }}
       className="inline-flex items-center gap-1.5 max-w-full text-xs text-tebesir-soluk hover:text-tebesir"
       title="Dosyayı indir"
     >
@@ -124,7 +129,7 @@ function OrderModal({ choices, initial, source, onClose, onCreated }: OrderModal
   const [service, setService] = useState(initial);
   const [useSource, setUseSource] = useState(!!source);
   const [material, setMaterial] = useState(initial.materials[0]);
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState('1');
   const [dimensions, setDimensions] = useState('');
   const [note, setNote] = useState('');
   const [file, setFile] = useState<File | null>(null);
@@ -160,7 +165,8 @@ function OrderModal({ choices, initial, source, onClose, onCreated }: OrderModal
     const form = new FormData();
     form.append('service', service.id);
     form.append('material', material);
-    form.append('quantity', String(quantity));
+    const qty = Math.max(1, Math.min(100, parseInt(quantity, 10) || 1));
+    form.append('quantity', String(qty));
     if (dimensions.trim()) form.append('dimensions', dimensions.trim());
     if (note.trim()) form.append('note', note.trim());
     if (fromProject) {
@@ -229,7 +235,16 @@ function OrderModal({ choices, initial, source, onClose, onCreated }: OrderModal
             </select>
           </Field>
           <Field id="m-adet" label="Adet">
-            <input id="m-adet" type="number" min={1} max={100} value={quantity} onChange={(e) => setQuantity(Math.max(1, Math.min(100, Number(e.target.value) || 1)))} className="girdi veri" />
+            <input
+              id="m-adet"
+              type="number"
+              min={1}
+              max={100}
+              value={quantity}
+              onChange={(e) => setQuantity(e.target.value)}
+              onBlur={() => setQuantity(String(Math.max(1, Math.min(100, parseInt(quantity, 10) || 1))))}
+              className="girdi veri"
+            />
           </Field>
         </div>
         <Field id="m-olcu" label="Ölçüler" note="isteğe bağlı">
@@ -264,7 +279,14 @@ function StaffRow({ order, onSaved }: { order: MarketOrder; onSaved: (o: MarketO
     setSaving(true);
     setError('');
     try {
-      const body = { status, price: price.trim() ? Number(price.replace(',', '.')) : null, staffNote: staffNote.trim() || null };
+      const trimmedPrice = price.trim();
+      const parsedPrice = trimmedPrice ? Number(trimmedPrice.replace(',', '.')) : null;
+      if (parsedPrice !== null && (!Number.isFinite(parsedPrice) || parsedPrice < 0)) {
+        setError('Geçerli bir fiyat gir (0 veya pozitif sayı).');
+        setSaving(false);
+        return;
+      }
+      const body = { status, price: parsedPrice, staffNote: staffNote.trim() || null };
       onSaved(await api<MarketOrder>(`/api/market/siparis/${order.id}`, { method: 'PUT', body: JSON.stringify(body) }));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Kaydedilemedi.');
@@ -280,12 +302,12 @@ function StaffRow({ order, onSaved }: { order: MarketOrder; onSaved: (o: MarketO
         <span className="font-semibold text-tebesir">{order.serviceName}</span>
         <StatusBadge order={order} />
         <span className="ml-auto text-xs text-tebesir-silik">
-          <Link to={`/u/${order.username}`} className="text-tebesir-soluk hover:underline">{order.username}</Link>
+          <Link to={`/u/${encodeURIComponent(order.username)}`} className="text-tebesir-soluk hover:underline">{order.username}</Link>
         </span>
       </div>
       <OrderMeta order={order} />
       {order.note && <p className="mt-2 text-sm text-tebesir-soluk whitespace-pre-wrap">{order.note}</p>}
-      <div className="mt-2"><FileButton order={order} /></div>
+      <div className="mt-2"><FileButton order={order} onError={setError} /></div>
       <form onSubmit={save} className="mt-3 grid gap-2 sm:grid-cols-[10rem_8rem_1fr_auto] items-start">
         <select value={status} onChange={(e) => setStatus(e.target.value as MarketStatus)} className="girdi" aria-label="Durum">
           {ALL_STATUSES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
@@ -312,6 +334,7 @@ export default function Market() {
   const [filter, setFilter] = useState<'acik' | MarketStatus | ''>('acik');
   const [ordering, setOrdering] = useState<{ choices: MarketService[]; initial: MarketService; source?: OrderSource } | null>(null);
   const [cancelling, setCancelling] = useState<MarketOrder | null>(null);
+  const [approvingId, setApprovingId] = useState<number | null>(null);
   const [actionError, setActionError] = useState('');
 
   const askedTab = params.get('sekme') as Tab | null;
@@ -319,17 +342,33 @@ export default function Market() {
   const setTab = (t: Tab) => setParams((p) => { const n = new URLSearchParams(p); n.set('sekme', t); n.delete('hizmet'); return n; }, { replace: true });
 
   useEffect(() => {
-    api<MarketService[]>('/api/market/hizmetler').then(setServices).catch(() => setServices([]));
+    api<MarketService[]>('/api/market/hizmetler')
+      .then(setServices)
+      .catch((err) => {
+        setActionError(err instanceof Error ? err.message : 'Hizmetler yüklenemedi.');
+        setServices([]);
+      });
   }, []);
 
   const loadMine = useCallback(() => {
-    if (user) api<MarketOrder[]>('/api/market/siparislerim').then(setMine).catch(() => setMine([]));
+    if (!user) return;
+    api<MarketOrder[]>('/api/market/siparislerim')
+      .then(setMine)
+      .catch((err) => {
+        setActionError(err instanceof Error ? err.message : 'Siparişlerin yüklenemedi.');
+        setMine([]);
+      });
   }, [user]);
   useEffect(loadMine, [loadMine]);
 
   useEffect(() => {
     if (!user?.isAdmin) return;
-    api<MarketOrder[]>('/api/market/siparisler').then(setIncoming).catch(() => setIncoming([]));
+    api<MarketOrder[]>('/api/market/siparisler')
+      .then(setIncoming)
+      .catch((err) => {
+        setActionError(err instanceof Error ? err.message : 'Gelen siparişler yüklenemedi.');
+        setIncoming([]);
+      });
   }, [user?.isAdmin]);
 
   // ?hizmet=baski: projedeki "Bastır" bağlantısı formu açık getirir
@@ -366,11 +405,15 @@ export default function Market() {
 
   const replaceMine = (o: MarketOrder) => setMine((prev) => (prev ?? []).map((x) => (x.id === o.id ? o : x)));
   const approve = async (o: MarketOrder) => {
+    if (approvingId === o.id) return;
     setActionError('');
+    setApprovingId(o.id);
     try {
       replaceMine(await api<MarketOrder>(`/api/market/siparis/${o.id}/onay`, { method: 'POST' }));
     } catch (err) {
       setActionError(err instanceof Error ? err.message : 'Onaylanamadı.');
+    } finally {
+      setApprovingId(null);
     }
   };
 
@@ -409,7 +452,13 @@ export default function Market() {
         services === null ? (
           <div className="grid sm:grid-cols-2 gap-4">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-48" />)}</div>
         ) : (
-          <ul className="grid sm:grid-cols-2 gap-4">
+          <div className="space-y-4">
+            <div className="kart px-4 py-3 text-xs text-tebesir-soluk flex flex-wrap items-center gap-x-6 gap-y-1.5">
+              <span><strong className="text-tebesir">1. Talep oluştur:</strong> Dosyanı, malzeme ve adedini seçip gönder.</span>
+              <span><strong className="text-tebesir">2. Kulüp atölyesi fiyat verir:</strong> Sipariş kulüp yöneticilerine düşer; inceleyip fiyat yazarlar.</span>
+              <span><strong className="text-tebesir">3. Onayla ve teslim al:</strong> Fiyatı onayladığında atölyede üretilir (siteden ödeme alınmaz).</span>
+            </div>
+            <ul className="grid sm:grid-cols-2 gap-4">
             {services.map((s) => {
               const Icon = ICONS[s.id] ?? Package;
               return (
@@ -431,7 +480,8 @@ export default function Market() {
                 </li>
               );
             })}
-          </ul>
+            </ul>
+          </div>
         )
       )}
 
@@ -452,12 +502,16 @@ export default function Market() {
                     {o.price != null && <span className="ml-auto veri text-base text-tebesir">{money(o.price)}</span>}
                   </div>
                   <OrderMeta order={o} />
+                  {o.note && <p className="mt-2 text-sm text-tebesir-soluk whitespace-pre-wrap"><span className="etiket mr-1">Notun</span>{o.note}</p>}
                   <Stepper status={o.status} />
                   {o.staffNote && <p className="mt-3 text-sm text-tebesir-soluk"><span className="etiket mr-1">Atölye</span>{o.staffNote}</p>}
                   <div className="mt-3 flex flex-wrap items-center gap-3">
-                    <span className="min-w-0 flex-1"><FileButton order={o} /></span>
+                    <span className="min-w-0 flex-1"><FileButton order={o} onError={setActionError} /></span>
                     {o.status === 'fiyatlandi' && (
-                      <button type="button" onClick={() => approve(o)} className="btn-ana"><Check className="w-4 h-4" aria-hidden="true" />Fiyatı onayla</button>
+                      <button type="button" disabled={approvingId === o.id} onClick={() => approve(o)} className="btn-ana">
+                        <Check className="w-4 h-4" aria-hidden="true" />
+                        {approvingId === o.id ? 'Onaylanıyor…' : 'Fiyatı onayla'}
+                      </button>
                     )}
                     {(o.status === 'alindi' || o.status === 'fiyatlandi' || o.status === 'onaylandi') && (
                       <button type="button" onClick={() => setCancelling(o)} className="btn-sade">İptal et</button>
@@ -502,6 +556,7 @@ export default function Market() {
           onClose={() => setOrdering(null)}
           onCreated={(o) => {
             setMine((prev) => [o, ...(prev ?? [])]);
+            if (user?.isAdmin) setIncoming((prev) => [o, ...(prev ?? [])]);
             setTab('siparislerim');
           }}
         />

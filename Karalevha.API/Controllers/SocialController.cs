@@ -61,7 +61,7 @@ namespace Karalevha.API.Controllers
 
         // GET: api/begeni/{type}?ids=1,2,3   — toplu beğeni sayısı ve "ben beğendim mi"
         [HttpGet("begeni/{type}")]
-        public async Task<IActionResult> GetLikes(string type, [FromQuery] string ids)
+        public async Task<IActionResult> GetLikes(string type, [FromQuery] string? ids)
         {
             if (!LikeTypes.Contains(type)) return BadRequest(new { message = "Geçersiz tür." });
             var idList = (ids ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries)

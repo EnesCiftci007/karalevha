@@ -81,8 +81,10 @@ namespace Karalevha.API.Controllers
             var makePhotos = await _context.PrintMakes.Where(m => m.PrintModelId == id).Select(m => m.PhotoPath).ToListAsync();
             var versions = await _context.FileVersions.Where(v => v.PrintModelId == id).Select(v => v.FilePath).ToListAsync();
 
+            var commentIds = await _context.Comments.Where(c => c.TargetType == "model" && c.TargetId == id).Select(c => c.Id).ToListAsync();
             _context.PrintModels.Remove(model);
-            _context.Likes.RemoveRange(_context.Likes.Where(l => l.TargetType == "model" && l.TargetId == id));
+            _context.Likes.RemoveRange(_context.Likes.Where(l =>
+                (l.TargetType == "model" && l.TargetId == id) || (l.TargetType == "comment" && commentIds.Contains(l.TargetId))));
             _context.Comments.RemoveRange(_context.Comments.Where(c => c.TargetType == "model" && c.TargetId == id));
             await _context.SaveChangesAsync();
 
@@ -117,8 +119,8 @@ namespace Karalevha.API.Controllers
             await using (var upload = file.OpenReadStream())
                 await _store.SaveAsync($"uploads/models/{safeFileName}", upload, "application/octet-stream");
 
-            var size = await _store.OpenAsync(FileKeys.FromPublicPath(model.FilePath) ?? "uploads/x", HttpContext.RequestAborted) is { } old
-                ? await DisposeAndLength(old) : 0;
+            var oldKey = FileKeys.FromPublicPath(model.FilePath);
+            var size = oldKey != null ? await _store.GetLengthAsync(oldKey, HttpContext.RequestAborted) ?? 0 : 0;
             _context.FileVersions.Add(new FileVersion
             {
                 PrintModelId = model.Id, Version = model.Version, FilePath = model.FilePath,

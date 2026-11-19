@@ -12,7 +12,11 @@ export function resolvePath(fromFile: string, target: string): string | null {
       if (parts.length === 0) return null;
       parts.pop();
     } else {
-      parts.push(decodeURIComponent(seg));
+      try {
+        parts.push(decodeURIComponent(seg));
+      } catch {
+        parts.push(seg);
+      }
     }
   }
   return parts.join('/');

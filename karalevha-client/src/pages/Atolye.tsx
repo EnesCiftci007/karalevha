@@ -174,7 +174,19 @@ function ReserveForm({
             <input id="rez-tarih" type="date" className="girdi" required value={date} min={dateInput(new Date())} max={dateInput(addDays(new Date(), 30))} onChange={(e) => setDate(e.target.value)} />
           </Field>
           <Field id="rez-baslangic" label="Başlangıç">
-            <select id="rez-baslangic" className="girdi" value={start} onChange={(e) => setStart(e.target.value)}>
+            <select
+              id="rez-baslangic"
+              className="girdi"
+              value={start}
+              onChange={(e) => {
+                const nextStart = e.target.value;
+                setStart(nextStart);
+                if (end <= nextStart) {
+                  const nextEnd = TIMES.find((t) => t > nextStart);
+                  if (nextEnd) setEnd(nextEnd);
+                }
+              }}
+            >
               {TIMES.slice(0, -1).map((t) => <option key={t}>{t}</option>)}
             </select>
           </Field>
@@ -211,6 +223,7 @@ export default function Atolye() {
   const { user } = useAuth();
   const [params, setParams] = useSearchParams();
   const [equipment, setEquipment] = useState<Equipment[] | null>(null);
+  const [loadError, setLoadError] = useState('');
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
   const [reservations, setReservations] = useState<Reservation[]>([]);
@@ -231,7 +244,10 @@ export default function Atolye() {
         setEquipment(list);
         setSelectedId((current) => current ?? list.find((e) => e.kind === 'yazici')?.id ?? list[0]?.id ?? null);
       })
-      .catch(() => setEquipment([]));
+      .catch((err) => {
+        setLoadError(err instanceof Error ? err.message : 'Ekipmanlar yüklenemedi.');
+        setEquipment([]);
+      });
   }, []);
 
   const loadWeek = useCallback(() => {
@@ -297,6 +313,9 @@ export default function Atolye() {
         }
       />
 
+      {loadError && (
+        <p role="alert" className="mb-4 text-sm text-hata">{loadError}</p>
+      )}
       {equipment === null ? (
         <div className="grid sm:grid-cols-3 gap-3 mb-8">{[0, 1, 2].map((i) => <Skeleton key={i} className="h-20" />)}</div>
       ) : equipment.length === 0 ? (
@@ -311,7 +330,7 @@ export default function Atolye() {
           {/* Ekipmanlar */}
           <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8" aria-label="Ekipmanlar">
             {equipment.map((e) => {
-              const { label, icon: Icon } = KINDS[e.kind];
+              const { label, icon: Icon } = KINDS[e.kind] ?? KINDS.diger;
               const active = e.id === selectedId;
               return (
                 <li key={e.id} className={`kart relative transition-colors ${active ? 'border-isaret' : 'hover:border-tebesir-silik'}`}>

@@ -24,12 +24,14 @@ namespace Karalevha.API.Controllers
         private readonly AppDbContext _context;
         private readonly CurrentUser _current;
         private readonly NotificationService _notifications;
+        private readonly ObaAccess _obaAccess;
 
-        public ReportsController(AppDbContext context, CurrentUser current, NotificationService notifications)
+        public ReportsController(AppDbContext context, CurrentUser current, NotificationService notifications, ObaAccess obaAccess)
         {
             _context = context;
             _current = current;
             _notifications = notifications;
+            _obaAccess = obaAccess;
         }
 
         /// <summary>Bildirilen içeriğin özeti: kimin, ne, nerede. İçerik silinmişse null.</summary>
@@ -93,6 +95,21 @@ namespace Karalevha.API.Controllers
             if (!Reasons.Contains(dto.Reason)) return BadRequest(new { message = "Bir neden seç." });
             var note = string.IsNullOrWhiteSpace(dto.Note) ? null : dto.Note.Trim();
             if (note?.Length > 500) return BadRequest(new { message = "Açıklama en fazla 500 karakter olabilir." });
+
+            if (dto.TargetType == "obamessage")
+            {
+                var channelId = await _context.ObaMessages.AsNoTracking()
+                    .Where(m => m.Id == dto.TargetId)
+                    .Select(m => (int?)m.ChannelId)
+                    .FirstOrDefaultAsync();
+                if (channelId == null) return NotFound(new { message = "İçerik bulunamadı; kaldırılmış olabilir." });
+                var channel = await _context.ObaChannels.AsNoTracking()
+                    .Include(c => c.Oba)
+                    .FirstOrDefaultAsync(c => c.Id == channelId.Value);
+                if (channel?.Oba == null) return NotFound(new { message = "İçerik bulunamadı; kaldırılmış olabilir." });
+                var (canRead, _) = await _obaAccess.ChannelAsync(channel, me);
+                if (!canRead) return NotFound(new { message = "İçerik bulunamadı; kaldırılmış olabilir." });
+            }
 
             var target = await Describe(dto.TargetType, dto.TargetId);
             if (target == null) return NotFound(new { message = "İçerik bulunamadı; kaldırılmış olabilir." });

@@ -120,8 +120,8 @@ export default function ProjeDetay() {
 
   return (
     <div>
-      {/* Sıkı başlık: kod görüntüleyici ilk ekranda tam görünsün */}
-      <header className="flex items-center gap-x-4 h-8 mb-2">
+      {/* Sıkı başlık: mobilde satıra sığacak şekilde sarılır, masaüstünde tek satır */}
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 min-h-8 mb-2">
         <div className="min-w-0 flex-1 flex items-baseline gap-2">
           <Link to={back.to} className="shrink-0 self-center inline-flex items-center gap-0.5 text-sm text-tebesir-silik hover:text-tebesir" aria-label="Projelere dön">
             <ChevronLeft className="w-4 h-4" aria-hidden="true" />

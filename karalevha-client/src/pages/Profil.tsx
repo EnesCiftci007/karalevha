@@ -214,7 +214,7 @@ export default function Profil() {
 
         <aside className="lg:col-span-4">
           {isMe && <AccountPanel username={profile.username} />}
-          {isMe && profile.bannedUntil && (
+          {isMe && profile.bannedUntil && new Date(profile.bannedUntil) > new Date() && (
             <p className="kart p-4 mb-8 text-sm text-hata">Hesabın askıda. Paylaşım yapamazsın.</p>
           )}
           {!isMe && user && (

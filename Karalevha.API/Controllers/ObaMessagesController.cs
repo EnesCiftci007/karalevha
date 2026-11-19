@@ -21,8 +21,9 @@ namespace Karalevha.API.Controllers
         private readonly CurrentUser _current;
         private readonly NotificationService _notifications;
         private readonly ObaAccess _access;
+        private readonly ILogger<ObaMessagesController> _logger;
 
-        public ObaMessagesController(AppDbContext context, IHubContext<ChatHub> hubContext, ObaFileStorage storage, CurrentUser current, NotificationService notifications, ObaAccess access)
+        public ObaMessagesController(AppDbContext context, IHubContext<ChatHub> hubContext, ObaFileStorage storage, CurrentUser current, NotificationService notifications, ObaAccess access, ILogger<ObaMessagesController> logger)
         {
             _context = context;
             _hubContext = hubContext;
@@ -30,6 +31,7 @@ namespace Karalevha.API.Controllers
             _current = current;
             _notifications = notifications;
             _access = access;
+            _logger = logger;
         }
 
         /// <summary>Mesajda @adı geçen ve kanalı okuyabilen kişilere bildirim ekler (SaveChanges çağıranda).</summary>
@@ -75,7 +77,8 @@ namespace Karalevha.API.Controllers
             await _context.SaveChangesAsync();
             await _storage.DeleteAsync(stored);
 
-            _ = _hubContext.Clients.Group(channelId.ToString()).SendAsync("MessageDeleted", messageId);
+            _ = _hubContext.Clients.Group(channelId.ToString()).SendAsync("MessageDeleted", messageId)
+                .ContinueWith(t => _logger.LogWarning(t.Exception, "Mesaj silme olayı yayınlanamadı"), TaskContinuationOptions.OnlyOnFaulted);
             return Ok(new { success = true });
         }
 
@@ -112,22 +115,42 @@ namespace Karalevha.API.Controllers
             }
         };
 
-        // GET: api/obamessages/{channelId}
+        // GET: api/obamessages/{channelId}?beforeId=&take=100
         [HttpGet("{channelId:int}")]
-        public async Task<IActionResult> GetMessages(int channelId)
+        public async Task<IActionResult> GetMessages(int channelId, [FromQuery] int? beforeId = null, [FromQuery] int take = 100)
         {
             var access = await ResolveAccess(channelId);
             if (access.Channel == null) return NotFound(new { message = "Kanal bulunamadı" });
             if (!access.CanRead) return CurrentUserId == null ? Unauthorized() : StatusCode(403);
 
-            var messages = await _context.ObaMessages
+            var limit = Math.Clamp(take, 1, 200);
+            var query = _context.ObaMessages
                 .AsNoTracking()
-                .Include(m => m.User)
-                .Where(m => m.ChannelId == channelId)
-                .OrderBy(m => m.CreatedAt)
+                .Where(m => m.ChannelId == channelId);
+            if (beforeId.HasValue)
+                query = query.Where(m => m.Id < beforeId.Value);
+
+            var rows = await query
+                .OrderByDescending(m => m.Id)
+                .Take(limit)
+                .Select(m => new
+                {
+                    m.Id,
+                    m.ChannelId,
+                    m.Content,
+                    m.CreatedAt,
+                    User = new { Id = m.UserId, Username = m.User != null ? m.User.Username : "Bilinmeyen" },
+                    File = m.FileStoredName == null ? null : new
+                    {
+                        Name = m.FileName,
+                        Size = m.FileSize,
+                        ContentType = m.FileContentType
+                    }
+                })
                 .ToListAsync();
 
-            return Ok(messages.Select(m => ToDto(m, m.UserId, m.User?.Username ?? "Bilinmeyen")));
+            rows.Reverse();
+            return Ok(rows);
         }
 
         public class CreateMessageDto {
@@ -267,7 +290,8 @@ namespace Karalevha.API.Controllers
             var dto = ToDto(message, userId, username);
 
             // Fire and forget SignalR broadcast
-            _ = _hubContext.Clients.Group(message.ChannelId.ToString()).SendAsync("ReceiveMessage", dto);
+            _ = _hubContext.Clients.Group(message.ChannelId.ToString()).SendAsync("ReceiveMessage", dto)
+                .ContinueWith(t => _logger.LogWarning(t.Exception, "Mesaj canlı yayınlanamadı"), TaskContinuationOptions.OnlyOnFaulted);
             return dto;
         }
     }

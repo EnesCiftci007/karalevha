@@ -56,6 +56,9 @@ export default function NotificationBell() {
   useEffect(() => {
     const base = document.title.replace(/^\(\d+\+?\) /, '');
     document.title = unread > 0 ? `(${unread > 9 ? '9+' : unread}) ${base}` : base;
+    return () => {
+      document.title = document.title.replace(/^\(\d+\+?\) /, '');
+    };
   }, [unread]);
 
   useEffect(() => {
