@@ -99,6 +99,8 @@ namespace Karalevha.API.Controllers
         private static object ToDto(ObaMessage m, int userId, string username) => new
         {
             m.Id,
+            // İstemci canlı mesajı yalnızca açık kanala ekler (başka kanalın mesajı karışmasın)
+            m.ChannelId,
             m.Content,
             m.CreatedAt,
             User = new { Id = userId, Username = username },

@@ -24,6 +24,7 @@ type Channel = ChannelSummary;
 
 interface Message {
   id: number;
+  channelId?: number;
   content: string;
   createdAt: string;
   user: {
@@ -39,6 +40,9 @@ export default function ObaDetay() {
   const { user } = useAuth();
   const [channels, setChannels] = useState<Channel[]>([]);
   const [activeChannel, setActiveChannel] = useState<Channel | null>(null);
+  // SignalR olayları kurulduğu andaki değeri değil, güncel açık kanalı görsün
+  const activeChannelRef = useRef<Channel | null>(null);
+  activeChannelRef.current = activeChannel;
   const [messages, setMessages] = useState<Message[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
@@ -52,6 +56,8 @@ export default function ObaDetay() {
   const [needsLogin, setNeedsLogin] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [sendError, setSendError] = useState('');
+  // Açık bağlantıdayken bu kanala erişim kalktıysa (kanaldan çıkarıldın, kanal gizlendi/silindi, obadan ayrıldın)
+  const [accessNotice, setAccessNotice] = useState('');
   const [viewer, setViewer] = useState<{ messageId: number; file: ObaFile } | null>(null);
   const [showFiles, setShowFiles] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -107,6 +113,8 @@ export default function ObaDetay() {
           });
 
           connection.on('ReceiveMessage', (message: Message) => {
+            // Yalnızca açık kanalın mesajı (kanal değiştirirken eski kanaldan gelen yayın karışmasın)
+            if (message.channelId !== undefined && message.channelId !== activeChannelRef.current?.id) return;
             setMessages(prev => {
               if (prev.some(m => m.id === message.id)) return prev;
               return [...prev, message];
@@ -114,11 +122,21 @@ export default function ObaDetay() {
           });
         })
         .catch(e => console.log('Connection failed: ', e));
+
+      // Sunucu bu kanala erişimin kalktığını söyledi: ekrandaki gizli içerik silinir, kanal listesi yenilenir
+      connection.on('KanalErisimiKalkti', (channelId: number) => {
+        if (activeChannelRef.current?.id !== channelId) return;
+        setMessages([]);
+        setActiveChannel(null);
+        setAccessNotice('Bu kanala erişimin kalktı.');
+        fetchChannelsRef.current();
+      });
     }
   }, [connection]);
 
   // Join channel group when activeChannel changes OR when connection establishes
   useEffect(() => {
+    if (activeChannel) setAccessNotice('');
     if (isConnected && connection && activeChannel) {
       connection.invoke('JoinChannel', activeChannel.id.toString())
         .then(() => console.log("Joined channel: ", activeChannel.id))
@@ -221,6 +239,7 @@ export default function ObaDetay() {
   };
 
 
+  const fetchChannelsRef = useRef<() => void>(() => {});
   const fetchChannels = async (selectId?: number) => {
     try {
       const res = await apiFetch(`/api/obachannels/${id}`);
@@ -261,6 +280,7 @@ export default function ObaDetay() {
       setLoading(false);
     }
   };
+  fetchChannelsRef.current = () => { fetchChannels(); };
 
   const fetchMessages = async () => {
     if (!activeChannel) return;
@@ -602,6 +622,9 @@ export default function ObaDetay() {
 
         {/* Mesajlar */}
         <div ref={messagesBoxRef} className="flex-1 overflow-y-auto px-3 sm:px-4 py-4">
+          {accessNotice && (
+            <p className="mb-3 rounded-md border border-hata/40 bg-hata/10 px-3 py-2 text-sm text-hata" role="alert">{accessNotice}</p>
+          )}
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center px-6">
               <MessageSquare className="w-6 h-6 mb-3 text-tebesir-silik" strokeWidth={1.5} aria-hidden="true" />

@@ -52,6 +52,9 @@ builder.Services.AddSingleton<CurrentUser>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<ObaAccess>();
 builder.Services.AddScoped<AccountDeletion>();
+// Canlı sohbet bağlantıları ve erişim değişince yeniden kontrol (gizli kanallar)
+builder.Services.AddSingleton<ChatConnections>();
+builder.Services.AddScoped<ChannelAccessGuard>();
 builder.Services.AddHttpClient<IEmailService, EmailService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient<RepoService>();

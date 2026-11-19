@@ -200,7 +200,8 @@ namespace Karalevha.API.Controllers
         [HttpPost("hesabi-sil")]
         [Authorize]
         [EnableRateLimiting("AuthLimiter")]
-        public async Task<IActionResult> DeleteAccount(DeleteAccountDto dto, [FromServices] AccountDeletion deletion)
+        public async Task<IActionResult> DeleteAccount(DeleteAccountDto dto, [FromServices] AccountDeletion deletion,
+            [FromServices] ChatConnections connections, [FromServices] ChannelAccessGuard guard)
         {
             var id = CurrentUser.IdOf(User);
             var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
@@ -210,8 +211,12 @@ namespace Karalevha.API.Controllers
             if (user.Role == Roles.Owner)
                 return BadRequest(new { message = "Kulüp kurucusunun hesabı silinemez. Önce kuruculuğu başka bir yöneticiye devret." });
 
+            // Silinecek obaların kanalları: silindikten sonra onları dinleyen diğer bağlantılar da çıkarılır
+            var ownedChannels = await _context.ObaChannels.Where(c => c.Oba!.OwnerId == user.Id).Select(c => c.Id).ToListAsync();
             await deletion.DeleteAsync(user.Id);
             _current.SetRole(user.Username, Roles.User);
+            connections.Abort(user.Id);                       // kişinin bütün canlı bağlantıları kesilir
+            await guard.RecheckChannelsAsync(ownedChannels);  // devredilen obalarda erişim sürer, silinenlerde kalkar
             AuthCookie.Clear(HttpContext);
             return Ok(new { message = "Hesabın ve verilerin silindi." });
         }

@@ -22,9 +22,11 @@ namespace Karalevha.API.Controllers
         private readonly ObaAccess _access;
         private readonly ObaFileStorage _storage;
         private readonly NotificationService _notifications;
+        private readonly ChannelAccessGuard _guard;
 
-        public ObaChannelsController(AppDbContext context, ObaAccess access, ObaFileStorage storage, NotificationService notifications)
+        public ObaChannelsController(AppDbContext context, ObaAccess access, ObaFileStorage storage, NotificationService notifications, ChannelAccessGuard guard)
         {
+            _guard = guard;
             _context = context;
             _access = access;
             _storage = storage;
@@ -268,6 +270,8 @@ namespace Karalevha.API.Controllers
 
             NotifyAdded(channel.Oba, channel, added, userId);
             await _context.SaveChangesAsync();
+            // Gizlendi ya da kişi listesinden çıkarılan varsa açık bağlantıları gruptan çıkar
+            await _guard.RecheckChannelsAsync(new[] { channelId });
             return Ok(ToDto(channel, userId));
         }
 
@@ -289,6 +293,7 @@ namespace Karalevha.API.Controllers
             _context.ObaMessages.RemoveRange(messages);
             _context.ObaChannels.Remove(channel); // kişi kayıtları veritabanında kendiliğinden silinir
             await _context.SaveChangesAsync();
+            await _guard.RecheckChannelsAsync(new[] { channelId }); // kanal yok: dinleyen herkes çıkar
 
             foreach (var s in stored) await _storage.DeleteAsync(s);
             return Ok(new { success = true });

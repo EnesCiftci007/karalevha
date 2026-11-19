@@ -12,6 +12,8 @@ public sealed class TestClient
     private readonly HttpClient _http;
     public string Username { get; }
     public int Id { get; }
+    /// <summary>Oturum çerezinin değeri (SignalR test bağlantısı için; tarayıcıda JavaScript bunu göremez)</summary>
+    public string? SessionToken { get; private set; }
 
     private TestClient(HttpClient http, string username, int id)
     {
@@ -44,7 +46,12 @@ public sealed class TestClient
         var body = JsonNode.Parse(await login.Content.ReadAsStringAsync())!;
         if (!login.IsSuccessStatusCode) throw new InvalidOperationException($"Giriş olmadı: {body}");
         // Oturum, yanıtın koyduğu HttpOnly çerezde; istemci onu kendisi taşır
-        return new TestClient(http, username, body["user"]!["id"]!.GetValue<int>());
+        var cookie = login.Headers.TryGetValues("Set-Cookie", out var cookies)
+            ? cookies.FirstOrDefault(c => c.StartsWith("kl_oturum=")) : null;
+        return new TestClient(http, username, body["user"]!["id"]!.GetValue<int>())
+        {
+            SessionToken = cookie?.Split(';')[0]["kl_oturum=".Length..],
+        };
     }
 
     /// <summary>Kulüp yöneticisi: ApiFactory.AdminName hesabı, rolü veritabanından verilir</summary>

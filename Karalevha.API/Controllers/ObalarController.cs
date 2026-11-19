@@ -16,9 +16,11 @@ namespace Karalevha.API.Controllers
     {
         private readonly AppDbContext _context;
         private readonly ObaFileStorage _storage;
+        private readonly ChannelAccessGuard _guard;
 
-        public ObalarController(AppDbContext context, ObaFileStorage storage)
+        public ObalarController(AppDbContext context, ObaFileStorage storage, ChannelAccessGuard guard)
         {
+            _guard = guard;
             _context = context;
             _storage = storage;
         }
@@ -257,6 +259,8 @@ namespace Karalevha.API.Controllers
                 await _context.ObaChannelMembers.Where(m => m.UserId == userId && m.Channel!.ObaId == id).ExecuteDeleteAsync();
                 await _context.Obalar.Where(o => o.Id == id && o.MemberCount > 1)
                     .ExecuteUpdateAsync(s => s.SetProperty(o => o.MemberCount, o => o.MemberCount - 1));
+                // Ayrılanın açık bağlantısı gizli oba/kanal mesajlarını almaya devam etmesin
+                await _guard.RecheckObaAsync(id);
             }
             return Ok(new { success = true });
         }
@@ -315,6 +319,7 @@ namespace Karalevha.API.Controllers
 
             var storedFiles = new List<string>();
             var channels = await _context.ObaChannels.Where(c => c.ObaId == id).ToListAsync();
+            var channelIds = channels.Select(c => c.Id).ToList();
             foreach(var channel in channels) {
                 var messages = await _context.ObaMessages.Where(m => m.ChannelId == channel.Id).ToListAsync();
                 storedFiles.AddRange(messages.Where(m => m.FileStoredName != null).Select(m => m.FileStoredName!));
@@ -327,6 +332,7 @@ namespace Karalevha.API.Controllers
 
             // Kayıtlar silindikten sonra paylaşılan dosyaları da diskten temizle
             foreach (var stored in storedFiles) await _storage.DeleteAsync(stored);
+            await _guard.RecheckChannelsAsync(channelIds); // oba yok: kanallarını dinleyen herkes çıkar
 
             return Ok(new { success = true });
         }
