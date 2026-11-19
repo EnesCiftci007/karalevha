@@ -73,7 +73,7 @@ export default function Projeler() {
     const q = query.trim().toLocaleLowerCase('tr');
     const list = (projects ?? []).filter(
       (p) =>
-        (!mine || p.owner === user?.username) && (!dal || categoryOf(p.category).id === dal) && (!q ||
+        (!mine || p.owner === user?.username || (!!user && !!p.memberIds?.includes(user.id))) && (!dal || categoryOf(p.category).id === dal) && (!q ||
         p.title.toLocaleLowerCase('tr').includes(q) ||
         (p.description ?? '').toLocaleLowerCase('tr').includes(q) ||
         p.owner.toLocaleLowerCase('tr').includes(q))

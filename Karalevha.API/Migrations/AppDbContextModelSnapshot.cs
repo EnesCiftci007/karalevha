@@ -168,6 +168,57 @@ namespace Karalevha.API.Migrations
                     b.ToTable("EventAttendees");
                 });
 
+            modelBuilder.Entity("Karalevha.API.Models.FileVersion", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("FileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("FilePath")
+                        .IsRequired()
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
+                    b.Property<int?>("PrintModelId")
+                        .HasColumnType("integer");
+
+                    b.Property<int?>("ProjectFileId")
+                        .HasColumnType("integer");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("bigint");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PrintModelId");
+
+                    b.HasIndex("ProjectFileId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("FileVersions");
+                });
+
             modelBuilder.Entity("Karalevha.API.Models.Like", b =>
                 {
                     b.Property<int>("Id")
@@ -642,6 +693,13 @@ namespace Karalevha.API.Migrations
                     b.Property<int>("UserId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("VersionNote")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ProjectId");
@@ -742,6 +800,13 @@ namespace Karalevha.API.Migrations
                     b.Property<int>("UserId")
                         .HasColumnType("integer");
 
+                    b.Property<int>("Version")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("VersionNote")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ProjectId");
@@ -749,6 +814,33 @@ namespace Karalevha.API.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("ProjectFiles");
+                });
+
+            modelBuilder.Entity("Karalevha.API.Models.ProjectMember", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("ProjectId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("ProjectId", "UserId")
+                        .IsUnique();
+
+                    b.ToTable("ProjectMembers");
                 });
 
             modelBuilder.Entity("Karalevha.API.Models.Report", b =>
@@ -991,6 +1083,30 @@ namespace Karalevha.API.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("Karalevha.API.Models.FileVersion", b =>
+                {
+                    b.HasOne("Karalevha.API.Models.PrintModel", "PrintModel")
+                        .WithMany()
+                        .HasForeignKey("PrintModelId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Karalevha.API.Models.ProjectFile", "ProjectFile")
+                        .WithMany()
+                        .HasForeignKey("ProjectFileId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.HasOne("Karalevha.API.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("PrintModel");
+
+                    b.Navigation("ProjectFile");
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("Karalevha.API.Models.Like", b =>
                 {
                     b.HasOne("Karalevha.API.Models.User", "User")
@@ -1177,6 +1293,25 @@ namespace Karalevha.API.Migrations
                 });
 
             modelBuilder.Entity("Karalevha.API.Models.ProjectFile", b =>
+                {
+                    b.HasOne("Karalevha.API.Models.Project", "Project")
+                        .WithMany()
+                        .HasForeignKey("ProjectId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Karalevha.API.Models.User", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Project");
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("Karalevha.API.Models.ProjectMember", b =>
                 {
                     b.HasOne("Karalevha.API.Models.Project", "Project")
                         .WithMany()

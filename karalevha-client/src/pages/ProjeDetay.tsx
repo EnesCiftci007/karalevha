@@ -2,7 +2,8 @@ import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
 
 const CodeViewer = lazy(() => import('../components/kod/CodeViewer'));
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Box, ChevronLeft, CircuitBoard, Code2, Flag, FolderGit2, PenTool, Pencil, Trash2 } from 'lucide-react';
+import { Box, ChevronLeft, CircuitBoard, Code2, Flag, FolderGit2, PenTool, Pencil, Trash2, Users } from 'lucide-react';
+import TeamModal from '../components/proje/TeamModal';
 import { useReport } from '../components/ui/Report';
 import ProjectModels from '../components/proje/ProjectModels';
 import ProjectFiles from '../components/proje/ProjectFiles';
@@ -30,6 +31,9 @@ export default function ProjeDetay() {
   const { user } = useAuth();
   const report = useReport();
   const [editing, setEditing] = useState(false);
+  const [showTeam, setShowTeam] = useState(false);
+  const [memberIds, setMemberIds] = useState<number[]>([]);
+  const onTeamChange = useCallback((ids: number[]) => setMemberIds(ids), []);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const social = useSocialCounts('project', id ? [Number(id)] : []);
   const [project, setProject] = useState<Project | null>(null);
@@ -52,6 +56,7 @@ export default function ProjeDetay() {
       .then((data) => {
         if (cancelled) return;
         setProject(data);
+        setMemberIds(data.memberIds ?? []);
         setModelCount(data.modelCount ?? null);
         setDrawingCount(data.drawingCount ?? null);
         setElectronicsCount(data.electronicsCount ?? null);
@@ -83,6 +88,8 @@ export default function ProjeDetay() {
   }
 
   const isOwner = user?.username === project.owner;
+  // Ekip (sahip ve üyeler) model, dosya ve sürüm ekler; düzenlemek ve silmek sahibindedir
+  const isTeam = isOwner || (!!user && memberIds.includes(user.id));
   const hasCode = !!project.repoUrl;
   const models = modelCount ?? project.modelCount ?? 0;
   const drawings = drawingCount ?? project.drawingCount ?? 0;
@@ -96,7 +103,7 @@ export default function ProjeDetay() {
     { id: 'cizimler', label: 'Çizimler', icon: PenTool, count: drawings, has: drawings > 0 },
     { id: 'elektronik', label: 'Elektronik', icon: CircuitBoard, count: electronics, has: electronics > 0 },
   ];
-  const shown = all.filter((t) => isOwner || t.has);
+  const shown = all.filter((t) => isTeam || t.has);
   const tabs = shown.length > 0 ? shown : all.filter((t) => t.id === 'modeller');
 
   // Bölüm: adresteki ?bolum, yoksa içi dolu ilk bölüm (kod > modeller > çizimler > elektronik)
@@ -127,7 +134,10 @@ export default function ProjeDetay() {
               <><span className="text-tebesir-soluk" title={project.description}>{project.description.trim()}</span> · </>
             )}
             <Link to={`/projeler?dal=${categoryOf(project.category).id}`} className="hover:text-tebesir">{categoryOf(project.category).label}</Link> ·{' '}
-            <UserLink username={project.owner} className="text-tebesir-soluk" /> ·{' '}
+            <UserLink username={project.owner} className="text-tebesir-soluk" />
+            {memberIds.length > 0 && (
+              <>{' '}<button type="button" onClick={() => setShowTeam(true)} className="text-tebesir-soluk hover:text-tebesir">ve {memberIds.length} kişi</button></>
+            )}{' '}·{' '}
             <time dateTime={project.createdAt} title={fullDate(project.createdAt)}>{timeAgo(project.createdAt)}</time>
           </p>
         </div>
@@ -153,8 +163,9 @@ export default function ProjeDetay() {
             label="Proje seçenekleri"
             actions={[
               ...(isOwner ? [{ label: 'Düzenle', icon: Pencil, onSelect: () => setEditing(true) }] : []),
+              { label: isOwner ? 'Ekibi yönet' : 'Ekip', icon: Users, onSelect: () => setShowTeam(true) },
               ...(isOwner || user?.isAdmin ? [{ label: 'Sil', icon: Trash2, danger: true, onSelect: () => setConfirmDelete(true) }] : []),
-              ...(user && !isOwner ? [{ label: 'Bildir', icon: Flag, onSelect: () => report('project', project.id, project.title) }] : []),
+              ...(user && !isTeam ? [{ label: 'Bildir', icon: Flag, onSelect: () => report('project', project.id, project.title) }] : []),
             ]}
           />
         </div>
@@ -167,19 +178,19 @@ export default function ProjeDetay() {
         </Suspense>
       )}
       {/* Depoya ek ya da depo yerine yüklenen kod dosyaları (Arduino çizimi, Python betiği…) */}
-      <div className={section === 'kod' && (!hasCode || codeFiles > 0 || isOwner) ? (hasCode ? 'mt-8' : 'mt-4') : 'hidden'}>
+      <div className={section === 'kod' && (!hasCode || codeFiles > 0 || isTeam) ? (hasCode ? 'mt-8' : 'mt-4') : 'hidden'}>
         {hasCode && <h2 className="etiket mb-3">Yüklenen kod dosyaları</h2>}
-        <ProjectFiles projectId={project.id} kind="kod" canEdit={isOwner} canDelete={isOwner || !!user?.isAdmin} onCountChange={onCodeFileCount} />
+        <ProjectFiles projectId={project.id} kind="kod" canEdit={isTeam} canDelete={isOwner || !!user?.isAdmin} onCountChange={onCodeFileCount} />
       </div>
       {/* Sayılar sekme açılmadan da güncel kalsın diye iki bölüm de bağlı; görünmeyen gizlenir */}
       <div className={section === 'modeller' ? 'mt-4' : 'hidden'}>
-        <ProjectModels projectId={project.id} canEdit={isOwner} onCountChange={onModelCount} />
+        <ProjectModels projectId={project.id} canEdit={isTeam} isProjectOwner={isOwner} onCountChange={onModelCount} />
       </div>
       <div className={section === 'cizimler' ? 'mt-4' : 'hidden'}>
-        <ProjectFiles projectId={project.id} kind="cizim" canEdit={isOwner} canDelete={isOwner || !!user?.isAdmin} onCountChange={onDrawingCount} />
+        <ProjectFiles projectId={project.id} kind="cizim" canEdit={isTeam} canDelete={isOwner || !!user?.isAdmin} onCountChange={onDrawingCount} />
       </div>
       <div className={section === 'elektronik' ? 'mt-4' : 'hidden'}>
-        <ProjectFiles projectId={project.id} kind="elektronik" canEdit={isOwner} canDelete={isOwner || !!user?.isAdmin} onCountChange={onElectronicsCount} />
+        <ProjectFiles projectId={project.id} kind="elektronik" canEdit={isTeam} canDelete={isOwner || !!user?.isAdmin} onCountChange={onElectronicsCount} />
       </div>
 
       <section className="mt-12 max-w-okuma">
@@ -189,6 +200,9 @@ export default function ProjeDetay() {
         <Comments type="project" id={project.id} onCountChange={(n) => social.update(project.id, { comments: n })} />
       </section>
 
+      {showTeam && project.userId && (
+        <TeamModal projectId={project.id} ownerId={project.userId} onClose={() => setShowTeam(false)} onChange={onTeamChange} />
+      )}
       {editing && <ProjectFormModal project={project} onSaved={setProject} onClose={() => setEditing(false)} />}
       {confirmDelete && (
         <ConfirmDialog

@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { Box, Download, Flag, Heart, MessageSquare, Pencil, Plus, Trash2, UploadCloud, X } from 'lucide-react';
+import { Box, Download, Flag, Heart, History, MessageSquare, Pencil, Plus, RefreshCw, Trash2, UploadCloud, X } from 'lucide-react';
 import { useReport } from '../ui/Report';
 import { api, API_URL } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { PrintModel } from '../../types';
 import { fullDate, timeAgo } from '../../utils/time';
 import ModelThumbnail from './ModelThumbnail';
+import { VersionBadge, VersionHistoryModal, VersionUploadModal } from './Versions';
 import { GAME_FORMATS, MODEL_ACCEPT, formatOf, type ModelFormat } from '../../utils/loadModel';
 import { formatSize } from '../../services/files';
 import EmptyState from '../ui/EmptyState';
@@ -34,6 +35,8 @@ interface ProjectModelsProps {
   projectId: number;
   /** Proje sahibi model ekler, düzenler */
   canEdit: boolean;
+  /** Projenin sahibi: herkesin yüklediği modeli düzenler ve siler */
+  isProjectOwner?: boolean;
   /** Bölüm başlığındaki sayı güncellensin */
   onCountChange?: (count: number) => void;
 }
@@ -42,7 +45,7 @@ interface ProjectModelsProps {
  * Projenin "Modeller" bölümü: 3B modellerin ızgarası, tam ekran inceleme (beğeni, "Bunu bastım", yorum),
  * proje sahibi için yükleme, düzenleme ve silme. Bağlantıdaki ?model=ID modeli doğrudan açar.
  */
-export default function ProjectModels({ projectId, canEdit, onCountChange }: ProjectModelsProps) {
+export default function ProjectModels({ projectId, canEdit, isProjectOwner = false, onCountChange }: ProjectModelsProps) {
   const { user } = useAuth();
   const [models, setModels] = useState<PrintModel[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
@@ -52,6 +55,8 @@ export default function ProjectModels({ projectId, canEdit, onCountChange }: Pro
   const [showUpload, setShowUpload] = useState(false);
   const [editing, setEditing] = useState<PrintModel | null>(null);
   const [deleting, setDeleting] = useState<PrintModel | null>(null);
+  const [versioning, setVersioning] = useState<PrintModel | null>(null);
+  const [history, setHistory] = useState<PrintModel | null>(null);
   const report = useReport();
 
   // Yükleme formu
@@ -189,7 +194,10 @@ export default function ProjectModels({ projectId, canEdit, onCountChange }: Pro
                   <h3 className="text-sm font-semibold text-tebesir line-clamp-2">
                     <button type="button" onClick={() => setPreview(model)} className="text-left hover:underline underline-offset-4">{model.title}</button>
                   </h3>
-                  <span className="veri shrink-0 pt-0.5">{model.format.toUpperCase()}</span>
+                  <span className="flex items-center gap-2 shrink-0 pt-0.5">
+                    <VersionBadge version={model.version} onClick={() => setHistory(model)} />
+                    <span className="veri">{model.format.toUpperCase()}</span>
+                  </span>
                 </div>
                 <p className="mt-1 text-xs text-tebesir-silik truncate">
                   {CATEGORY_LABEL[model.category]} · <time dateTime={model.uploadedAt} title={fullDate(model.uploadedAt)}>{timeAgo(model.uploadedAt)}</time>
@@ -260,8 +268,10 @@ export default function ProjectModels({ projectId, canEdit, onCountChange }: Pro
                   <ItemMenu
                     label="Model seçenekleri"
                     actions={[
-                      ...(user?.id === preview.userId ? [{ label: 'Düzenle', icon: Pencil, onSelect: () => setEditing(preview) }] : []),
-                      ...(user?.id === preview.userId || user?.isAdmin ? [{ label: 'Sil', icon: Trash2, danger: true, onSelect: () => setDeleting(preview) }] : []),
+                      ...(user?.id === preview.userId || isProjectOwner ? [{ label: 'Düzenle', icon: Pencil, onSelect: () => setEditing(preview) }] : []),
+                      ...(canEdit ? [{ label: 'Yeni sürüm yükle', icon: RefreshCw, onSelect: () => setVersioning(preview) }] : []),
+                      ...((preview.version ?? 1) > 1 ? [{ label: 'Sürüm geçmişi', icon: History, onSelect: () => setHistory(preview) }] : []),
+                      ...(user?.id === preview.userId || isProjectOwner || user?.isAdmin ? [{ label: 'Sil', icon: Trash2, danger: true, onSelect: () => setDeleting(preview) }] : []),
                       ...(user && user.id !== preview.userId ? [{ label: 'Bildir', icon: Flag, onSelect: () => report('model', preview.id, preview.title) }] : []),
                     ]}
                   />
@@ -389,6 +399,31 @@ export default function ProjectModels({ projectId, canEdit, onCountChange }: Pro
         >
           <span className="font-medium text-tebesir">{deleting.title}</span> ve dosyası kalıcı olarak silinecek.
         </ConfirmDialog>
+      )}
+      {versioning && (
+        <VersionUploadModal
+          title={versioning.title}
+          endpoint={`/api/printmodels/${versioning.id}/surum`}
+          accept={MODEL_ACCEPT}
+          maxBytes={MAX_UPLOAD}
+          onClose={() => setVersioning(null)}
+          onDone={() => {
+            const id = versioning.id;
+            // Yeni sürüm yüklenince açık önizleme de yeni dosyayı göstersin
+            api<PrintModel[]>(`/api/printmodels?projectId=${projectId}&take=100`).then((data) => {
+              setModels(data);
+              setPreview((p) => (p && p.id === id ? data.find((m) => m.id === id) ?? p : p));
+            }).catch(() => {});
+          }}
+        />
+      )}
+      {history && (
+        <VersionHistoryModal
+          title={history.title}
+          endpoint={`/api/printmodels/${history.id}/surumler`}
+          current={{ version: history.version ?? 1, note: history.versionNote, fileName: downloadName(history), fileUrl: history.fileUrl, uploader: history.uploader, uploadedAt: history.uploadedAt }}
+          onClose={() => setHistory(null)}
+        />
       )}
     </div>
   );

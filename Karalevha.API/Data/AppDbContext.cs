@@ -30,6 +30,8 @@ namespace Karalevha.API.Data
         public DbSet<Comment> Comments { get; set; }
         public DbSet<Notification> Notifications { get; set; }
         public DbSet<Report> Reports { get; set; }
+        public DbSet<ProjectMember> ProjectMembers { get; set; }
+        public DbSet<FileVersion> FileVersions { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -71,6 +73,12 @@ namespace Karalevha.API.Data
             // Şikâyetler içeriğe ve duruma göre aranır (yönetim sayfası, "zaten bildirdin")
             modelBuilder.Entity<Report>().HasIndex(r => new { r.TargetType, r.TargetId, r.Status });
             modelBuilder.Entity<Report>().HasIndex(r => r.Status);
+            // Proje ekibi: bir kişi bir projede bir kez
+            modelBuilder.Entity<ProjectMember>().HasIndex(m => new { m.ProjectId, m.UserId }).IsUnique();
+            // Sürümler dosyası ya da modeliyle birlikte silinir; yükleyen silinirse sürüm kalır
+            modelBuilder.Entity<FileVersion>().HasOne(v => v.ProjectFile).WithMany().HasForeignKey(v => v.ProjectFileId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<FileVersion>().HasOne(v => v.PrintModel).WithMany().HasForeignKey(v => v.PrintModelId).OnDelete(DeleteBehavior.Cascade);
+            modelBuilder.Entity<FileVersion>().HasOne(v => v.User).WithMany().HasForeignKey(v => v.UserId).OnDelete(DeleteBehavior.SetNull);
             modelBuilder.Entity<Oba>().HasIndex(o => o.InviteCode).IsUnique();
 
             // Bir kişi bir obaya bir kez üye olur; bir kişiyi bir kez takip eder

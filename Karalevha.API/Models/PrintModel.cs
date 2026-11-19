@@ -29,6 +29,13 @@ namespace Karalevha.API.Models
 
         public DateTime UploadedAt { get; set; } = DateTime.UtcNow;
 
+        /// <summary>Kaçıncı sürüm (yeni sürüm yüklendikçe artar; eskileri FileVersion'da)</summary>
+        public int Version { get; set; } = 1;
+
+        /// <summary>Bu sürümün değişiklik notu, ör. "motor yuvası 2 mm genişletildi"</summary>
+        [MaxLength(300)]
+        public string? VersionNote { get; set; }
+
         /// <summary>Modelin ait olduğu proje. 3B modeller artık projelerin "Modeller" bölümünde durur.</summary>
         public int? ProjectId { get; set; }
         [ForeignKey("ProjectId")]

@@ -23,9 +23,11 @@ namespace Karalevha.API.Controllers
         private readonly AppDbContext _context;
         private readonly CurrentUser _current;
         private readonly IFileStore _store;
+        private readonly NotificationService _notifications;
 
-        public ProjectsController(AppDbContext context, CurrentUser current, IFileStore store)
+        public ProjectsController(AppDbContext context, CurrentUser current, IFileStore store, NotificationService notifications)
         {
+            _notifications = notifications;
             _context = context;
             _current = current;
             _store = store;
@@ -49,6 +51,8 @@ namespace Karalevha.API.Controllers
                 Owner = p.User!.Username,
                 ModelCount = _context.PrintModels.Count(m => m.ProjectId == p.Id),
                 FileCount = _context.ProjectFiles.Count(f => f.ProjectId == p.Id),
+                // Ekip: sahip dışındaki üyeler (istemci düzenleme yetkisi ve "benimkiler" için)
+                MemberIds = _context.ProjectMembers.Where(m => m.ProjectId == p.Id).Select(m => m.UserId).ToList(),
                 DrawingCount = _context.ProjectFiles.Count(f => f.ProjectId == p.Id && f.Kind == ProjectFileTypes.Drawing),
                 ElectronicsCount = _context.ProjectFiles.Count(f => f.ProjectId == p.Id && f.Kind == ProjectFileTypes.Electronics),
                 CodeFileCount = _context.ProjectFiles.Count(f => f.ProjectId == p.Id && f.Kind == ProjectFileTypes.Code),
@@ -145,6 +149,10 @@ namespace Karalevha.API.Controllers
             var modelIds = models.Select(m => m.Id).ToList();
             var makePhotos = await _context.PrintMakes.Where(m => modelIds.Contains(m.PrintModelId)).Select(m => m.PhotoPath).ToListAsync();
             var files = await _context.ProjectFiles.Where(f => f.ProjectId == id).Select(f => f.FilePath).ToListAsync();
+            // Eski sürümlerin dosyaları da (kayıtları cascade ile gider)
+            var versions = await _context.FileVersions
+                .Where(v => (v.ProjectFileId != null && v.ProjectFile!.ProjectId == id) || (v.PrintModelId != null && v.PrintModel!.ProjectId == id))
+                .Select(v => v.FilePath).ToListAsync();
 
             _context.Projects.Remove(project);
             _context.Likes.RemoveRange(_context.Likes.Where(l =>
@@ -153,7 +161,7 @@ namespace Karalevha.API.Controllers
                 (c.TargetType == "project" && c.TargetId == id) || (c.TargetType == "model" && modelIds.Contains(c.TargetId))));
             await _context.SaveChangesAsync();
 
-            await UploadFiles.DeleteAsync(_store, models.Select(m => m.FilePath).Concat(makePhotos).Concat(files));
+            await UploadFiles.DeleteAsync(_store, models.Select(m => m.FilePath).Concat(makePhotos).Concat(files).Concat(versions));
             return Ok(new { success = true });
         }
 
@@ -167,6 +175,8 @@ namespace Karalevha.API.Controllers
             FileUrl = f.FilePath,
             f.ContentType,
             f.Kind,
+            f.Version,
+            f.VersionNote,
             f.Size,
             f.UploadedAt,
             f.UserId,
@@ -208,7 +218,7 @@ namespace Karalevha.API.Controllers
             var project = await _context.Projects.FindAsync(id);
             if (project == null) return NotFound(new { message = "Proje bulunamadı" });
             var userId = CurrentUser.IdOf(User)!.Value;
-            if (userId != project.UserId) return StatusCode(403, new { message = "Bu projeye yalnızca sahibi dosya ekleyebilir." });
+            if (!await ProjectTeam.IsTeamAsync(_context, id, userId)) return StatusCode(403, new { message = "Bu projeye yalnızca ekibi dosya ekleyebilir." });
 
             if (file == null || file.Length == 0) return BadRequest(new { message = "Bir dosya seç." });
             if (file.Length > MaxFileSize) return BadRequest(new { message = "Dosya en fazla 25 MB olabilir." });
@@ -260,18 +270,147 @@ namespace Karalevha.API.Controllers
             return Ok(FileDto(entry, CurrentUser.NameOf(User)));
         }
 
-        // DELETE: api/projects/{id}/dosyalar/{fileId}   (proje sahibi ya da yönetici)
+        // DELETE: api/projects/{id}/dosyalar/{fileId}   (yükleyen, proje sahibi ya da yönetici)
         [HttpDelete("{id:int}/dosyalar/{fileId:int}")]
         [Authorize]
         public async Task<IActionResult> DeleteFile(int id, int fileId)
         {
             var entry = await _context.ProjectFiles.Include(f => f.Project).FirstOrDefaultAsync(f => f.Id == fileId && f.ProjectId == id);
             if (entry?.Project == null) return NotFound(new { message = "Dosya bulunamadı." });
-            if (!_current.CanManage(User, entry.Project.UserId)) return StatusCode(403, new { message = "Bu dosyayı silemezsin." });
+            if (CurrentUser.IdOf(User) != entry.UserId && !_current.CanManage(User, entry.Project.UserId))
+                return StatusCode(403, new { message = "Bu dosyayı silemezsin." });
 
+            var versions = await _context.FileVersions.Where(v => v.ProjectFileId == fileId).Select(v => v.FilePath).ToListAsync();
             _context.ProjectFiles.Remove(entry);
             await _context.SaveChangesAsync();
-            await UploadFiles.DeleteAsync(_store, new[] { entry.FilePath });
+            await UploadFiles.DeleteAsync(_store, versions.Append(entry.FilePath));
+            return Ok(new { success = true });
+        }
+
+        // ------------------------------------------------------------ Sürümler
+
+        // POST: api/projects/{id}/dosyalar/{fileId}/surum   (multipart: file, note?) — ekip
+        // O anki dosya sürüm geçmişine taşınır, yenisi onun yerini alır (bağlantılar ve yorumlar aynı kalır).
+        [HttpPost("{id:int}/dosyalar/{fileId:int}/surum")]
+        [Authorize]
+        [EnableRateLimiting("PartUploadLimiter")]
+        [RequestSizeLimit(MaxFileSize + 1_000_000)]
+        [RequestFormLimits(MultipartBodyLengthLimit = MaxFileSize + 1_000_000)]
+        public async Task<IActionResult> UploadFileVersion(int id, int fileId, IFormFile file, [FromForm] string? note)
+        {
+            var entry = await _context.ProjectFiles.FirstOrDefaultAsync(f => f.Id == fileId && f.ProjectId == id);
+            if (entry == null) return NotFound(new { message = "Dosya bulunamadı." });
+            var userId = CurrentUser.IdOf(User)!.Value;
+            if (!await ProjectTeam.IsTeamAsync(_context, id, userId)) return StatusCode(403, new { message = "Yeni sürümü yalnızca proje ekibi yükleyebilir." });
+            if (file == null || file.Length == 0) return BadRequest(new { message = "Bir dosya seç." });
+            if (file.Length > MaxFileSize) return BadRequest(new { message = "Dosya en fazla 25 MB olabilir." });
+            var extension = Path.GetExtension(file.FileName);
+            if (!ProjectFileTypes.Allows(entry.Kind, extension)) return BadRequest(new { message = "Bu dosya türü bu bölüme eklenemez." });
+            note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+            if (note?.Length > 300) return BadRequest(new { message = "Not en fazla 300 karakter olabilir." });
+
+            var stored = $"{Guid.NewGuid()}{extension.ToLowerInvariant()}";
+            await using (var upload = file.OpenReadStream())
+                await _store.SaveAsync($"uploads/projeler/{stored}", upload, ProjectFileTypes.ContentTypeOf(extension));
+
+            _context.FileVersions.Add(new FileVersion
+            {
+                ProjectFileId = entry.Id, Version = entry.Version, FilePath = entry.FilePath, FileName = entry.FileName,
+                Size = entry.Size, UserId = entry.UserId, Note = entry.VersionNote, CreatedAt = entry.UploadedAt,
+            });
+            var original = Path.GetFileName(file.FileName);
+            entry.FilePath = $"/uploads/projeler/{stored}";
+            entry.FileName = original.Length > 255 ? original[^255..] : original;
+            entry.ContentType = ProjectFileTypes.ContentTypeOf(extension);
+            entry.Size = file.Length;
+            entry.UserId = userId;
+            entry.UploadedAt = DateTime.UtcNow;
+            entry.Version += 1;
+            entry.VersionNote = note;
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch
+            {
+                await _store.DeleteAsync($"uploads/projeler/{stored}");
+                throw;
+            }
+            return Ok(FileDto(entry, CurrentUser.NameOf(User)));
+        }
+
+        // GET: api/projects/{id}/dosyalar/{fileId}/surumler   — eski sürümler, yeniden eskiye
+        [HttpGet("{id:int}/dosyalar/{fileId:int}/surumler")]
+        public async Task<IActionResult> GetFileVersions(int id, int fileId)
+        {
+            if (!await _context.ProjectFiles.AnyAsync(f => f.Id == fileId && f.ProjectId == id)) return NotFound(new { message = "Dosya bulunamadı." });
+            return Ok(await VersionList(_context.FileVersions.Where(v => v.ProjectFileId == fileId)));
+        }
+
+        internal static Task<List<VersionDto>> VersionList(IQueryable<FileVersion> query) =>
+            query.AsNoTracking().OrderByDescending(v => v.Version)
+                .Select(v => new VersionDto(v.Id, v.Version, v.FileName, v.FilePath, v.Size, v.Note, v.CreatedAt, v.User != null ? v.User.Username : null))
+                .ToListAsync();
+
+        public record VersionDto(int Id, int Version, string FileName, string FileUrl, long Size, string? Note, DateTime CreatedAt, string? Uploader);
+
+        // ------------------------------------------------------------ Ekip
+
+        // GET: api/projects/{id}/ekip   — sahip ve üyeler
+        [HttpGet("{id:int}/ekip")]
+        public async Task<IActionResult> GetTeam(int id)
+        {
+            var owner = await _context.Projects.AsNoTracking().Where(p => p.Id == id)
+                .Select(p => new { UserId = p.UserId, p.User!.Username }).FirstOrDefaultAsync();
+            if (owner == null) return NotFound(new { message = "Proje bulunamadı" });
+            var members = await _context.ProjectMembers.AsNoTracking().Where(m => m.ProjectId == id).OrderBy(m => m.AddedAt)
+                .Select(m => new { m.UserId, m.User!.Username, m.AddedAt }).ToListAsync();
+            return Ok(new[] { new { owner.UserId, owner.Username, Role = "sahip", AddedAt = (DateTime?)null } }
+                .Concat(members.Select(m => new { m.UserId, m.Username, Role = "uye", AddedAt = (DateTime?)m.AddedAt })));
+        }
+
+        public class AddMemberDto
+        {
+            public string Username { get; set; } = string.Empty;
+        }
+
+        private const int MaxMembers = 20;
+
+        // POST: api/projects/{id}/ekip   — sahip üye ekler
+        [HttpPost("{id:int}/ekip")]
+        [Authorize]
+        public async Task<IActionResult> AddMember(int id, AddMemberDto dto)
+        {
+            var project = await _context.Projects.FindAsync(id);
+            if (project == null) return NotFound(new { message = "Proje bulunamadı" });
+            if (CurrentUser.IdOf(User) != project.UserId) return StatusCode(403, new { message = "Ekibi yalnızca proje sahibi yönetir." });
+
+            var name = (dto.Username ?? string.Empty).Trim().TrimStart('@').ToLowerInvariant();
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.NormalizedUsername == name);
+            if (user == null) return NotFound(new { message = "Bu kullanıcı adıyla kimse yok." });
+            if (user.Id == project.UserId) return BadRequest(new { message = "Proje sahibi zaten ekipte." });
+            if (await _context.ProjectMembers.AnyAsync(m => m.ProjectId == id && m.UserId == user.Id)) return BadRequest(new { message = $"{user.Username} zaten ekipte." });
+            if (await _context.ProjectMembers.CountAsync(m => m.ProjectId == id) >= MaxMembers) return BadRequest(new { message = $"Bir projede en fazla {MaxMembers} üye olabilir." });
+
+            _context.ProjectMembers.Add(new ProjectMember { ProjectId = id, UserId = user.Id });
+            _notifications.Add(user.Id, project.UserId, $"{CurrentUser.NameOf(User)} seni \"{project.Title}\" projesinin ekibine ekledi.", $"/projeler/{id}");
+            await _context.SaveChangesAsync();
+            return Ok(new { user.Id, user.Username });
+        }
+
+        // DELETE: api/projects/{id}/ekip/{userId}   — sahip çıkarır ya da üye kendisi ayrılır
+        [HttpDelete("{id:int}/ekip/{userId:int}")]
+        [Authorize]
+        public async Task<IActionResult> RemoveMember(int id, int userId)
+        {
+            var project = await _context.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id);
+            if (project == null) return NotFound(new { message = "Proje bulunamadı" });
+            var me = CurrentUser.IdOf(User);
+            if (me != project.UserId && me != userId) return StatusCode(403, new { message = "Bu kişiyi ekipten çıkaramazsın." });
+            var member = await _context.ProjectMembers.FirstOrDefaultAsync(m => m.ProjectId == id && m.UserId == userId);
+            if (member == null) return NotFound(new { message = "Bu kişi ekipte değil." });
+            _context.ProjectMembers.Remove(member);
+            await _context.SaveChangesAsync();
             return Ok(new { success = true });
         }
     }

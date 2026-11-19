@@ -52,6 +52,9 @@ export interface PrintModel {
   /** Modelin ait olduğu proje */
   projectId?: number | null;
   projectTitle?: string | null;
+  /** Kaçıncı sürüm ve değişiklik notu (eskileri sürüm geçmişinde) */
+  version?: number;
+  versionNote?: string | null;
 }
 
 export interface Project {
@@ -65,6 +68,8 @@ export interface Project {
   createdAt: string;
   owner: string;
   userId?: number;
+  /** Ekip üyeleri (sahip hariç) */
+  memberIds?: number[];
   modelCount?: number;
   fileCount?: number;
   drawingCount?: number;
@@ -85,6 +90,8 @@ export interface ProjectFile {
   contentType: string;
   /** Bölüm: cizim (mekanik/CAD), elektronik, kod */
   kind?: 'cizim' | 'elektronik' | 'kod';
+  version?: number;
+  versionNote?: string | null;
   size: number;
   uploadedAt: string;
   userId: number;

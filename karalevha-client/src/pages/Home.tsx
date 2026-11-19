@@ -76,7 +76,7 @@ export default function Home() {
   const mineOnly = <T,>(items: T[] | null | undefined, isMine: (t: T) => boolean) =>
     items ? (user ? items.filter(isMine).length : items.length) : undefined;
   const stats = [
-    { label: user ? 'projen' : 'proje', value: mineOnly(lists?.projects, (p) => p.owner === user?.username), to: '/projeler' },
+    { label: user ? 'projen' : 'proje', value: mineOnly(lists?.projects, (p) => p.owner === user?.username || (!!user && !!p.memberIds?.includes(user.id))), to: '/projeler' },
     { label: user ? 'modelin' : 'model', value: mineOnly(lists?.models, (m) => m.userId === user?.id), to: '/projeler' },
     { label: user ? 'oban' : 'oba', value: mineOnly(lists?.obalar, (o) => !!o.isMember || o.owner === user?.username), to: '/e-oba' },
     { label: user ? 'paylaşımın' : 'paylaşım', value: mineOnly(lists?.posts, (p) => p.user?.id === user?.id), to: '/akis' },

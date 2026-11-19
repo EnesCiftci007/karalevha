@@ -1,13 +1,14 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { Box, CircuitBoard, Factory, Code2, Download, File, FileCode2, FileText, Image as ImageIcon, Loader2, PenTool, Plus, Trash2, UploadCloud, X } from 'lucide-react';
+import { Box, CircuitBoard, Factory, RefreshCw, Code2, Download, File, FileCode2, FileText, Image as ImageIcon, Loader2, PenTool, Plus, Trash2, UploadCloud, X } from 'lucide-react';
 import { api, API_URL } from '../../services/api';
 import { ProjectFile } from '../../types';
 import { formatSize } from '../../services/files';
 import { fullDate, timeAgo } from '../../utils/time';
 import { languageOf } from '../kod/fileTypes';
 import { cadFormatOf } from '../../utils/loadModel';
+import { VersionBadge, VersionHistoryModal, VersionUploadModal } from './Versions';
 import { KIND_FORMATS, acceptOf, fits, loadFileTypes, type FileKind, type FileTypes } from '../../utils/projectFileTypes';
 import EmptyState from '../ui/EmptyState';
 import Field from '../ui/Field';
@@ -130,6 +131,10 @@ export default function ProjectFiles({ projectId, kind, canEdit, canDelete, onCo
   const [viewing3d, setViewing3d] = useState<ProjectFile | null>(null);
   const [viewingCircuit, setViewingCircuit] = useState<ProjectFile | null>(null);
   const { user } = useAuth();
+  const [versioning, setVersioning] = useState<ProjectFile | null>(null);
+  const [history, setHistory] = useState<ProjectFile | null>(null);
+  // Herkesinkini sahip/yönetici siler; ekip üyesi kendi yüklediğini
+  const canDeleteFile = (f: ProjectFile) => canDelete || (!!user && f.userId === user.id);
   const [deleting, setDeleting] = useState<ProjectFile | null>(null);
   const [showUpload, setShowUpload] = useState(false);
   const [file, setFile] = useState<File | null>(null);
@@ -270,11 +275,17 @@ export default function ProjectFiles({ projectId, kind, canEdit, canDelete, onCo
                       <Box className="w-3.5 h-3.5" aria-hidden="true" />3B
                     </button>
                   )}
+                  <VersionBadge version={f.version} onClick={() => setHistory(f)} />
                   <span className="veri shrink-0 hidden sm:inline">{extOf(f)}</span>
                   <a href={urlOf(f)} download={f.fileName} className="p-1.5 rounded text-tebesir-silik hover:text-tebesir hover:bg-levha-yuzey" aria-label={`${f.title} dosyasını indir`} title="İndir">
                     <Download className="w-4 h-4" />
                   </a>
-                  {canDelete && (
+                  {canEdit && (
+                    <button type="button" onClick={() => setVersioning(f)} className="p-1.5 rounded text-tebesir-silik hover:text-tebesir hover:bg-levha-yuzey" aria-label={`${f.title} için yeni sürüm yükle`} title="Yeni sürüm yükle">
+                      <RefreshCw className="w-4 h-4" />
+                    </button>
+                  )}
+                  {canDeleteFile(f) && (
                     <button type="button" onClick={() => setDeleting(f)} className="p-1.5 rounded text-tebesir-silik hover:text-hata hover:bg-levha-yuzey" aria-label={`${f.title} dosyasını sil`} title="Sil">
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -299,7 +310,7 @@ export default function ProjectFiles({ projectId, kind, canEdit, canDelete, onCo
           <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-levha-cizgi">
             <span className="text-xs text-tebesir-silik truncate">{viewing.fileName} · {formatSize(viewing.size)} · {viewing.uploader}</span>
             <div className="flex items-center gap-2 shrink-0">
-              {canDelete && (
+              {canDeleteFile(viewing) && (
                 <button type="button" onClick={() => { setDeleting(viewing); setViewing(null); }} className="btn-sade text-hata">
                   <Trash2 className="w-4 h-4" aria-hidden="true" />Sil
                 </button>
@@ -308,6 +319,25 @@ export default function ProjectFiles({ projectId, kind, canEdit, canDelete, onCo
             </div>
           </div>
         </Modal>
+      )}
+
+      {versioning && (
+        <VersionUploadModal
+          title={versioning.title}
+          endpoint={`/api/projects/${projectId}/dosyalar/${versioning.id}/surum`}
+          accept={types ? acceptOf(types, kind) : undefined}
+          maxBytes={MAX_UPLOAD}
+          onClose={() => setVersioning(null)}
+          onDone={load}
+        />
+      )}
+      {history && (
+        <VersionHistoryModal
+          title={history.title}
+          endpoint={`/api/projects/${projectId}/dosyalar/${history.id}/surumler`}
+          current={{ version: history.version ?? 1, note: history.versionNote, fileName: history.fileName, fileUrl: history.fileUrl, uploader: history.uploader, uploadedAt: history.uploadedAt }}
+          onClose={() => setHistory(null)}
+        />
       )}
 
       {/* KiCad şema/PCB ya da Gerber kart görünümü */}

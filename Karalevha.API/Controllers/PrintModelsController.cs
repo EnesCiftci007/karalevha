@@ -49,7 +49,9 @@ namespace Karalevha.API.Controllers
         {
             var model = await _context.PrintModels.FindAsync(id);
             if (model == null) return NotFound(new { message = "Model bulunamadı." });
-            if (CurrentUser.IdOf(User) != model.UserId) return StatusCode(403, new { message = "Bu modeli düzenleyemezsin." });
+            // Yükleyen ya da projenin sahibi düzenler
+            if (CurrentUser.IdOf(User) != model.UserId && !(model.ProjectId is { } pid && await ProjectTeam.IsOwnerAsync(_context, pid, CurrentUser.IdOf(User))))
+                return StatusCode(403, new { message = "Bu modeli düzenleyemezsin." });
 
             var title = dto.Title?.Trim() ?? string.Empty;
             if (title.Length == 0 || title.Length > 100) return BadRequest(new { message = "Model adı 1-100 karakter olmalı." });
@@ -71,10 +73,13 @@ namespace Karalevha.API.Controllers
         {
             var model = await _context.PrintModels.FindAsync(id);
             if (model == null) return NotFound(new { message = "Model bulunamadı." });
-            if (!_current.CanManage(User, model.UserId)) return StatusCode(403, new { message = "Bu modeli silemezsin." });
+            // Yükleyen, projenin sahibi ya da yönetici siler
+            if (!_current.CanManage(User, model.UserId) && !(model.ProjectId is { } pid && await ProjectTeam.IsOwnerAsync(_context, pid, CurrentUser.IdOf(User))))
+                return StatusCode(403, new { message = "Bu modeli silemezsin." });
 
-            // "Bunu bastım" fotoğrafları kayıtla birlikte (cascade) silinir; dosyalarını önceden topla
+            // "Bunu bastım" fotoğrafları ve eski sürümler kayıtla birlikte (cascade) silinir; dosyalarını önceden topla
             var makePhotos = await _context.PrintMakes.Where(m => m.PrintModelId == id).Select(m => m.PhotoPath).ToListAsync();
+            var versions = await _context.FileVersions.Where(v => v.PrintModelId == id).Select(v => v.FilePath).ToListAsync();
 
             _context.PrintModels.Remove(model);
             _context.Likes.RemoveRange(_context.Likes.Where(l => l.TargetType == "model" && l.TargetId == id));
@@ -82,9 +87,75 @@ namespace Karalevha.API.Controllers
             await _context.SaveChangesAsync();
 
             // Kayıt silindikten sonra dosyaları da kaldır (yalnızca /uploads altındaki geçerli yollar)
-            await UploadFiles.DeleteAsync(_store, makePhotos.Append(model.FilePath));
+            await UploadFiles.DeleteAsync(_store, makePhotos.Concat(versions).Append(model.FilePath));
 
             return Ok(new { success = true });
+        }
+
+        // POST: api/printmodels/{id}/surum   (multipart: file, note?) — proje ekibi
+        // O anki model sürüm geçmişine taşınır; beğeniler, yorumlar ve baskı fotoğrafları yeni sürümde kalır.
+        [HttpPost("{id:int}/surum")]
+        [Authorize]
+        [EnableRateLimiting("PartUploadLimiter")]
+        [RequestSizeLimit(MaxFileSize + 1_000_000)]
+        [RequestFormLimits(MultipartBodyLengthLimit = MaxFileSize + 1_000_000)]
+        public async Task<IActionResult> UploadVersion(int id, IFormFile file, [FromForm] string? note)
+        {
+            var model = await _context.PrintModels.FindAsync(id);
+            if (model == null) return NotFound(new { message = "Model bulunamadı." });
+            var userId = CurrentUser.IdOf(User)!.Value;
+            var allowed = model.ProjectId is { } pid ? await ProjectTeam.IsTeamAsync(_context, pid, userId) : model.UserId == userId;
+            if (!allowed) return StatusCode(403, new { message = "Yeni sürümü yalnızca proje ekibi yükleyebilir." });
+            if (file == null || file.Length == 0) return BadRequest(new { message = "Lütfen bir model dosyası seçin." });
+            if (file.Length > MaxFileSize) return BadRequest(new { message = "Dosya en fazla 50 MB olabilir." });
+            var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+            if (!AllowedExtensions.Contains(extension)) return BadRequest(new { message = "Desteklenen biçimler: STL, 3MF, OBJ, FBX, GLB." });
+            note = string.IsNullOrWhiteSpace(note) ? null : note.Trim();
+            if (note?.Length > 300) return BadRequest(new { message = "Not en fazla 300 karakter olabilir." });
+
+            var safeFileName = $"{Guid.NewGuid()}{extension}";
+            await using (var upload = file.OpenReadStream())
+                await _store.SaveAsync($"uploads/models/{safeFileName}", upload, "application/octet-stream");
+
+            var size = await _store.OpenAsync(FileKeys.FromPublicPath(model.FilePath) ?? "uploads/x", HttpContext.RequestAborted) is { } old
+                ? await DisposeAndLength(old) : 0;
+            _context.FileVersions.Add(new FileVersion
+            {
+                PrintModelId = model.Id, Version = model.Version, FilePath = model.FilePath,
+                // Modelin diskteki adı GUID; sürüm listesinde modelin adı ve uzantısı görünsün
+                FileName = $"{model.Title}{Path.GetExtension(model.FileName).ToLowerInvariant()}",
+                Size = size, UserId = model.UserId, Note = model.VersionNote, CreatedAt = model.UploadedAt,
+            });
+            model.FilePath = $"/uploads/models/{safeFileName}";
+            model.FileName = safeFileName;
+            model.UserId = userId;
+            model.UploadedAt = DateTime.UtcNow;
+            model.Version += 1;
+            model.VersionNote = note;
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch
+            {
+                await _store.DeleteAsync($"uploads/models/{safeFileName}");
+                throw;
+            }
+            return Ok(new { model.Id, model.Version, FileUrl = model.FilePath, Format = extension.TrimStart('.') });
+        }
+
+        private static async Task<long> DisposeAndLength(StoredFile file)
+        {
+            await file.Content.DisposeAsync();
+            return file.Length ?? 0;
+        }
+
+        // GET: api/printmodels/{id}/surumler   — eski sürümler, yeniden eskiye
+        [HttpGet("{id:int}/surumler")]
+        public async Task<IActionResult> GetVersions(int id)
+        {
+            if (!await _context.PrintModels.AnyAsync(m => m.Id == id)) return NotFound(new { message = "Model bulunamadı." });
+            return Ok(await ProjectsController.VersionList(_context.FileVersions.Where(v => v.PrintModelId == id)));
         }
 
         // GET: api/printmodels/{id}   — tek model (eski /baski-istasyonu?model= bağlantılarını projeye yönlendirmek için)
@@ -127,6 +198,8 @@ namespace Karalevha.API.Controllers
                     Uploader = m.User!.Username,
                     m.ProjectId,
                     ProjectTitle = m.Project != null ? m.Project.Title : null,
+                    m.Version,
+                    m.VersionNote,
                 })
                 .ToListAsync();
 
@@ -144,6 +217,8 @@ namespace Karalevha.API.Controllers
                 m.Uploader,
                 m.ProjectId,
                 m.ProjectTitle,
+                m.Version,
+                m.VersionNote,
             }));
         }
 
@@ -159,7 +234,7 @@ namespace Karalevha.API.Controllers
             if (projectId == null) return BadRequest(new { message = "Model bir projeye eklenmeli." });
             var project = await _context.Projects.AsNoTracking().FirstOrDefaultAsync(p => p.Id == projectId);
             if (project == null) return NotFound(new { message = "Proje bulunamadı." });
-            if (CurrentUser.IdOf(User) != project.UserId) return StatusCode(403, new { message = "Bu projeye yalnızca sahibi model ekleyebilir." });
+            if (!await ProjectTeam.IsTeamAsync(_context, project.Id, CurrentUser.IdOf(User))) return StatusCode(403, new { message = "Bu projeye yalnızca ekibi model ekleyebilir." });
 
             if (file == null || file.Length == 0)
                 return BadRequest(new { message = "Lütfen bir model dosyası seçin." });
