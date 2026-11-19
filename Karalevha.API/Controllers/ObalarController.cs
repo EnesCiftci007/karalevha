@@ -17,12 +17,14 @@ namespace Karalevha.API.Controllers
         private readonly AppDbContext _context;
         private readonly ObaFileStorage _storage;
         private readonly ChannelAccessGuard _guard;
+        private readonly CurrentUser _current;
 
-        public ObalarController(AppDbContext context, ObaFileStorage storage, ChannelAccessGuard guard)
+        public ObalarController(AppDbContext context, ObaFileStorage storage, ChannelAccessGuard guard, CurrentUser current)
         {
             _guard = guard;
             _context = context;
             _storage = storage;
+            _current = current;
         }
 
         // GET: api/obalar
@@ -199,7 +201,8 @@ namespace Karalevha.API.Controllers
             var userId = int.Parse(userIdClaim.Value);
 
             var oba = await _context.Obalar.FindAsync(id);
-            if (oba == null) return NotFound("Oba bulunamadı");
+            if (oba == null) return NotFound(new { message = "Oba bulunamadı." });
+            if (oba.OwnerId == userId) return Ok(new { success = true });
 
             var existingMember = await _context.ObaMembers.FirstOrDefaultAsync(m => m.ObaId == id && m.UserId == userId);
             if (existingMember != null) return Ok(new { success = true });
@@ -303,13 +306,13 @@ namespace Karalevha.API.Controllers
                 .Include(o => o.Owner) // Include it if we need it
                 .FirstOrDefaultAsync(o => o.Id == id);
 
-            if (oba == null) return NotFound("Oba bulunamadı");
+            if (oba == null) return NotFound(new { message = "Oba bulunamadı." });
 
             // OwnerCheck based on OwnerId, fallback to ObaMembers for admins later
-            if (oba.OwnerId != userId) {
+            if (oba.OwnerId != userId && !_current.IsAdmin(User)) {
                 var member = await _context.ObaMembers.FirstOrDefaultAsync(m => m.ObaId == id && m.UserId == userId);
                 if (member == null || member.Role != "admin") {
-                    return StatusCode(403, "Bu obayı silme yetkiniz yok.");
+                    return StatusCode(403, new { message = "Bu obayı silme yetkiniz yok." });
                 }
             }
 

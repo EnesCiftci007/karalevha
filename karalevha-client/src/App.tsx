@@ -3,6 +3,7 @@ import { ReportProvider } from './components/ui/Report';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import MainLayout from './components/layout/MainLayout';
+import ErrorBoundary from './components/ui/ErrorBoundary';
 import Home from './pages/Home';
 import { NotFound } from './pages/NotFound';
 
@@ -27,47 +28,59 @@ const EtkinlikDetay = lazy(() => import('./pages/EtkinlikDetay'));
 const Profil = lazy(() => import('./pages/Profil'));
 const Ara = lazy(() => import('./pages/Ara'));
 
-const page = (el: React.ReactNode) => <Suspense fallback={null}>{el}</Suspense>;
+const PageFallback = (
+  <div className="min-h-[40vh] flex items-center justify-center text-sm text-tebesir-silik" role="status">
+    Yükleniyor…
+  </div>
+);
+
+const page = (el: React.ReactNode) => (
+  <ErrorBoundary>
+    <Suspense fallback={PageFallback}>{el}</Suspense>
+  </ErrorBoundary>
+);
 
 function App() {
   return (
-    <AuthProvider>
-      <ReportProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route path="/auth" element={page(<Auth />)} />
-          <Route path="/verify-email" element={page(<VerifyEmail />)} />
+    <ErrorBoundary>
+      <AuthProvider>
+        <ReportProvider>
+          <BrowserRouter>
+            <Routes>
+              <Route path="/auth" element={page(<Auth />)} />
+              <Route path="/verify-email" element={page(<VerifyEmail />)} />
 
-          {/* Tüm sayfalar giriş yapmadan gezilebilir; paylaşım ve yazma işlemleri giriş ister. */}
-          <Route path="/" element={<MainLayout />}>
-            <Route index element={<Home />} />
-            <Route path="akis" element={page(<Akis />)} />
-            <Route path="e-oba" element={page(<EOba />)} />
-            <Route path="e-oba/:id" element={page(<ObaDetay />)} />
-            <Route path="e-oba/davet/:kod" element={page(<ObaDavet />)} />
-            <Route path="market" element={page(<Market />)} />
-            {/* Modeller projelere taşındı: eski bağlantılar modelin projesine gider */}
-            <Route path="model/:id" element={page(<ModelYonlendir />)} />
-            <Route path="baski-istasyonu" element={page(<ModelYonlendir />)} />
-            <Route path="projeler" element={page(<Projeler />)} />
-            <Route path="projeler/:id" element={page(<ProjeDetay />)} />
-            <Route path="atolye" element={page(<Atolye />)} />
-            <Route path="etkinlikler" element={page(<Etkinlikler />)} />
-            <Route path="etkinlikler/:id" element={page(<EtkinlikDetay />)} />
-            <Route path="u/:username" element={page(<Profil />)} />
-            <Route path="ara" element={page(<Ara />)} />
-            <Route path="yonetim" element={page(<Yonetim />)} />
-            <Route path="gizlilik" element={page(<Gizlilik />)} />
-            <Route path="kurulum" element={page(<Kurulum />)} />
-            <Route path="tasarim" element={page(<Tasarim />)} />
-          </Route>
+              {/* Tüm sayfalar giriş yapmadan gezilebilir; paylaşım ve yazma işlemleri giriş ister. */}
+              <Route path="/" element={<MainLayout />}>
+                <Route index element={<Home />} />
+                <Route path="akis" element={page(<Akis />)} />
+                <Route path="e-oba" element={page(<EOba />)} />
+                <Route path="e-oba/:id" element={page(<ObaDetay />)} />
+                <Route path="e-oba/davet/:kod" element={page(<ObaDavet />)} />
+                <Route path="market" element={page(<Market />)} />
+                {/* Modeller projelere taşındı: eski bağlantılar modelin projesine gider */}
+                <Route path="model/:id" element={page(<ModelYonlendir />)} />
+                <Route path="baski-istasyonu" element={page(<ModelYonlendir />)} />
+                <Route path="projeler" element={page(<Projeler />)} />
+                <Route path="projeler/:id" element={page(<ProjeDetay />)} />
+                <Route path="atolye" element={page(<Atolye />)} />
+                <Route path="etkinlikler" element={page(<Etkinlikler />)} />
+                <Route path="etkinlikler/:id" element={page(<EtkinlikDetay />)} />
+                <Route path="u/:username" element={page(<Profil />)} />
+                <Route path="ara" element={page(<Ara />)} />
+                <Route path="yonetim" element={page(<Yonetim />)} />
+                <Route path="gizlilik" element={page(<Gizlilik />)} />
+                <Route path="kurulum" element={page(<Kurulum />)} />
+                {import.meta.env.DEV && <Route path="tasarim" element={page(<Tasarim />)} />}
+              </Route>
 
-          {/* 404 Hata Sayfası */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
-      </ReportProvider>
-    </AuthProvider>
+              {/* 404 Hata Sayfası */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </ReportProvider>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

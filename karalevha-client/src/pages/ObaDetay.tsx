@@ -102,36 +102,52 @@ export default function ObaDetay() {
 
   // Connect and subscribe to messages
   useEffect(() => {
-    if (connection) {
-      connection.start()
-        .then(() => {
-          console.log('Connected to SignalR');
-          setIsConnected(true);
+    if (!connection) return;
+    let active = true;
 
-          connection.on('MessageDeleted', (messageId: number) => {
-            setMessages(prev => prev.filter(m => m.id !== messageId));
-          });
-
-          connection.on('ReceiveMessage', (message: Message) => {
-            // Yalnızca açık kanalın mesajı (kanal değiştirirken eski kanaldan gelen yayın karışmasın)
-            if (message.channelId !== undefined && message.channelId !== activeChannelRef.current?.id) return;
-            setMessages(prev => {
-              if (prev.some(m => m.id === message.id)) return prev;
-              return [...prev, message];
-            });
-          });
-        })
-        .catch(e => console.log('Connection failed: ', e));
-
-      // Sunucu bu kanala erişimin kalktığını söyledi: ekrandaki gizli içerik silinir, kanal listesi yenilenir
-      connection.on('KanalErisimiKalkti', (channelId: number) => {
-        if (activeChannelRef.current?.id !== channelId) return;
-        setMessages([]);
-        setActiveChannel(null);
-        setAccessNotice('Bu kanala erişimin kalktı.');
-        fetchChannelsRef.current();
+    const onMessageDeleted = (messageId: number) => {
+      setMessages(prev => prev.filter(m => m.id !== messageId));
+    };
+    const onReceiveMessage = (message: Message) => {
+      // Yalnızca açık kanalın mesajı (kanal değiştirirken eski kanaldan gelen yayın karışmasın)
+      if (message.channelId !== undefined && message.channelId !== activeChannelRef.current?.id) return;
+      setMessages(prev => {
+        if (prev.some(m => m.id === message.id)) return prev;
+        return [...prev, message];
       });
-    }
+    };
+    const onAccessRevoked = (channelId: number) => {
+      if (activeChannelRef.current?.id !== channelId) return;
+      setMessages([]);
+      setActiveChannel(null);
+      setAccessNotice('Bu kanala erişimin kalktı.');
+      fetchChannelsRef.current();
+    };
+
+    connection.on('MessageDeleted', onMessageDeleted);
+    connection.on('ReceiveMessage', onReceiveMessage);
+    connection.on('KanalErisimiKalkti', onAccessRevoked);
+    connection.onreconnecting(() => { if (active) setIsConnected(false); });
+    connection.onreconnected(() => {
+      if (!active) return;
+      setIsConnected(true);
+      const ch = activeChannelRef.current;
+      if (ch) {
+        connection.invoke('JoinChannel', ch.id.toString()).catch(() => {});
+      }
+    });
+    connection.onclose(() => { if (active) setIsConnected(false); });
+
+    connection.start()
+      .then(() => { if (active) setIsConnected(true); })
+      .catch(() => { if (active) setIsConnected(false); });
+
+    return () => {
+      active = false;
+      connection.off('MessageDeleted', onMessageDeleted);
+      connection.off('ReceiveMessage', onReceiveMessage);
+      connection.off('KanalErisimiKalkti', onAccessRevoked);
+    };
   }, [connection]);
 
   // Join channel group when activeChannel changes OR when connection establishes
@@ -139,8 +155,7 @@ export default function ObaDetay() {
     if (activeChannel) setAccessNotice('');
     if (isConnected && connection && activeChannel) {
       connection.invoke('JoinChannel', activeChannel.id.toString())
-        .then(() => console.log("Joined channel: ", activeChannel.id))
-        .catch(err => console.error("JoinChannel error: ", err));
+        .catch(() => {});
 
       return () => {
         // Bağlantı zaten kapandıysa (çıkış, sayfadan ayrılma) ayrılma çağrısı gereksiz
@@ -266,6 +281,7 @@ export default function ObaDetay() {
       }
 
       if (res.ok) {
+        setNeedsPassword(false);
         const data: Channel[] = await res.json();
         setChannels(data);
         // Seçilecek kanal: az önce kaydedilen, bağlantıdaki ?kanal=, bu obada en son açık olan ya da şimdiki; yoksa ilk kanal
@@ -282,13 +298,20 @@ export default function ObaDetay() {
   };
   fetchChannelsRef.current = () => { fetchChannels(); };
 
+  const messagesReqRef = useRef(0);
   const fetchMessages = async () => {
     if (!activeChannel) return;
+    const reqId = ++messagesReqRef.current;
+    const chId = activeChannel.id;
     try {
-      const data = await api<Message[]>(`/api/obamessages/${activeChannel.id}`);
-      setMessages(data);
+      const data = await api<Message[]>(`/api/obamessages/${chId}`);
+      if (messagesReqRef.current === reqId && activeChannelRef.current?.id === chId) {
+        setMessages(data);
+      }
     } catch (error) {
-      console.error('Mesajlar yüklenemedi:', error);
+      if (messagesReqRef.current === reqId) {
+        setAccessNotice(error instanceof Error ? error.message : 'Mesajlar yüklenemedi.');
+      }
     }
   };
 
@@ -638,7 +661,7 @@ export default function ObaDetay() {
                 const canDelete = !!user && msg.id > 0 && (user.id === msg.user.id || user.username === obaOwner || !!user.isAdmin);
                 return (
                   <li key={msg.id} className={`group relative flex gap-3 px-2 py-1 rounded-md hover:bg-levha-yuzey/50 ${first && idx > 0 ? 'mt-3' : ''}`}>
-                    <span className="absolute right-2 top-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+                    <span className="absolute right-2 top-1 flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
                       {!!user && msg.id > 0 && user.id !== msg.user.id && (
                         <button
                           type="button"

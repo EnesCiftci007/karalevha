@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Flag, Heart, MessageSquare, Reply, Trash2 } from 'lucide-react';
 import { useReport } from '../ui/Report';
 import { api } from '../../services/api';
@@ -9,6 +9,7 @@ import { fullDate, timeAgo } from '../../utils/time';
 import { PostText } from '../akis/PostItem';
 import Avatar from '../ui/Avatar';
 import UserLink from '../ui/UserLink';
+import ConfirmDialog from '../ui/ConfirmDialog';
 
 export type TargetType = 'post' | 'project' | 'model';
 
@@ -217,15 +218,24 @@ function CommentForm({
  */
 export function Comments({ type, id, ownerId, onCountChange }: { type: TargetType; id: number; ownerId?: number; onCountChange?: (count: number) => void }) {
   const { user } = useAuth();
+  const location = useLocation();
   const [comments, setComments] = useState<CommentItem[] | null>(null);
   // Hangi ana yorumun altında yanıt kutusu açık, kutu hangi metinle başlıyor
   const [replying, setReplying] = useState<{ parentId: number; initial: string } | null>(null);
+  const [toDelete, setToDelete] = useState<CommentItem | null>(null);
   const report = useReport();
   const [error, setError] = useState('');
 
   useEffect(() => {
     let cancelled = false;
-    api<CommentItem[]>(`/api/yorum/${type}/${id}`).then((d) => !cancelled && setComments(d)).catch(() => !cancelled && setComments([]));
+    setError('');
+    api<CommentItem[]>(`/api/yorum/${type}/${id}`)
+      .then((d) => !cancelled && setComments(d))
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Yorumlar yüklenemedi.');
+        setComments([]);
+      });
     return () => {
       cancelled = true;
     };
@@ -245,13 +255,9 @@ export function Comments({ type, id, ownerId, onCountChange }: { type: TargetTyp
   };
 
   const remove = async (commentId: number) => {
-    try {
-      const res = await api<{ removed?: number[] }>(`/api/yorum/${commentId}`, { method: 'DELETE' });
-      const gone = new Set(res.removed ?? [commentId]);
-      set((comments ?? []).filter((c) => !gone.has(c.id)));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Yorum silinemedi.');
-    }
+    const res = await api<{ removed?: number[] }>(`/api/yorum/${commentId}`, { method: 'DELETE' });
+    const gone = new Set(res.removed ?? [commentId]);
+    set((comments ?? []).filter((c) => !gone.has(c.id)));
   };
 
   const roots = (comments ?? []).filter((c) => !c.parentId);
@@ -266,14 +272,14 @@ export function Comments({ type, id, ownerId, onCountChange }: { type: TargetTyp
           <div className="flex items-baseline gap-2">
             <UserLink username={c.username} className="text-sm font-semibold text-tebesir" />
             <time dateTime={c.createdAt} title={fullDate(c.createdAt)} className="text-xs text-tebesir-silik">{timeAgo(c.createdAt)}</time>
-            <span className="ml-auto flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+            <span className="ml-auto flex items-center gap-0.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
               {user && user.id !== c.userId && (
                 <button type="button" onClick={() => report('comment', c.id, `${c.username} adlı kişinin yorumu`)} className="p-1 rounded text-tebesir-silik hover:text-tebesir" aria-label="Yorumu bildir" title="Bildir">
                   <Flag className="w-3.5 h-3.5" />
                 </button>
               )}
               {canDelete && (
-                <button type="button" onClick={() => remove(c.id)} className="p-1 rounded text-tebesir-silik hover:text-hata" aria-label={c.parentId ? 'Yanıtı sil' : 'Yorumu ve yanıtlarını sil'}>
+                <button type="button" onClick={() => setToDelete(c)} className="p-1 rounded text-tebesir-silik hover:text-hata" aria-label={c.parentId ? 'Yanıtı sil' : 'Yorumu ve yanıtlarını sil'}>
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
               )}
@@ -343,8 +349,20 @@ export function Comments({ type, id, ownerId, onCountChange }: { type: TargetTyp
         <CommentForm id={`yorum-${type}-${id}`} placeholder="Yorum yaz… (@ad ile birinden bahset, #etiket kullan)" submitLabel="Gönder" onSubmit={(content) => post(content)} />
       ) : (
         <p className="text-sm text-tebesir-silik">
-          Yorum yazmak için <Link to="/auth" className="text-tebesir-soluk underline underline-offset-4">giriş yap</Link>.
+          Yorum yazmak için <Link to="/auth" state={{ from: `${location.pathname}${location.search}` }} className="text-tebesir-soluk underline underline-offset-4">giriş yap</Link>.
         </p>
+      )}
+
+      {toDelete && (
+        <ConfirmDialog
+          title={toDelete.parentId ? 'Yanıtı sil?' : 'Yorumu sil?'}
+          confirmLabel="Sil"
+          danger
+          onConfirm={() => remove(toDelete.id)}
+          onClose={() => setToDelete(null)}
+        >
+          {toDelete.parentId ? 'Bu yanıt kalıcı olarak silinecek.' : 'Bu yorum ve varsa tüm yanıtları kalıcı olarak silinecek.'}
+        </ConfirmDialog>
       )}
     </div>
   );

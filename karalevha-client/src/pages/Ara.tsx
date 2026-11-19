@@ -67,6 +67,7 @@ export default function Ara() {
   const [params] = useSearchParams();
   const q = (params.get('q') ?? '').trim();
   const [results, setResults] = useState<Results | null>(null);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     if (q.length < 2) return setResults(null);
@@ -74,7 +75,11 @@ export default function Ara() {
     setResults(null);
     api<Results>(`/api/search?q=${encodeURIComponent(q)}`)
       .then((d) => !cancelled && setResults(d))
-      .catch(() => !cancelled && setResults({ projects: [], models: [], obalar: [], users: [], events: [], posts: [] }));
+      .catch((err) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : 'Arama yapılamadı.');
+        setResults({ projects: [], models: [], obalar: [], users: [], events: [], posts: [] });
+      });
     return () => {
       cancelled = true;
     };
@@ -86,7 +91,9 @@ export default function Ara() {
     <div className="max-w-3xl">
       <PageHeader title={q ? `"${q}" için sonuçlar` : 'Arama'} description={q.length < 2 ? 'Üst menüdeki kutuya en az iki harf yaz.' : undefined} />
 
-      {q.length < 2 ? null : results === null ? (
+      {error ? (
+        <p role="alert" className="text-sm text-hata">{error}</p>
+      ) : q.length < 2 ? null : results === null ? (
         <SkeletonRows rows={4} />
       ) : total === 0 ? (
         <EmptyState icon={Search} title="Sonuç bulunamadı" description="Başka bir kelime dene ya da yazımı kontrol et." />

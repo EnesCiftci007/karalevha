@@ -91,7 +91,16 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
     const onUnauthorized = () => forget();
     const onStorage = (e: StorageEvent) => {
-      if (e.key === 'user' && !e.newValue) setUser(null); // başka sekmede çıkış
+      if (e.key !== 'user') return;
+      if (!e.newValue) {
+        setUser(null); // başka sekmede çıkış
+      } else {
+        try {
+          setUser(JSON.parse(e.newValue) as User); // başka sekmede giriş veya güncelleme
+        } catch {
+          setUser(null);
+        }
+      }
     };
     window.addEventListener('auth:unauthorized', onUnauthorized);
     window.addEventListener('storage', onStorage);

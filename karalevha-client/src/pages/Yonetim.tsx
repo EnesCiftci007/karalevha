@@ -72,7 +72,7 @@ function GroupCard({ g, onAction }: { g: ReportGroup; onAction?: (a: Action) => 
           <p className="text-sm text-tebesir">
             {g.summary}
             {g.author && !isUser && (
-              <span className="text-tebesir-silik"> · <Link to={`/u/${g.author}`} className="hover:underline">{g.author}</Link></span>
+              <span className="text-tebesir-silik"> · <Link to={`/u/${encodeURIComponent(g.author)}`} className="hover:underline">{g.author}</Link></span>
             )}
           </p>
         ) : (
@@ -137,7 +137,13 @@ export default function Yonetim() {
 
   const load = useCallback(() => {
     setGroups(null);
-    api<ReportGroup[]>(`/api/sikayetler?durum=${tab}`).then(setGroups).catch(() => setGroups([]));
+    setError('');
+    api<ReportGroup[]>(`/api/sikayetler?durum=${tab}`)
+      .then(setGroups)
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : 'Şikâyetler yüklenemedi.');
+        setGroups([]);
+      });
   }, [tab]);
   useEffect(() => {
     if (user?.isAdmin) load();

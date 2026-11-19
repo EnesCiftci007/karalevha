@@ -27,6 +27,8 @@ export default function EtkinlikDetay() {
 
   useEffect(() => {
     let cancelled = false;
+    setEvent(null);
+    setFailed(false);
     api<ClubEvent>(`/api/etkinlik/${id}`)
       .then((data) => !cancelled && setEvent(data))
       .catch(() => !cancelled && setFailed(true));

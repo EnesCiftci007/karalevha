@@ -13,28 +13,35 @@ import ConfirmDialog from '../ui/ConfirmDialog';
 /** Takip et / Takiptesin. Takiptesin üstüne gelince "Bırak" olur. */
 export function FollowButton({ username, following, onChange }: { username: string; following: boolean; onChange: (following: boolean, followerCount: number) => void }) {
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
   const toggle = async () => {
     setBusy(true);
+    setError('');
     try {
       const d = await api<{ isFollowing: boolean; followerCount: number }>(`/api/users/${encodeURIComponent(username)}/follow`, { method: following ? 'DELETE' : 'POST' });
       onChange(d.isFollowing, d.followerCount);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Olmadı.');
+      setError(err instanceof Error ? err.message : 'İşlem yapılamadı.');
     } finally {
       setBusy(false);
     }
   };
-  return following ? (
-    <button type="button" onClick={toggle} disabled={busy} className="btn-ikincil group">
-      <UserCheck className="w-4 h-4" aria-hidden="true" />
-      <span className="group-hover:hidden">Takiptesin</span>
-      <span className="hidden group-hover:inline">Takibi bırak</span>
-    </button>
-  ) : (
-    <button type="button" onClick={toggle} disabled={busy} className="btn-ana">
-      <UserPlus className="w-4 h-4" aria-hidden="true" />
-      Takip et
-    </button>
+  return (
+    <div className="inline-flex flex-col items-start gap-1">
+      {following ? (
+        <button type="button" onClick={toggle} disabled={busy} className="btn-ikincil group">
+          <UserCheck className="w-4 h-4" aria-hidden="true" />
+          <span className="group-hover:hidden">Takiptesin</span>
+          <span className="hidden group-hover:inline">Takibi bırak</span>
+        </button>
+      ) : (
+        <button type="button" onClick={toggle} disabled={busy} className="btn-ana">
+          <UserPlus className="w-4 h-4" aria-hidden="true" />
+          Takip et
+        </button>
+      )}
+      {error && <p role="alert" className="text-xs text-hata">{error}</p>}
+    </div>
   );
 }
 
@@ -55,7 +62,7 @@ export function FollowListModal({ username, direction, onClose }: { username: st
         ) : (
           names.map((n) => (
             <li key={n}>
-              <Link to={`/u/${n}`} onClick={onClose} className="flex items-center gap-3 px-3 py-2 rounded hover:bg-levha transition-colors">
+              <Link to={`/u/${encodeURIComponent(n)}`} onClick={onClose} className="flex items-center gap-3 px-3 py-2 rounded hover:bg-levha transition-colors">
                 <Avatar name={n} size="sm" />
                 <span className="text-sm text-tebesir">{n}</span>
               </Link>

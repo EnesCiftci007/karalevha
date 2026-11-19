@@ -49,6 +49,12 @@ namespace Karalevha.API.Services
 
             var actorIds = saved.Where(n => n.ActorId != null).Select(n => n.ActorId!.Value).Distinct().ToList();
             var actors = _context.Users.Local.Where(u => actorIds.Contains(u.Id)).ToDictionary(u => u.Id, u => u.Username);
+            var missing = actorIds.Where(id => !actors.ContainsKey(id)).ToList();
+            if (missing.Count > 0)
+            {
+                foreach (var u in _context.Users.Where(u => missing.Contains(u.Id)).Select(u => new { u.Id, u.Username }).ToList())
+                    actors[u.Id] = u.Username;
+            }
 
             foreach (var n in saved)
             {

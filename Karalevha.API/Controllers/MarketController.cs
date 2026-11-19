@@ -143,17 +143,10 @@ namespace Karalevha.API.Controllers
             }
             else
             {
-                var opened = await _store.OpenAsync(source!.Key, HttpContext.RequestAborted);
-                if (opened == null) return NotFound(new { message = "Projedeki dosya depoda bulunamadı." });
-                await using (opened.Content)
-                {
-                    await using var counted = new MemoryStream();
-                    await opened.Content.CopyToAsync(counted, HttpContext.RequestAborted);
-                    if (counted.Length == 0 || counted.Length > MaxFileSize) return BadRequest(new { message = "Dosya boş olamaz ve en fazla 50 MB olabilir." });
-                    counted.Position = 0;
-                    await _store.SaveAsync($"market/{stored}", counted, "application/octet-stream");
-                    size = counted.Length;
-                }
+                var copied = await _store.CopyAsync(source!.Key, $"market/{stored}", "application/octet-stream", MaxFileSize, HttpContext.RequestAborted);
+                if (copied == null) return NotFound(new { message = "Projedeki dosya depoda bulunamadı." });
+                if (copied < 0) return BadRequest(new { message = "Dosya boş olamaz ve en fazla 50 MB olabilir." });
+                size = copied.Value;
             }
 
             var userId = CurrentUser.IdOf(User)!.Value;
@@ -173,14 +166,13 @@ namespace Karalevha.API.Controllers
             };
             _context.MarketOrders.Add(order);
 
-            // Yöneticilere haber ver (bildirim zili)
+            // Yöneticilere haber ver (bildirim zili) — siparişle aynı SaveChanges içinde atomik yazılır
             var me = CurrentUser.NameOf(User);
             var staff = await _context.Users.Where(u => u.Role == Roles.Admin || u.Role == Roles.Owner).Select(u => u.Id).ToListAsync();
+            foreach (var id in staff)
+                _notifications.Add(id, userId, $"{me} yeni bir {def.Name.ToLowerInvariant()} siparişi verdi.", "/market?sekme=gelen");
             try
             {
-                await _context.SaveChangesAsync();
-                foreach (var id in staff)
-                    _notifications.Add(id, userId, $"{me} yeni bir {def.Name.ToLowerInvariant()} siparişi verdi.", "/market?sekme=gelen");
                 await _context.SaveChangesAsync();
             }
             catch

@@ -36,9 +36,11 @@ namespace Karalevha.API.Filters
                 var bannedUntil = await _context.Users.Where(u => u.Id == userId).Select(u => u.BannedUntil).FirstOrDefaultAsync();
                 if (bannedUntil > DateTime.UtcNow)
                 {
+                    var tr = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
+                    var untilTr = TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(bannedUntil.Value, DateTimeKind.Utc), tr);
                     context.Result = new ObjectResult(new
                     {
-                        message = $"Hesabın {bannedUntil.Value.ToLocalTime():dd.MM.yyyy HH:mm} tarihine kadar askıya alındı.",
+                        message = $"Hesabın {untilTr:dd.MM.yyyy HH:mm} tarihine kadar askıya alındı.",
                         bannedUntil,
                     })
                     { StatusCode = StatusCodes.Status403Forbidden };

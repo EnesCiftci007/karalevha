@@ -121,7 +121,7 @@ export default function Home() {
       </section>
 
       {/* Rakamlar: tıklayınca ilgili sayfa (giriş yapılmışsa kişinin kendi içeriğine süzülmüş) */}
-      <nav aria-label={user ? 'Senin içeriğin' : 'Kulübün rakamları'} className="mt-8 grid grid-cols-4 divide-x divide-levha-cizgi border-y border-levha-cizgi">
+      <nav aria-label={user ? 'Senin içeriğin' : 'Kulübün rakamları'} className="mt-8 grid grid-cols-2 sm:grid-cols-4 sm:divide-x divide-levha-cizgi border-y border-levha-cizgi">
         {stats.map(({ label, value, to }) => (
           <Link key={label} to={to} className="group relative py-4 px-4 flex flex-col hover:bg-white/[0.03] focus-visible:bg-white/[0.03] transition-colors">
             {/* Üzerine gelince sağ üstte beliren ok */}

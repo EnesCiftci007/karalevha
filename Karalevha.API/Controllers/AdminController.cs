@@ -170,7 +170,7 @@ namespace Karalevha.API.Controllers
         {
             if (!_current.IsAdmin(User)) return StatusCode(403, new { message = "Bu işlem kulüp yöneticilerine açık." });
 
-            var minutes = dto.DurationMinutes > 0 ? dto.DurationMinutes : dto.DurationHours * 60;
+            long minutes = dto.DurationMinutes > 0 ? dto.DurationMinutes : (long)dto.DurationHours * 60;
             if (minutes < 1 || minutes > MaxBanMinutes) return BadRequest(new { message = "Süre 1 dakika ile 30 gün arasında olmalı." });
 
             var target = await _context.Users.FindAsync(dto.UserId);

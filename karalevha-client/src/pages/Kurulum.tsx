@@ -12,12 +12,17 @@ import PageHeader from '../components/ui/PageHeader';
 export default function Kurulum() {
   const { user, refreshUser } = useAuth();
   const [status, setStatus] = useState<{ hasOwner: boolean; setupEnabled: boolean } | null>(null);
+  const [loadError, setLoadError] = useState('');
   const [token, setToken] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
-    if (user) api<{ hasOwner: boolean; setupEnabled: boolean }>('/api/admin/owner-durumu').then(setStatus).catch(() => {});
+    if (!user) return;
+    setLoadError('');
+    api<{ hasOwner: boolean; setupEnabled: boolean }>('/api/admin/owner-durumu')
+      .then(setStatus)
+      .catch((err) => setLoadError(err instanceof Error ? err.message : 'Kurulum durumu alınamadı.'));
   }, [user]);
 
   const submit = async (e: React.FormEvent) => {
@@ -45,6 +50,8 @@ export default function Kurulum() {
         <p className="text-sm text-tebesir-soluk">
           Önce kurucu olacak hesapla <Link to="/auth" state={{ from: '/kurulum' }} className="underline underline-offset-4 hover:text-tebesir">giriş yap</Link>.
         </p>
+      ) : loadError ? (
+        <p role="alert" className="text-sm text-hata">{loadError}</p>
       ) : status === null ? null : status.hasOwner && !message?.ok ? (
         <p className="text-sm text-tebesir-soluk">Kulübün zaten bir kurucusu var; kurulum bir kez yapılır.</p>
       ) : !status.setupEnabled ? (

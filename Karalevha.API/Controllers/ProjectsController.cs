@@ -154,9 +154,12 @@ namespace Karalevha.API.Controllers
                 .Where(v => (v.ProjectFileId != null && v.ProjectFile!.ProjectId == id) || (v.PrintModelId != null && v.PrintModel!.ProjectId == id))
                 .Select(v => v.FilePath).ToListAsync();
 
+            var commentIds = await _context.Comments.Where(c =>
+                (c.TargetType == "project" && c.TargetId == id) || (c.TargetType == "model" && modelIds.Contains(c.TargetId)))
+                .Select(c => c.Id).ToListAsync();
             _context.Projects.Remove(project);
             _context.Likes.RemoveRange(_context.Likes.Where(l =>
-                (l.TargetType == "project" && l.TargetId == id) || (l.TargetType == "model" && modelIds.Contains(l.TargetId))));
+                (l.TargetType == "project" && l.TargetId == id) || (l.TargetType == "model" && modelIds.Contains(l.TargetId)) || (l.TargetType == "comment" && commentIds.Contains(l.TargetId))));
             _context.Comments.RemoveRange(_context.Comments.Where(c =>
                 (c.TargetType == "project" && c.TargetId == id) || (c.TargetType == "model" && modelIds.Contains(c.TargetId))));
             await _context.SaveChangesAsync();

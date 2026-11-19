@@ -142,8 +142,10 @@ namespace Karalevha.API.Controllers
             if (post == null) return NotFound(new { message = "Gönderi bulunamadı." });
             if (!_current.CanManage(User, post.UserId)) return StatusCode(403, new { message = "Bu gönderiyi silemezsin." });
 
+            var commentIds = await _context.Comments.Where(c => c.TargetType == "post" && c.TargetId == id).Select(c => c.Id).ToListAsync();
             _context.Posts.Remove(post);
-            _context.Likes.RemoveRange(_context.Likes.Where(l => l.TargetType == "post" && l.TargetId == id));
+            _context.Likes.RemoveRange(_context.Likes.Where(l =>
+                (l.TargetType == "post" && l.TargetId == id) || (l.TargetType == "comment" && commentIds.Contains(l.TargetId))));
             _context.Comments.RemoveRange(_context.Comments.Where(c => c.TargetType == "post" && c.TargetId == id));
             await _context.SaveChangesAsync();
             return Ok(new { success = true });

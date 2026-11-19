@@ -67,7 +67,7 @@ export default function EOba() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [user?.id]);
 
   const visible = useMemo(() => {
     const q = query.trim().toLocaleLowerCase('tr');
@@ -279,7 +279,7 @@ export default function EOba() {
         <Modal title="Oba kur" onClose={closeCreate}>
           <form onSubmit={handleCreate} className="p-5 space-y-4">
             <Field id="oba-adi" label="Oba adı">
-              <input id="oba-adi" type="text" required maxLength={50} autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Devre Analizi" className="girdi" />
+              <input id="oba-adi" type="text" required maxLength={100} autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Devre Analizi" className="girdi" />
             </Field>
             <Field id="oba-aciklama" label="Açıklama" note="isteğe bağlı">
               <textarea id="oba-aciklama" rows={3} maxLength={500} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Bu oba ne için?" className="girdi resize-y" />
