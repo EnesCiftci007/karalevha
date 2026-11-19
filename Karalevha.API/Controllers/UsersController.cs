@@ -163,6 +163,12 @@ namespace Karalevha.API.Controllers
             return Ok(new { user.Bio, user.Interests });
         }
 
+        /// <summary>Dalların görünen adları (istemcideki projectCategories ile aynı); "robotik" araması dalı bulsun</summary>
+        private static readonly Dictionary<string, string> ProjectCategoryLabels = new()
+        {
+            ["robotik"] = "Robotik", ["elektronik"] = "Elektronik", ["yazilim"] = "Yazılım", ["tasarim"] = "3B tasarım", ["diger"] = "Diğer",
+        };
+
         // GET: api/search?q=...
         [HttpGet("search")]
         public async Task<IActionResult> Search([FromQuery] string? q)
@@ -175,10 +181,50 @@ namespace Karalevha.API.Controllers
             var pattern = "%" + term.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
             const int take = 6;
 
-            var projects = await _context.Projects.AsNoTracking()
-                .Where(p => EF.Functions.ILike(p.Title, pattern, "\\") || EF.Functions.ILike(p.Description, pattern, "\\"))
-                .OrderByDescending(p => p.CreatedAt).Take(take)
-                .Select(p => new { p.Id, p.Title, Owner = p.User!.Username }).ToListAsync();
+            // Projeler yalnızca adıyla değil içeriğiyle de bulunur: dosya ve model adları (ör. "kicad", "step"),
+            // ekip, dal ve depo. Sonuçta neden bulunduğu yazılır; adı eşleşenler önce gelir.
+            // Dal yalnızca 3+ harfle aranır ("ro" bütün robotik projelerini getirmesin); Türkçe ve ASCII yazım ("yazilim")
+            var tr = System.Globalization.CultureInfo.GetCultureInfo("tr-TR").CompareInfo;
+            var categories = term.Length < 3 ? new List<string>() : ProjectCategoryLabels
+                .Where(c => tr.IndexOf(c.Value, term, System.Globalization.CompareOptions.IgnoreCase) >= 0 || c.Key.Contains(term, StringComparison.OrdinalIgnoreCase))
+                .Select(c => c.Key).ToList();
+            var projectHits = await _context.Projects.AsNoTracking()
+                .Where(p => EF.Functions.ILike(p.Title, pattern, "\\") || EF.Functions.ILike(p.Description, pattern, "\\")
+                    || EF.Functions.ILike(p.RepoUrl, pattern, "\\")
+                    || EF.Functions.ILike(p.User!.Username, pattern, "\\")
+                    || categories.Contains(p.Category)
+                    || _context.ProjectMembers.Any(m => m.ProjectId == p.Id && EF.Functions.ILike(m.User!.Username, pattern, "\\"))
+                    || _context.ProjectFiles.Any(f => f.ProjectId == p.Id && (EF.Functions.ILike(f.Title, pattern, "\\") || EF.Functions.ILike(f.FileName, pattern, "\\")))
+                    || _context.PrintModels.Any(m => m.ProjectId == p.Id && EF.Functions.ILike(m.Title, pattern, "\\")))
+                .OrderByDescending(p => EF.Functions.ILike(p.Title, pattern, "\\") ? 1 : 0)
+                .ThenByDescending(p => p.CreatedAt)
+                .Take(8)
+                .Select(p => new
+                {
+                    p.Id, p.Title, p.Category, p.RepoUrl,
+                    Owner = p.User!.Username,
+                    TextHit = EF.Functions.ILike(p.Title, pattern, "\\") || EF.Functions.ILike(p.Description, pattern, "\\"),
+                    File = _context.ProjectFiles.Where(f => f.ProjectId == p.Id && (EF.Functions.ILike(f.Title, pattern, "\\") || EF.Functions.ILike(f.FileName, pattern, "\\")))
+                        .Select(f => f.FileName).FirstOrDefault(),
+                    Model = _context.PrintModels.Where(m => m.ProjectId == p.Id && EF.Functions.ILike(m.Title, pattern, "\\")).Select(m => m.Title).FirstOrDefault(),
+                    Member = _context.ProjectMembers.Where(m => m.ProjectId == p.Id && EF.Functions.ILike(m.User!.Username, pattern, "\\")).Select(m => m.User!.Username).FirstOrDefault(),
+                })
+                .ToListAsync();
+            var projects = projectHits.Select(p => new
+            {
+                p.Id,
+                p.Title,
+                p.Owner,
+                // Adı ya da açıklaması eşleşmediyse neden bulunduğu
+                Match = p.TextHit ? null
+                    : p.File != null ? $"dosya: {p.File}"
+                    : p.Model != null ? $"model: {p.Model}"
+                    : p.Member != null ? $"ekip: {p.Member}"
+                    : categories.Contains(p.Category) ? $"dal: {ProjectCategoryLabels.GetValueOrDefault(p.Category, p.Category)}"
+                    : p.Owner.Contains(term, StringComparison.OrdinalIgnoreCase) ? "sahibi"
+                    : p.RepoUrl.Contains(term, StringComparison.OrdinalIgnoreCase) ? "depo"
+                    : null,
+            }).ToList();
             var models = await _context.PrintModels.AsNoTracking()
                 .Where(m => EF.Functions.ILike(m.Title, pattern, "\\") || (m.Description != null && EF.Functions.ILike(m.Description, pattern, "\\")))
                 .OrderByDescending(m => m.UploadedAt).Take(take)

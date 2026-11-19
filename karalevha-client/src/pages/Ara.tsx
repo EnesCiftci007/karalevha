@@ -8,7 +8,8 @@ import PageHeader from '../components/ui/PageHeader';
 import { SkeletonRows } from '../components/ui/Skeleton';
 
 interface Results {
-  projects: { id: number; title: string; owner: string }[];
+  /** match: adı eşleşmediyse neden bulunduğu, ör. "dosya: sema.kicad_sch" */
+  projects: { id: number; title: string; owner: string; match?: string | null }[];
   models: { id: number; title: string; category: 'baski' | 'oyun'; uploader: string }[];
   obalar: { id: number; name: string; isPrivate: boolean; memberCount: number }[];
   users: { username: string }[];
@@ -20,6 +21,8 @@ interface Row {
   to: string;
   title: string;
   meta?: ReactNode;
+  /** Başlığın altında soluk ikinci satır (ör. projenin neden bulunduğu) */
+  detail?: string;
 }
 
 /** Aranan kelimeyi metin içinde vurgular (büyük/küçük harf duyarsız). */
@@ -47,7 +50,10 @@ function Group({ title, icon: Icon, rows, term }: { title: string; icon: LucideI
         {rows.map((r) => (
           <li key={r.to}>
             <Link to={r.to} className="flex items-baseline justify-between gap-4 px-4 py-3 hover:bg-levha-yuzey/50 transition-colors">
-              <span className="min-w-0 text-sm text-tebesir truncate"><Highlight text={r.title} term={term} /></span>
+              <span className="min-w-0">
+                <span className="block text-sm text-tebesir truncate"><Highlight text={r.title} term={term} /></span>
+                {r.detail && <span className="block text-xs text-tebesir-silik truncate"><Highlight text={r.detail} term={term} /></span>}
+              </span>
               {r.meta && <span className="shrink-0 text-xs text-tebesir-silik">{r.meta}</span>}
             </Link>
           </li>
@@ -87,7 +93,7 @@ export default function Ara() {
       ) : (
         <div className="space-y-8">
           <Group title="Kişiler" icon={UserRound} term={q} rows={results.users.map((u) => ({ to: `/u/${encodeURIComponent(u.username)}`, title: u.username }))} />
-          <Group title="Projeler" icon={FolderGit2} term={q} rows={results.projects.map((p) => ({ to: `/projeler/${p.id}`, title: p.title, meta: p.owner }))} />
+          <Group title="Projeler" icon={FolderGit2} term={q} rows={results.projects.map((p) => ({ to: `/projeler/${p.id}`, title: p.title, meta: p.owner, detail: p.match ?? undefined }))} />
           <Group title="3B modeller" icon={Box} term={q} rows={results.models.map((m) => ({ to: `/model/${m.id}`, title: m.title, meta: `${m.category === 'oyun' ? 'Oyun' : 'Baskı'} · ${m.uploader}` }))} />
           <Group
             title="Obalar"
