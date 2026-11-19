@@ -9,25 +9,16 @@ namespace Karalevha.API.Services
     /// <summary>
     /// Giriş yapmış kullanıcı ve kulüp yöneticisi kontrolü.
     ///
-    /// Roller veritabanında durur (User.Role: User / Admin / Owner). Yapılandırma ilk yöneticileri belirler ve
-    /// açılışta veritabanına yazılır: "OwnerUsername" Owner olur, "Admins" listesindekiler Admin.
-    /// Örnek: dotnet user-secrets set "Admins:0" "kullaniciadi"
+    /// Roller yalnızca veritabanında durur (User.Role: User / Admin / Owner). Rolü hiçbir yapılandırma ya da
+    /// kayıt vermez: ilk Owner tek seferlik kurulumla (AdminController.BootstrapOwner) atanır, Admin'leri
+    /// Owner atar, Owner kuruculuğu devreder. Veritabanında en fazla bir Owner olabilir (IX_Users_SingleOwner).
     ///
     /// Yönetici olan kullanıcı adları bellekte tutulur; rol değişince <see cref="SetRole"/> ile anında güncellenir,
     /// böylece her istekte veritabanına gidilmez ve yeni rol oturum açmayı beklemeden geçerli olur.
     /// </summary>
     public class CurrentUser
     {
-        private readonly HashSet<string> _configAdmins = new(StringComparer.OrdinalIgnoreCase);
-        private readonly string? _configOwner;
         private readonly ConcurrentDictionary<string, string> _roles = new(StringComparer.OrdinalIgnoreCase);
-
-        public CurrentUser(IConfiguration config)
-        {
-            foreach (var name in config.GetSection("Admins").Get<string[]>() ?? Array.Empty<string>())
-                if (!string.IsNullOrWhiteSpace(name)) _configAdmins.Add(name.Trim());
-            if (config["OwnerUsername"] is { Length: > 0 } owner) _configOwner = owner.Trim();
-        }
 
         public static int? IdOf(ClaimsPrincipal principal) =>
             int.TryParse(principal.FindFirst(ClaimTypes.NameIdentifier)?.Value, out var id) ? id : null;
@@ -35,33 +26,12 @@ namespace Karalevha.API.Services
         public static string NameOf(ClaimsPrincipal principal) =>
             principal.FindFirst(ClaimTypes.Name)?.Value ?? "Bilinmeyen";
 
-        /// <summary>Yapılandırmanın bu kullanıcıya verdiği rol (yoksa null)</summary>
-        public string? ConfiguredRole(string username) =>
-            _configOwner != null && string.Equals(_configOwner, username, StringComparison.OrdinalIgnoreCase) ? Roles.Owner
-            : _configAdmins.Contains(username) ? Roles.Admin
-            : null;
-
-        /// <summary>Açılışta: yapılandırmadaki rolleri veritabanına yaz, yöneticileri belleğe al.</summary>
+        /// <summary>Açılışta: yöneticileri veritabanından belleğe al (hiçbir rolü değiştirmez).</summary>
         public async Task LoadAsync(AppDbContext db)
         {
-            var wanted = _configAdmins.Select(n => n.ToLowerInvariant()).ToList();
-            if (_configOwner != null) wanted.Add(_configOwner.ToLowerInvariant());
-            foreach (var user in await db.Users.Where(u => wanted.Contains(u.NormalizedUsername)).ToListAsync())
-                Promote(user);
-            await db.SaveChangesAsync();
-
             _roles.Clear();
             foreach (var u in await db.Users.Where(u => u.Role != Roles.User).Select(u => new { u.Username, u.Role }).ToListAsync())
                 _roles[u.Username] = u.Role;
-        }
-
-        /// <summary>Yapılandırma bu kişiye daha yüksek bir rol veriyorsa uygular (kaydetmez). Rol düşürmez.</summary>
-        public void Promote(User user)
-        {
-            var configured = ConfiguredRole(user.Username);
-            if (configured == Roles.Owner || (configured == Roles.Admin && user.Role == Roles.User))
-                user.Role = configured;
-            SetRole(user.Username, user.Role);
         }
 
         public void SetRole(string username, string role)

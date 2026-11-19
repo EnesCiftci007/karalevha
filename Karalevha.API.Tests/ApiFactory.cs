@@ -2,6 +2,7 @@ using Karalevha.API.Data;
 using Karalevha.API.Services;
 using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
@@ -21,6 +22,8 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     public const string AdminName = "test_yonetici";
     public const string OwnerName = "test_kurucu";
+    /// <summary>Testlerdeki Owner kurulum anahtarı (gerçek değil)</summary>
+    public const string BootstrapToken = "test-kurulum-anahtari-otuz-iki-karakterden-uzun";
     public const string Password = "Test-Sifre-2026!";
     public const string JwtKey = "test-anahtari-en-az-otuz-iki-bayt-uzunlugunda-0123456789";
 
@@ -44,8 +47,12 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["Jwt__Key"] = JwtKey,
             ["Jwt__Issuer"] = "Karalevha.API",
             ["Jwt__Audience"] = "Karalevha.Client",
-            ["Admins__0"] = AdminName,
-            ["OwnerUsername"] = OwnerName,
+            // Roller yapılandırmadan gelmez; testler rolü veritabanından atar (SetRoleAsync)
+            ["Bootstrap__OwnerToken"] = BootstrapToken,
+            // Eski, tehlikeli ayarlar bilerek duruyor: artık yok sayılmalılar. Biri yapılandırmadan rol vermeyi
+            // geri getirirse RoleTests.Kayit_hicbir_adla_rol_vermez ("sero", "admin") kırılır.
+            ["OwnerUsername"] = "sero",
+            ["Admins__0"] = "admin",
             // Doğrulama bağlantısındaki site adresi
             ["Cors__Origins__0"] = "http://localhost:5173",
             ["RateLimits__Disabled"] = "true",
@@ -73,6 +80,41 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     public T Service<T>() where T : notnull => Services.GetRequiredService<T>();
 
     public AppDbContext NewDb() => Services.CreateScope().ServiceProvider.GetRequiredService<AppDbContext>();
+
+    /// <summary>
+    /// Test kurulumu: kişiye veritabanında rol verir ve API'nin bellekteki rolünü günceller (Owner'ın
+    /// rol ekranından yaptığı gibi). Owner verilirse var olan Owner önce Admin'e düşer (tek-Owner kuralı).
+    /// </summary>
+    public async Task SetRoleAsync(string username, string role)
+    {
+        using var db = NewDb();
+        var cache = Service<CurrentUser>();
+        if (role == Karalevha.API.Models.Roles.Owner)
+        {
+            foreach (var owner in await db.Users.Where(u => u.Role == Karalevha.API.Models.Roles.Owner && u.Username != username).ToListAsync())
+            {
+                owner.Role = Karalevha.API.Models.Roles.Admin;
+                cache.SetRole(owner.Username, owner.Role);
+            }
+            await db.SaveChangesAsync();
+        }
+        var user = await db.Users.SingleAsync(u => u.Username == username);
+        user.Role = role;
+        await db.SaveChangesAsync();
+        cache.SetRole(username, role);
+    }
+
+    /// <summary>Kulübün Owner'ını User'a düşürür (Owner kurulum testleri için)</summary>
+    public async Task ClearOwnerAsync()
+    {
+        using var db = NewDb();
+        foreach (var owner in await db.Users.Where(u => u.Role == Karalevha.API.Models.Roles.Owner).ToListAsync())
+        {
+            owner.Role = Karalevha.API.Models.Roles.User;
+            Service<CurrentUser>().SetRole(owner.Username, owner.Role);
+        }
+        await db.SaveChangesAsync();
+    }
 
     private static string TestConnectionString()
     {

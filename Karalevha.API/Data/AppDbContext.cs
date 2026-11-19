@@ -89,6 +89,8 @@ namespace Karalevha.API.Data
             modelBuilder.Entity<UserFollow>().HasOne(f => f.Following).WithMany().HasForeignKey(f => f.FollowingId).OnDelete(DeleteBehavior.Cascade);
 
             modelBuilder.Entity<User>().Property(u => u.Role).HasDefaultValue(Roles.User);
+            // Kulübün en fazla bir Owner'ı olabilir: eşzamanlı kurulum ya da devir iki Owner üretemez
+            modelBuilder.Entity<User>().HasIndex(u => u.Role).IsUnique().HasFilter("\"Role\" = 'Owner'").HasDatabaseName("IX_Users_SingleOwner");
             modelBuilder.Entity<User>().Property(u => u.Interests).HasDefaultValueSql("'{}'::text[]");
             modelBuilder.Entity<Post>().Property(p => p.Tags).HasDefaultValueSql("'{}'::text[]");
 

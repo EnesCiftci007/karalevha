@@ -15,6 +15,7 @@ const ModelYonlendir = lazy(() => import('./pages/ModelYonlendir'));
 const ObaDavet = lazy(() => import('./pages/ObaDavet'));
 const Yonetim = lazy(() => import('./pages/Yonetim'));
 const Gizlilik = lazy(() => import('./pages/Gizlilik'));
+const Kurulum = lazy(() => import('./pages/Kurulum'));
 const Auth = lazy(() => import('./pages/Auth'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const Projeler = lazy(() => import('./pages/Projeler'));
@@ -57,6 +58,7 @@ function App() {
             <Route path="ara" element={page(<Ara />)} />
             <Route path="yonetim" element={page(<Yonetim />)} />
             <Route path="gizlilik" element={page(<Gizlilik />)} />
+            <Route path="kurulum" element={page(<Kurulum />)} />
             <Route path="tasarim" element={page(<Tasarim />)} />
           </Route>
 

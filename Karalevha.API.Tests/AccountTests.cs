@@ -19,6 +19,7 @@ public class AccountTests(ApiFactory api)
         Assert.True((await me.Get("/api/auth/me")).Ok);
 
         var owner = await TestClient.Register(api, ApiFactory.OwnerName);
+        await api.SetRoleAsync(ApiFactory.OwnerName, Karalevha.API.Models.Roles.Owner);
         var res = await DeleteAccount(owner);
         Assert.Equal(400, res.Code);
         Assert.Contains("kurucu", res["message"].GetValue<string>());

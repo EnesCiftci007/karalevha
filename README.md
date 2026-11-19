@@ -152,14 +152,26 @@ dotnet run --project Karalevha.API -- --depoya-aktar
 siler ve hesapları en fazla 30 gün askıya alır (profildeki "Yönetim" kutusu). Askıdaki hesap okuyabilir ama giriş
 yapamaz ve hiçbir şey paylaşamaz. Owner, profillerden başkalarını yönetici yapabilir.
 
-İlk roller yapılandırmadan gelir ve açılışta veritabanına yazılır:
+Roller yalnızca veritabanında durur; **kayıt hiçbir koşulda rol vermez** ve yapılandırmadan rol okunmaz
+(eski `OwnerUsername` / `Admins` ayarları artık yok sayılır, silinebilir). Kulübün **en fazla bir Owner'ı** olur;
+bunu veritabanındaki `IX_Users_SingleOwner` indeksi garanti eder.
 
-```bash
-dotnet user-secrets set "OwnerUsername" "kullaniciadi"
-dotnet user-secrets set "Admins:0" "baska-kullanici"
+**İlk Owner (tek seferlik kurulum):**
+
+1. Sunucuya en az 32 karakterlik rastgele bir anahtar verin: `Bootstrap__OwnerToken` (yerelde
+   `dotnet user-secrets set "Bootstrap:OwnerToken" "..."`). Anahtar hiçbir yerde loglanmaz.
+2. Kurucu olacak hesapla giriş yapıp `/kurulum` sayfasında anahtarı girin.
+3. Owner oluşunca kurulum kalıcı olarak kapanır; anahtarı sunucudan silebilirsiniz.
+
+Sonrasında Owner, profillerden başkalarını yönetici yapar ve kuruculuğu **"Kuruculuğu devret"** ile başka birine
+verir (şifre yeniden istenir; devreden aynı işlemde Admin olur). Rol değişikliği hemen geçerli olur.
+
+Canlıya almadan önce veritabanında birden fazla Owner olmadığını salt okunur kontrol edin (birden fazlaysa
+tek-Owner migration'ı uygulanmaz):
+
+```sql
+SELECT "Id", "Username" FROM "Users" WHERE "Role" = 'Owner';
 ```
-
-Canlıda ortam değişkeni olarak: `OwnerUsername`, `Admins__0`, `Admins__1`, … Rol değişikliği hemen geçerli olur.
 
 ### E-posta doğrulama (isteğe bağlı)
 
@@ -195,7 +207,7 @@ Uygulama sunucuya (Render, Railway vb.) yüklendiğinde aşağıdaki ortam deği
 | `Cors__Origins__0` | `https://karalevha.vercel.app` (sonda / yok) |
 | `ASPNETCORE_ENVIRONMENT` | `Production` |
 | `Storage__Provider` ve `Storage__S3__*` | Yüklenen dosyaların deposu (R2/S3), bkz. **Dosya deposu** |
-| `Admins__0` | (İsteğe bağlı) Kulüp yöneticisinin kullanıcı adı |
+| `Bootstrap__OwnerToken` | (İlk kurulum için, 32+ karakter) Owner kurulum anahtarı; kurulumdan sonra silinebilir |
 | `Proxy__ForwardLimit` | `2` (site Vercel üzerinden yönlendiriyorsa; bkz. aşağı) |
 
 ### Site ve API aynı adreste (oturum çerezi)

@@ -47,8 +47,13 @@ public sealed class TestClient
         return new TestClient(http, username, body["user"]!["id"]!.GetValue<int>());
     }
 
-    /// <summary>Yönetici (ApiFactory.AdminName yapılandırmada yönetici)</summary>
-    public static Task<TestClient> Admin(ApiFactory api) => Register(api, ApiFactory.AdminName);
+    /// <summary>Kulüp yöneticisi: ApiFactory.AdminName hesabı, rolü veritabanından verilir</summary>
+    public static async Task<TestClient> Admin(ApiFactory api)
+    {
+        var client = await Register(api, ApiFactory.AdminName);
+        await api.SetRoleAsync(ApiFactory.AdminName, Karalevha.API.Models.Roles.Admin);
+        return client;
+    }
 
     public async Task<Response> Get(string path) => await Response.From(await _http.GetAsync(path));
     public async Task<Response> Delete(string path) => await Response.From(await _http.DeleteAsync(path));

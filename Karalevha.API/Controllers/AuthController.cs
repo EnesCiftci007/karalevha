@@ -112,8 +112,7 @@ namespace Karalevha.API.Controllers
                 EmailConfirmed = !RequireEmailVerification,
             };
             var verificationToken = RequireEmailVerification ? IssueVerification(user) : null;
-            // Yapılandırmada Owner/Admin olarak adı geçen kişi kayıt olunca rolünü alır
-            _current.Promote(user);
+            // Kayıt hiçbir koşulda rol vermez: yeni hesap her zaman User (rolleri yalnızca Owner dağıtır)
 
             try
             {
@@ -160,9 +159,8 @@ namespace Karalevha.API.Controllers
             if (RequireEmailVerification && !user.EmailConfirmed)
                 return StatusCode(403, new { requiresVerification = true, email = user.Email, message = "Devam etmek için e-posta adresini doğrulaman gerekiyor." });
 
-            var previousRole = user.Role;
-            _current.Promote(user);
-            if (user.Role != previousRole) await _context.SaveChangesAsync();
+            // Bellekteki rolü veritabanındakiyle eşitle (rol vermez, yalnızca okur)
+            _current.SetRole(user.Username, user.Role);
 
             // Jeton yanıt gövdesinde değil, HttpOnly çerezde: JavaScript onu hiç görmez
             AuthCookie.Set(HttpContext, GenerateJwtToken(user));

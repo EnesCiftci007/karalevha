@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ShieldCheck, UserCheck, UserPlus } from 'lucide-react';
+import { Crown, ShieldCheck, UserCheck, UserPlus } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 import { api } from '../../services/api';
 import { POST_TAGS } from '../../types';
 import { fullDate } from '../../utils/time';
@@ -136,7 +137,7 @@ interface AdminPanelProps {
   bannedUntil: string | null;
   /** Bakan kişi Owner mı (rol verebilir) */
   viewerIsOwner: boolean;
-  onChange: (patch: { role?: 'User' | 'Admin'; bannedUntil?: string | null }) => void;
+  onChange: (patch: { role?: 'User' | 'Admin' | 'Owner'; bannedUntil?: string | null }) => void;
 }
 
 /** Yöneticilere görünen kutu: askıya al / askıdan çıkar, Owner için yönetici yap. */
@@ -145,7 +146,28 @@ export function AdminPanel({ userId, username, role, bannedUntil, viewerIsOwner,
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [confirmBan, setConfirmBan] = useState(false);
+  const [transferring, setTransferring] = useState(false);
+  const [password, setPassword] = useState('');
+  const { refreshUser } = useAuth();
   const banned = bannedUntil && new Date(bannedUntil) > new Date();
+
+  // Kuruculuğu (Owner) bu kişiye devret: şifre yeniden istenir, devreden aynı işlemde Admin olur
+  const transfer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!password || busy) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api('/api/admin/owner-devret', { method: 'POST', body: JSON.stringify({ userId, password }) });
+      setTransferring(false);
+      onChange({ role: 'Owner' });
+      await refreshUser();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Devredilemedi.');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);
@@ -197,6 +219,29 @@ export function AdminPanel({ userId, username, role, bannedUntil, viewerIsOwner,
         <button type="button" onClick={() => setRole(role === 'Admin' ? 'User' : 'Admin')} disabled={busy} className="btn-sade w-full mt-3">
           {role === 'Admin' ? 'Yöneticiliği al' : 'Yönetici yap'}
         </button>
+      )}
+      {viewerIsOwner && !banned && (
+        <button type="button" onClick={() => { setPassword(''); setTransferring(true); }} disabled={busy} className="btn-sade w-full mt-1">
+          <Crown className="w-4 h-4" aria-hidden="true" />Kuruculuğu devret
+        </button>
+      )}
+      {transferring && (
+        <Modal title="Kuruculuğu devret" onClose={() => !busy && setTransferring(false)}>
+          <form onSubmit={transfer} className="p-5 space-y-4">
+            <p className="text-sm text-tebesir-soluk">
+              <span className="font-medium text-tebesir">{username}</span> kulübün kurucusu (Owner) olur; sen yönetici (Admin) olarak kalırsın.
+              Kulübün tek bir kurucusu olabilir; geri almak için yeni kurucunun devretmesi gerekir.
+            </p>
+            <Field id="devir-sifre" label="Şifren">
+              <input id="devir-sifre" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className="girdi" />
+            </Field>
+            {error && <p className="text-sm text-hata" role="alert">{error}</p>}
+            <div className="flex justify-end gap-3">
+              <button type="button" onClick={() => setTransferring(false)} disabled={busy} className="btn-ikincil">Vazgeç</button>
+              <button type="submit" disabled={busy || !password} className="btn-ana">{busy ? 'Devrediliyor…' : 'Devret'}</button>
+            </div>
+          </form>
+        </Modal>
       )}
       {error && <p className="mt-2 text-sm text-hata" role="alert">{error}</p>}
       {confirmBan && (

@@ -35,6 +35,99 @@ namespace Karalevha.API.Controllers
             public string Role { get; set; } = string.Empty;
         }
 
+        // ------------------------------------------------------------ Owner kurulumu ve devri
+
+        /// <summary>Kurulum anahtarı: sunucu ortam değişkeni Bootstrap__OwnerToken (en az 32 karakter). Yoksa kurulum kapalı.</summary>
+        private string? BootstrapToken(IConfiguration config) =>
+            config["Bootstrap:OwnerToken"] is { Length: >= 32 } token ? token : null;
+
+        private static bool SameSecret(string a, string b) =>
+            System.Security.Cryptography.CryptographicOperations.FixedTimeEquals(
+                System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(a)),
+                System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(b)));
+
+        private static bool IsUniqueViolation(DbUpdateException e) =>
+            e.InnerException is Npgsql.PostgresException { SqlState: "23505" };
+
+        // GET: api/admin/owner-durumu   — kulübün Owner'ı var mı, kurulum açık mı
+        [HttpGet("owner-durumu")]
+        public async Task<IActionResult> OwnerStatus([FromServices] IConfiguration config) =>
+            Ok(new { hasOwner = await _context.Users.AnyAsync(u => u.Role == Roles.Owner), setupEnabled = BootstrapToken(config) != null });
+
+        public class BootstrapOwnerDto
+        {
+            public string Token { get; set; } = string.Empty;
+        }
+
+        // POST: api/admin/owner-kurulum   — tek seferlik: Owner yokken, kurulum anahtarıyla, giriş yapmış kişiyi Owner yapar
+        // Anahtar loglanmaz ve sabit zamanlı karşılaştırılır. Eşzamanlı iki istekten yalnızca biri geçer
+        // (veritabanındaki tek-Owner kuralı); Owner oluştuktan sonra kurulum bir daha çalışmaz.
+        [HttpPost("owner-kurulum")]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("AuthLimiter")]
+        public async Task<IActionResult> BootstrapOwner(BootstrapOwnerDto dto, [FromServices] IConfiguration config)
+        {
+            var token = BootstrapToken(config);
+            if (token == null) return NotFound(new { message = "Owner kurulumu kapalı." });
+            if (!SameSecret(dto.Token ?? string.Empty, token)) return StatusCode(403, new { message = "Kurulum anahtarı yanlış." });
+            if (await _context.Users.AnyAsync(u => u.Role == Roles.Owner))
+                return Conflict(new { message = "Kulübün zaten bir Owner'ı var; kurulum bir kez yapılır." });
+
+            var me = await _context.Users.FindAsync(CurrentUser.IdOf(User));
+            if (me == null) return Unauthorized();
+            if (me.BannedUntil > DateTime.UtcNow) return StatusCode(403, new { message = "Askıdaki hesap Owner olamaz." });
+            me.Role = Roles.Owner;
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException e) when (IsUniqueViolation(e))
+            {
+                return Conflict(new { message = "Kulübün zaten bir Owner'ı var; kurulum bir kez yapılır." });
+            }
+            _current.SetRole(me.Username, Roles.Owner);
+            return Ok(new { userId = me.Id, role = me.Role });
+        }
+
+        public class TransferOwnerDto
+        {
+            public int UserId { get; set; }
+            public string Password { get; set; } = string.Empty;
+        }
+
+        // POST: api/admin/owner-devret   — Owner kuruculuğu devreder; eski Owner aynı işlemde Admin olur
+        [HttpPost("owner-devret")]
+        [Microsoft.AspNetCore.RateLimiting.EnableRateLimiting("AuthLimiter")]
+        public async Task<IActionResult> TransferOwner(TransferOwnerDto dto)
+        {
+            var me = await _context.Users.FindAsync(CurrentUser.IdOf(User));
+            // Bellekteki role değil veritabanına bakılır: devir yalnızca gerçek Owner'dan
+            if (me == null || me.Role != Roles.Owner) return StatusCode(403, new { message = "Kuruculuğu yalnızca Owner devredebilir." });
+            if (!BCrypt.Net.BCrypt.EnhancedVerify(dto.Password ?? string.Empty, me.PasswordHash)) return BadRequest(new { message = "Şifre yanlış." });
+            if (dto.UserId == me.Id) return BadRequest(new { message = "Zaten Owner'sın." });
+            var target = await _context.Users.FindAsync(dto.UserId);
+            if (target == null) return NotFound(new { message = "Kullanıcı bulunamadı." });
+            if (target.BannedUntil > DateTime.UtcNow) return BadRequest(new { message = "Askıdaki hesaba kuruculuk devredilemez." });
+
+            await using var tx = await _context.Database.BeginTransactionAsync();
+            // Önce eski Owner düşer, sonra yenisi yükselir: tek-Owner kuralı ara adımda da bozulmaz
+            me.Role = Roles.Admin;
+            await _context.SaveChangesAsync();
+            target.Role = Roles.Owner;
+            _notifications.Add(target.Id, me.Id, $"{me.Username} kulübün kuruculuğunu (Owner) sana devretti.", $"/u/{target.Username}");
+            try
+            {
+                await _context.SaveChangesAsync();
+                await tx.CommitAsync();
+            }
+            catch (DbUpdateException e) when (IsUniqueViolation(e))
+            {
+                return Conflict(new { message = "Devir sırasında başka bir Owner değişikliği oldu; yeniden dene." });
+            }
+            _current.SetRole(me.Username, Roles.Admin);
+            _current.SetRole(target.Username, Roles.Owner);
+            return Ok(new { ownerId = target.Id, previousOwnerId = me.Id });
+        }
+
         // POST: api/admin/set-role  (yalnızca Owner)
         [HttpPost("set-role")]
         public async Task<IActionResult> SetRole(SetRoleDto dto)

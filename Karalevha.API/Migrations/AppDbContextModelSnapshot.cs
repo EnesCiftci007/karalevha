@@ -1012,6 +1012,11 @@ namespace Karalevha.API.Migrations
                     b.HasIndex("NormalizedUsername")
                         .IsUnique();
 
+                    b.HasIndex("Role")
+                        .IsUnique()
+                        .HasDatabaseName("IX_Users_SingleOwner")
+                        .HasFilter("\"Role\" = 'Owner'");
+
                     b.ToTable("Users");
                 });
 

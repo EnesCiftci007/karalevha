@@ -230,7 +230,7 @@ export default function Profil() {
               role={profile.role}
               bannedUntil={profile.bannedUntil}
               viewerIsOwner={user.role === 'Owner'}
-              onChange={(p) => patch({ ...p, ...(p.role ? { isAdmin: p.role === 'Admin' } : {}) })}
+              onChange={(p) => patch({ ...p, ...(p.role ? { isAdmin: p.role !== 'User' } : {}) })}
             />
           )}
           <h2 className="text-sm font-semibold text-tebesir mb-3">Obaları</h2>
