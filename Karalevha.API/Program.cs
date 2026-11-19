@@ -51,6 +51,7 @@ builder.Services.AddFileStore(builder.Configuration);
 builder.Services.AddSingleton<CurrentUser>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<ObaAccess>();
+builder.Services.AddScoped<AccountDeletion>();
 builder.Services.AddHttpClient<IEmailService, EmailService>();
 builder.Services.AddMemoryCache();
 builder.Services.AddHttpClient<RepoService>();

@@ -20,6 +20,7 @@ namespace Karalevha.API.Tests;
 public sealed class ApiFactory : WebApplicationFactory<Program>
 {
     public const string AdminName = "test_yonetici";
+    public const string OwnerName = "test_kurucu";
     public const string Password = "Test-Sifre-2026!";
     public const string JwtKey = "test-anahtari-en-az-otuz-iki-bayt-uzunlugunda-0123456789";
 
@@ -44,6 +45,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
             ["Jwt__Issuer"] = "Karalevha.API",
             ["Jwt__Audience"] = "Karalevha.Client",
             ["Admins__0"] = AdminName,
+            ["OwnerUsername"] = OwnerName,
             // Doğrulama bağlantısındaki site adresi
             ["Cors__Origins__0"] = "http://localhost:5173",
             ["RateLimits__Disabled"] = "true",

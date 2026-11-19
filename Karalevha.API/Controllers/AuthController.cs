@@ -192,6 +192,84 @@ namespace Karalevha.API.Controllers
             return Ok(new { user = UserDto(user) });
         }
 
+        public class DeleteAccountDto
+        {
+            public string Password { get; set; } = string.Empty;
+        }
+
+        // POST: api/auth/hesabi-sil   — hesabı ve kişinin verilerini kalıcı olarak siler (KVKK)
+        // Şifre yeniden istenir: açık unutulmuş bir oturumdan hesap silinemesin.
+        [HttpPost("hesabi-sil")]
+        [Authorize]
+        [EnableRateLimiting("AuthLimiter")]
+        public async Task<IActionResult> DeleteAccount(DeleteAccountDto dto, [FromServices] AccountDeletion deletion)
+        {
+            var id = CurrentUser.IdOf(User);
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.Id == id);
+            if (user == null) return Unauthorized();
+            if (!BCrypt.Net.BCrypt.EnhancedVerify(dto.Password ?? string.Empty, user.PasswordHash))
+                return BadRequest(new { message = "Şifre yanlış." });
+            if (user.Role == Roles.Owner)
+                return BadRequest(new { message = "Kulüp kurucusunun hesabı silinemez. Önce kuruculuğu başka bir yöneticiye devret." });
+
+            await deletion.DeleteAsync(user.Id);
+            _current.SetRole(user.Username, Roles.User);
+            AuthCookie.Clear(HttpContext);
+            return Ok(new { message = "Hesabın ve verilerin silindi." });
+        }
+
+        // GET: api/auth/verilerim   — kişinin sitedeki verileri tek bir JSON dosyası olarak (KVKK: bilgi edinme)
+        [HttpGet("verilerim")]
+        [Authorize]
+        [EnableRateLimiting("AuthLimiter")]
+        public async Task<IActionResult> ExportMyData()
+        {
+            var id = CurrentUser.IdOf(User)!.Value;
+            var user = await _context.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == id);
+            if (user == null) return Unauthorized();
+            const int cap = 5000;
+
+            var data = new
+            {
+                hazirlanma = DateTime.UtcNow,
+                hesap = new { user.Id, user.Username, user.Email, user.Role, user.EmailConfirmed, user.BannedUntil },
+                projeler = await _context.Projects.AsNoTracking().Where(p => p.UserId == id)
+                    .Select(p => new { p.Id, p.Title, p.Description, p.RepoUrl, p.Category, p.CreatedAt }).Take(cap).ToListAsync(),
+                ekipUyelikleri = await _context.ProjectMembers.AsNoTracking().Where(m => m.UserId == id)
+                    .Select(m => new { m.ProjectId, Proje = m.Project!.Title, m.AddedAt }).Take(cap).ToListAsync(),
+                modeller = await _context.PrintModels.AsNoTracking().Where(m => m.UserId == id)
+                    .Select(m => new { m.Id, m.Title, m.Description, m.ProjectId, m.UploadedAt, Adres = m.FilePath }).Take(cap).ToListAsync(),
+                projeDosyalari = await _context.ProjectFiles.AsNoTracking().Where(f => f.UserId == id)
+                    .Select(f => new { f.Id, f.Title, f.FileName, f.ProjectId, f.UploadedAt, Adres = f.FilePath }).Take(cap).ToListAsync(),
+                gonderiler = await _context.Posts.AsNoTracking().Where(p => p.UserId == id)
+                    .Select(p => new { p.Id, p.Content, p.CreatedAt }).Take(cap).ToListAsync(),
+                yorumlar = await _context.Comments.AsNoTracking().Where(c => c.UserId == id)
+                    .Select(c => new { c.Id, c.TargetType, c.TargetId, c.Content, c.CreatedAt }).Take(cap).ToListAsync(),
+                begeniler = await _context.Likes.AsNoTracking().Where(l => l.UserId == id)
+                    .Select(l => new { l.TargetType, l.TargetId }).Take(cap).ToListAsync(),
+                obaUyelikleri = await _context.ObaMembers.AsNoTracking().Where(m => m.UserId == id)
+                    .Select(m => new { m.ObaId, Oba = m.Oba!.Name, m.JoinedAt }).Take(cap).ToListAsync(),
+                kurdugunObalar = await _context.Obalar.AsNoTracking().Where(o => o.OwnerId == id)
+                    .Select(o => new { o.Id, o.Name, o.Description, o.CreatedAt }).Take(cap).ToListAsync(),
+                obaMesajlari = await _context.ObaMessages.AsNoTracking().Where(m => m.UserId == id)
+                    .OrderByDescending(m => m.CreatedAt)
+                    .Select(m => new { m.Id, m.ChannelId, m.Content, m.FileName, m.CreatedAt }).Take(cap).ToListAsync(),
+                siparisler = await _context.MarketOrders.AsNoTracking().Where(o => o.UserId == id)
+                    .Select(o => new { o.Id, o.Service, o.Material, o.Quantity, o.Dimensions, o.Note, o.FileName, o.Status, o.Price, o.CreatedAt }).Take(cap).ToListAsync(),
+                rezervasyonlar = await _context.Reservations.AsNoTracking().Where(r => r.UserId == id)
+                    .Select(r => new { r.Id, r.EquipmentId, r.StartsAt }).Take(cap).ToListAsync(),
+                baskiFotograflari = await _context.PrintMakes.AsNoTracking().Where(m => m.UserId == id)
+                    .Select(m => new { m.Id, m.PrintModelId, m.Note, Adres = m.PhotoPath }).Take(cap).ToListAsync(),
+                takipEttiklerin = await _context.UserFollows.AsNoTracking().Where(f => f.FollowerId == id)
+                    .Select(f => f.Following!.Username).Take(cap).ToListAsync(),
+                sikayetlerin = await _context.Reports.AsNoTracking().Where(r => r.ReporterId == id)
+                    .Select(r => new { r.TargetType, r.TargetId, r.Reason, r.Note, r.Status, r.CreatedAt }).Take(cap).ToListAsync(),
+            };
+
+            var json = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(data, new System.Text.Json.JsonSerializerOptions(System.Text.Json.JsonSerializerDefaults.Web) { WriteIndented = true });
+            return File(json, "application/json", $"karalevha-verilerim-{user.Username}.json");
+        }
+
         // GET: api/auth/me
         // İstemci açılışta çağırır: rol ve askı durumu oturum boyunca güncel kalsın.
         [HttpGet("me")]

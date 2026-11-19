@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Box, Flag, FolderGit2, MessagesSquare, Pencil, UserRound } from 'lucide-react';
 import { useReport } from '../components/ui/Report';
+import AccountPanel from '../components/profil/AccountPanel';
 import { api, API_URL } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { timeAgo } from '../utils/time';
@@ -212,6 +213,7 @@ export default function Profil() {
         </div>
 
         <aside className="lg:col-span-4">
+          {isMe && <AccountPanel username={profile.username} />}
           {isMe && profile.bannedUntil && (
             <p className="kart p-4 mb-8 text-sm text-hata">Hesabın askıda. Paylaşım yapamazsın.</p>
           )}

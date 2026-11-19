@@ -8,6 +8,7 @@ const links = [
   { to: '/e-oba', label: 'E-Oba' },
   { to: '/atolye', label: 'Atölye' },
   { to: '/etkinlikler', label: 'Etkinlikler' },
+  { to: '/gizlilik', label: 'Gizlilik' },
 ];
 
 /** Sayfa altı: imza, bölüm bağlantıları, maskot. */

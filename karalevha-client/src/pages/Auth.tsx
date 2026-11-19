@@ -197,6 +197,11 @@ export default function Auth() {
             <button type="submit" disabled={loading} className="btn-ana w-full mt-2">
               {loading ? 'Bekle…' : isLogin ? 'Giriş yap' : 'Hesap oluştur'}
             </button>
+            {!isLogin && (
+              <p className="text-xs text-tebesir-silik">
+                Kayıt olarak kişisel verilerinin <Link to="/gizlilik" className="underline underline-offset-4 hover:text-tebesir">Aydınlatma Metni</Link>'ndeki gibi işleneceğini öğrenmiş olursun.
+              </p>
+            )}
           </form>
 
           <p className="mt-8 text-sm text-tebesir-silik">
