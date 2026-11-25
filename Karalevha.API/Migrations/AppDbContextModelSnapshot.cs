@@ -21,6 +21,7 @@ namespace Karalevha.API.Migrations
                 .HasAnnotation("ProductVersion", "9.0.2")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
+            NpgsqlModelBuilderExtensions.HasPostgresExtension(modelBuilder, "btree_gist");
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
             modelBuilder.Entity("Karalevha.API.Models.ClubEvent", b =>
@@ -938,7 +939,10 @@ namespace Karalevha.API.Migrations
 
                     b.HasIndex("EquipmentId", "StartsAt", "EndsAt");
 
-                    b.ToTable("Reservations");
+                    b.ToTable("Reservations", t =>
+                        {
+                            t.HasCheckConstraint("CK_Reservations_EndsAfterStart", "\"EndsAt\" > \"StartsAt\"");
+                        });
                 });
 
             modelBuilder.Entity("Karalevha.API.Models.User", b =>

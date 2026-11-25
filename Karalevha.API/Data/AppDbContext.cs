@@ -48,6 +48,11 @@ namespace Karalevha.API.Data
 
             // Çakışma sorgusu ekipman + zaman aralığına göre yapılır
             modelBuilder.Entity<Reservation>().HasIndex(r => new { r.EquipmentId, r.StartsAt, r.EndsAt });
+            // Çakışma garantisi veritabanında: aynı ekipmanın aralıkları kesişemez (EX_Reservations_NoOverlap,
+            // migration NoReservationOverlap'te elle yazılı; EF exclusion constraint'i modelleyemez). Kural için
+            // tamsayı eşitliğini GiST'te kullanabilen btree_gist eklentisi gerekir.
+            modelBuilder.HasPostgresExtension("btree_gist");
+            modelBuilder.Entity<Reservation>().ToTable(t => t.HasCheckConstraint("CK_Reservations_EndsAfterStart", "\"EndsAt\" > \"StartsAt\""));
             modelBuilder.Entity<Reservation>().HasOne(r => r.PrintModel).WithMany().OnDelete(DeleteBehavior.SetNull);
 
             modelBuilder.Entity<ClubEvent>().HasIndex(e => e.StartsAt);

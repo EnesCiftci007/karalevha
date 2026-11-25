@@ -200,48 +200,48 @@ namespace Karalevha.API.Controllers
             if (dto.PrintModelId != null && !await _context.PrintModels.AnyAsync(m => m.Id == dto.PrintModelId))
                 return BadRequest(new { message = "Seçilen model bulunamadı." });
 
-            // Aynı ekipmanda çakışan rezervasyon var mı? Eşzamanlı isteklerde çifte rezervasyonu önlemek için Serializable işlem.
+            // Kullanıcıya kimin hangi saatleri tuttuğunu söyleyebilmek için önce bakılır. Asıl garanti veritabanında:
+            // EX_Reservations_NoOverlap kuralı, aynı anda gelen iki istekten yalnızca birini kaydeder.
+            var clash = await FindClashAsync(dto.EquipmentId, start, end);
+            if (clash != null) return clash;
+
+            var reservation = new Reservation
+            {
+                EquipmentId = dto.EquipmentId,
+                UserId = userId.Value,
+                StartsAt = start,
+                EndsAt = end,
+                Note = note,
+                PrintModelId = dto.PrintModelId
+            };
+            _context.Reservations.Add(reservation);
+            try
+            {
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.ExclusionViolation })
+            {
+                // Ön kontrolden sonra, kaydetmeden önce başka biri aynı saatleri ayırdı
+                _context.Entry(reservation).State = EntityState.Detached;
+                return await FindClashAsync(dto.EquipmentId, start, end)
+                       ?? Conflict(new { message = "Bu saatler az önce başka biri tarafından ayrıldı, lütfen tekrar dene." });
+            }
+            return Ok(await ProjectReservations(_context.Reservations.Where(r => r.Id == reservation.Id)).FirstAsync());
+        }
+
+        /// <summary>Aynı ekipmanda bu aralıkla kesişen rezervasyon varsa 409 (kimde, hangi saatler); yoksa null.
+        /// Bitişi diğerinin başlangıcına eşit olan ardışık rezervasyonlar çakışmaz.</summary>
+        private async Task<IActionResult?> FindClashAsync(int equipmentId, DateTime start, DateTime end)
+        {
+            var clash = await _context.Reservations.AsNoTracking()
+                .Include(r => r.User)
+                .Where(r => r.EquipmentId == equipmentId && r.StartsAt < end && r.EndsAt > start)
+                .OrderBy(r => r.StartsAt)
+                .FirstOrDefaultAsync();
+            if (clash == null) return null;
             var tr = TimeZoneInfo.FindSystemTimeZoneById("Europe/Istanbul");
             string fmt(DateTime t) => TimeZoneInfo.ConvertTimeFromUtc(DateTime.SpecifyKind(t, DateTimeKind.Utc), tr).ToString("HH:mm");
-
-            for (var attempt = 0; attempt < 3; attempt++)
-            {
-                await using var tx = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
-                var clash = await _context.Reservations
-                    .Include(r => r.User)
-                    .Where(r => r.EquipmentId == dto.EquipmentId && r.StartsAt < end && r.EndsAt > start)
-                    .OrderBy(r => r.StartsAt)
-                    .FirstOrDefaultAsync();
-                if (clash != null)
-                {
-                    await tx.RollbackAsync();
-                    return Conflict(new { message = $"Bu saatler dolu: {clash.User?.Username} {fmt(clash.StartsAt)}–{fmt(clash.EndsAt)} arasında kullanıyor." });
-                }
-
-                var reservation = new Reservation
-                {
-                    EquipmentId = dto.EquipmentId,
-                    UserId = userId.Value,
-                    StartsAt = start,
-                    EndsAt = end,
-                    Note = note,
-                    PrintModelId = dto.PrintModelId
-                };
-                _context.Reservations.Add(reservation);
-                try
-                {
-                    await _context.SaveChangesAsync();
-                    await tx.CommitAsync();
-                    return Ok(await ProjectReservations(_context.Reservations.Where(r => r.Id == reservation.Id)).FirstAsync());
-                }
-                catch (DbUpdateException ex) when (ex.InnerException is Npgsql.PostgresException { SqlState: "40001" } && attempt < 2)
-                {
-                    await tx.RollbackAsync();
-                    _context.Entry(reservation).State = EntityState.Detached;
-                }
-            }
-
-            return Conflict(new { message = "Bu saatler az önce başka biri tarafından ayrıldı, lütfen tekrar dene." });
+            return Conflict(new { message = $"Bu saatler dolu: {clash.User?.Username} {fmt(clash.StartsAt)}–{fmt(clash.EndsAt)} arasında kullanıyor." });
         }
 
         // DELETE: api/atolye/rezervasyon/{id}  (sahibi ya da yönetici)
