@@ -56,7 +56,20 @@ function PostFooter({ post, counts, onChange }: { post: Post; counts: SocialCoun
 }
 
 const MAX_LENGTH = 1000; // Backend sınırıyla aynı
-const PAGE = 20; // bir seferde gösterilen gönderi sayısı
+const PAGE = 20; // bir seferde sunucudan istenen gönderi sayısı
+
+type PostPage = { items: Post[]; nextCursor: string | null };
+
+/** Akış isteğinin adresi: süzgeçler sunucuda uygulanır, sayfalar cursor ile devam eder */
+function feedUrl(f: { tag: string | null; scope: Scope; sort: SortKey; period: Period }, cursor?: string | null) {
+  const q = new URLSearchParams({ limit: String(PAGE) });
+  if (f.tag) q.set('etiket', f.tag);
+  if (f.scope !== 'hepsi') q.set('kapsam', f.scope);
+  if (f.sort !== 'yeni') q.set('sirala', f.sort);
+  if (f.period !== 'tum') q.set('since', new Date(periodStart(f.period)).toISOString());
+  if (cursor) q.set('cursor', cursor);
+  return `/api/posts?${q}`;
+}
 
 export default function Akis() {
   const { user } = useAuth();
@@ -74,8 +87,12 @@ export default function Akis() {
   const [trending, setTrending] = useState<{ tag: string; count: number }[]>([]);
   const [trendingRecent, setTrendingRecent] = useState(true);
   const [posts, setPosts] = useState<Post[] | null>(null);
-  const [shown, setShown] = useState(PAGE);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
+  // Süzgeç değişince eski isteğin geç gelen sonucu yeni listeye karışmasın
+  const feedReqRef = useRef(0);
   const [obalar, setObalar] = useState<Oba[]>([]);
   const [content, setContent] = useState('');
   const [sending, setSending] = useState(false);
@@ -93,24 +110,45 @@ export default function Akis() {
   };
 
   useEffect(() => {
-    let cancelled = false;
+    const req = ++feedReqRef.current;
     setPosts(null);
-    setShown(PAGE);
+    setNextCursor(null);
+    setMoreError('');
     setLoadFailed(false);
-    const q = new URLSearchParams();
-    if (tagFilter) q.set('etiket', tagFilter);
-    if (scope === 'takip') q.set('kapsam', 'takip');
-    api<Post[]>(`/api/posts${q.size ? `?${q}` : ''}`)
-      .then((data) => !cancelled && setPosts(scope === 'benim' ? data.filter((p) => p.user?.id === user?.id) : data))
+    api<PostPage>(feedUrl({ tag: tagFilter, scope, sort, period }))
+      .then((page) => {
+        if (feedReqRef.current !== req) return;
+        setPosts(page.items);
+        setNextCursor(page.nextCursor);
+      })
       .catch(() => {
-        if (cancelled) return;
+        if (feedReqRef.current !== req) return;
         setPosts([]);
         setLoadFailed(true);
       });
-    return () => {
-      cancelled = true;
-    };
-  }, [tagFilter, scope, user]);
+    // user: giriş/çıkışta ilgi alanına göre öne çıkanlar ve "takip" değişir
+  }, [tagFilter, scope, sort, period, user]);
+
+  const loadMore = async () => {
+    if (!nextCursor || loadingMore) return;
+    const req = feedReqRef.current;
+    setLoadingMore(true);
+    setMoreError('');
+    try {
+      const page = await api<PostPage>(feedUrl({ tag: tagFilter, scope, sort, period }, nextCursor));
+      if (feedReqRef.current !== req) return;
+      // Beğeni/yorum sayısı sayfalar arasında değişebilir: aynı gönderi iki kez gösterilmez
+      setPosts((prev) => {
+        const seen = new Set((prev ?? []).map((p) => p.id));
+        return [...(prev ?? []), ...page.items.filter((p) => !seen.has(p.id))];
+      });
+      setNextCursor(page.nextCursor);
+    } catch (err) {
+      if (feedReqRef.current === req) setMoreError(err instanceof Error ? err.message : 'Daha fazla gönderi yüklenemedi.');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
     api<Oba[]>('/api/obalar').then(setObalar).catch(() => {});
@@ -163,14 +201,8 @@ export default function Akis() {
 
   const social = useSocialCounts('post', (posts ?? []).map((p) => p.id));
 
-  // Zaman ve sıralama istemcide (etiket ve kapsam sunucuda/yüklemede uygulanır)
-  const visible = useMemo(() => {
-    const since = periodStart(period);
-    const list = (posts ?? []).filter((p) => new Date(p.createdAt).getTime() >= since);
-    if (sort === 'yeni') return list;
-    const key = (p: Post) => (sort === 'begeni' ? social.get(p.id).likes : social.get(p.id).comments);
-    return [...list].sort((a, b) => key(b) - key(a) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [posts, period, sort, social]);
+  // Etiket, kapsam, zaman ve sıralama sunucuda uygulanır; liste geldiği sırayla gösterilir
+  const visible = posts ?? [];
 
   // Bildirimden #gonderi-ID ile gelindiyse o gönderiye kaydır
   useEffect(() => {
@@ -263,7 +295,7 @@ export default function Akis() {
             <p className="py-12 text-center text-tebesir-silik">
               {loadFailed
                 ? 'Akış yüklenemedi. Sayfayı yenilemeyi dene.'
-                : posts.length > 0
+                : period !== 'tum'
                   ? 'Bu zaman aralığında gönderi yok.'
                 : tagFilter
                   ? `#${tagFilter} etiketiyle henüz gönderi yok.`
@@ -276,7 +308,7 @@ export default function Akis() {
           ) : (
             <>
             <ul className="divide-y divide-levha-cizgi">
-              {visible.slice(0, shown).map((post) => (
+              {visible.map((post) => (
                 <PostItem
                   key={post.id}
                   post={post}
@@ -286,11 +318,12 @@ export default function Akis() {
                 />
               ))}
             </ul>
-            {visible.length > shown && (
-              <div className="pt-4 text-center">
-                <button type="button" className="btn-ikincil" onClick={() => setShown((n) => n + PAGE)}>
-                  Daha fazla göster <span className="veri">{visible.length - shown}</span>
+            {(nextCursor || moreError) && (
+              <div className="pt-4 flex flex-col items-center gap-1">
+                <button type="button" className="btn-ikincil" onClick={loadMore} disabled={loadingMore || !nextCursor}>
+                  {loadingMore ? 'Yükleniyor…' : 'Daha fazla göster'}
                 </button>
+                {moreError && <p className="text-xs text-hata" role="alert">{moreError}</p>}
               </div>
             )}
             </>

@@ -20,6 +20,9 @@ import ItemMenu from '../components/ui/ItemMenu';
 import ChannelFormModal, { categoryLabel, type ChannelDetail, type ChannelSummary } from '../components/oba/ChannelFormModal';
 import { MAX_FILE_SIZE, ObaFile, canPreview, downloadObaFile, formatSize } from '../services/files';
 
+/** Kanal açılınca gelen son mesaj sayısı; daha eskileri "Daha eski mesajlar" ile istenir */
+const MESSAGE_PAGE = 50;
+
 type Channel = ChannelSummary;
 
 interface Message {
@@ -44,6 +47,12 @@ export default function ObaDetay() {
   const activeChannelRef = useRef<Channel | null>(null);
   activeChannelRef.current = activeChannel;
   const [messages, setMessages] = useState<Message[]>([]);
+  // Kanalda daha eski mesaj var mı (ilk açılışta son MESSAGE_PAGE mesaj gelir, gerisi istenince)
+  const [hasOlder, setHasOlder] = useState(false);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [olderError, setOlderError] = useState('');
+  // Eski mesajlar üste eklenince okunan yer kaymasın: eklemeden önceki kaydırma durumu
+  const keepScrollRef = useRef<{ height: number; top: number } | null>(null);
   const [newMessage, setNewMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [needsPassword, setNeedsPassword] = useState(false);
@@ -214,6 +223,13 @@ export default function ObaDetay() {
   useEffect(() => {
     const box = messagesBoxRef.current;
     if (!box || !activeChannel) return;
+    // Üste eski mesajlar eklendiyse: en alta inme, okunan mesaj yerinde kalsın
+    const keep = keepScrollRef.current;
+    if (keep) {
+      keepScrollRef.current = null;
+      box.scrollTop = box.scrollHeight - keep.height + keep.top;
+      return;
+    }
     const sameChannel = scrolledChannelRef.current === activeChannel.id;
     scrolledChannelRef.current = activeChannel.id;
     box.scrollTo({ top: box.scrollHeight, behavior: sameChannel ? 'smooth' : 'auto' });
@@ -303,15 +319,42 @@ export default function ObaDetay() {
     if (!activeChannel) return;
     const reqId = ++messagesReqRef.current;
     const chId = activeChannel.id;
+    setHasOlder(false);
+    setOlderError('');
     try {
-      const data = await api<Message[]>(`/api/obamessages/${chId}`);
+      const data = await api<Message[]>(`/api/obamessages/${chId}?take=${MESSAGE_PAGE}`);
       if (messagesReqRef.current === reqId && activeChannelRef.current?.id === chId) {
         setMessages(data);
+        setHasOlder(data.length === MESSAGE_PAGE);
       }
     } catch (error) {
       if (messagesReqRef.current === reqId) {
         setAccessNotice(error instanceof Error ? error.message : 'Mesajlar yüklenemedi.');
       }
+    }
+  };
+
+  /** Görünen en eski mesajdan öncekiler; tekrar edenler atılır, kanal değiştiyse sonuç yok sayılır */
+  const loadOlder = async () => {
+    const ch = activeChannelRef.current;
+    const oldest = messages.find((m) => m.id > 0);
+    if (!ch || !oldest || loadingOlder) return;
+    setLoadingOlder(true);
+    setOlderError('');
+    try {
+      const data = await api<Message[]>(`/api/obamessages/${ch.id}?beforeId=${oldest.id}&take=${MESSAGE_PAGE}`);
+      if (activeChannelRef.current?.id !== ch.id) return;
+      const box = messagesBoxRef.current;
+      if (box) keepScrollRef.current = { height: box.scrollHeight, top: box.scrollTop };
+      setMessages((prev) => {
+        const seen = new Set(prev.map((m) => m.id));
+        return [...data.filter((m) => !seen.has(m.id)), ...prev];
+      });
+      setHasOlder(data.length === MESSAGE_PAGE);
+    } catch (error) {
+      if (activeChannelRef.current?.id === ch.id) setOlderError(error instanceof Error ? error.message : 'Eski mesajlar yüklenemedi.');
+    } finally {
+      setLoadingOlder(false);
     }
   };
 
@@ -655,6 +698,15 @@ export default function ObaDetay() {
               <p className="mt-1 text-sm text-tebesir-soluk">Henüz mesaj yok. Bir not, soru ya da dosya paylaşarak başlat.</p>
             </div>
           ) : (
+            <>
+            {(hasOlder || olderError) && (
+              <div className="mb-3 flex flex-col items-center gap-1">
+                <button type="button" className="btn-ikincil" onClick={loadOlder} disabled={loadingOlder}>
+                  {loadingOlder ? 'Yükleniyor…' : 'Daha eski mesajlar'}
+                </button>
+                {olderError && <p className="text-xs text-hata" role="alert">{olderError}</p>}
+              </div>
+            )}
             <ol className="space-y-0.5">
               {messages.map((msg, idx) => {
                 const first = startsGroup(idx);
@@ -722,6 +774,7 @@ export default function ObaDetay() {
                 );
               })}
             </ol>
+            </>
           )}
         </div>
 

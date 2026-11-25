@@ -75,11 +75,68 @@ namespace Karalevha.API.Controllers
             return null;
         }
 
-        // GET: api/projects
+        // GET: api/projects?ara=&dal=robotik&kimin=benim&sirala=yeni|begeni|yorum|ad&limit=20&cursor=...
+        // limit ya da cursor verilirse sayfalı yanıt: { items, nextCursor, total } (total: süzgece uyan sayı,
+        // yalnızca ilk sayfada). İkisi de yoksa eski biçim (bütün liste, yeniden eskiye).
         [HttpGet]
-        public async Task<IActionResult> GetProjects()
+        public async Task<IActionResult> GetProjects([FromQuery] string? ara, [FromQuery] string? dal, [FromQuery] string? kimin,
+            [FromQuery] string? sirala, [FromQuery] int? limit, [FromQuery] string? cursor)
         {
-            return Ok(await Project(_context.Projects.AsNoTracking().OrderByDescending(p => p.CreatedAt)).ToListAsync());
+            var query = _context.Projects.AsNoTracking();
+            if (limit == null && cursor == null)
+                return Ok(await Project(query.OrderByDescending(p => p.CreatedAt).ThenByDescending(p => p.Id)).ToListAsync());
+
+            if (kimin == "benim")
+            {
+                var me = CurrentUser.IdOf(User);
+                if (me == null) return Unauthorized();
+                query = query.Where(p => p.UserId == me || _context.ProjectMembers.Any(m => m.ProjectId == p.Id && m.UserId == me));
+            }
+            if (!string.IsNullOrEmpty(dal))
+            {
+                if (!Categories.Contains(dal)) return BadRequest(new { message = "Geçersiz proje dalı." });
+                // Dalı seçilmemiş eski projeler "Diğer" sayılır (istemcideki categoryOf ile aynı)
+                query = dal == "diger"
+                    ? query.Where(p => p.Category == null || !Categories.Contains(p.Category) || p.Category == "diger")
+                    : query.Where(p => p.Category == dal);
+            }
+            var q = ara?.Trim();
+            if (!string.IsNullOrEmpty(q))
+            {
+                if (q.Length > 100) q = q[..100];
+                var pattern = "%" + q.Replace("\\", "\\\\").Replace("%", "\\%").Replace("_", "\\_") + "%";
+                query = query.Where(p => EF.Functions.ILike(p.Title, pattern) || EF.Functions.ILike(p.Description, pattern)
+                                         || EF.Functions.ILike(p.User!.Username, pattern));
+            }
+
+            var sort = sirala is "begeni" or "yorum" or "ad" ? sirala : "yeni";
+            var after = Paging.Decode(cursor, sort);
+            if (cursor != null && after == null) return BadRequest(new { message = "Geçersiz sayfa imleci." });
+
+            IQueryable<Keyed<Project>> keyed = sort switch
+            {
+                "begeni" => query.Select(p => new Keyed<Project> { Item = p, N = _context.Likes.Count(l => l.TargetType == "project" && l.TargetId == p.Id), T = p.CreatedAt, Id = p.Id }),
+                "yorum" => query.Select(p => new Keyed<Project> { Item = p, N = _context.Comments.Count(c => c.TargetType == "project" && c.TargetId == p.Id), T = p.CreatedAt, Id = p.Id }),
+                _ => query.Select(p => new Keyed<Project> { Item = p, N = 0, T = p.CreatedAt, Id = p.Id, S = p.Title.ToLower() }),
+            };
+            var take = Paging.Clamp(limit);
+            var ordered = sort == "ad" ? keyed.AfterAsc(after).OrderAsc() : keyed.AfterDesc(after).OrderDesc();
+            var rows = await ordered.Take(take + 1).Select(Paging.KeyOf<Project>()).ToListAsync();
+            var (ids, next) = Paging.Cut(rows, take, sort);
+            var items = await Project(_context.Projects.AsNoTracking().Where(p => ids.Contains(p.Id))).ToListAsync();
+            int? total = after == null ? await query.CountAsync() : null;
+            return Ok(new { items = Paging.InOrder(items, ids), nextCursor = next, total });
+        }
+
+        // GET: api/projects/sayilar   — dal düğmeleri için: bütün projeler ve dal başına sayı
+        [HttpGet("sayilar")]
+        public async Task<IActionResult> GetProjectCounts()
+        {
+            var byCategory = await _context.Projects.AsNoTracking().GroupBy(p => p.Category).Select(g => new { g.Key, Count = g.Count() }).ToListAsync();
+            var categories = Categories.ToDictionary(c => c, _ => 0);
+            foreach (var g in byCategory)
+                categories[g.Key != null && Categories.Contains(g.Key) ? g.Key : "diger"] += g.Count;
+            return Ok(new { total = byCategory.Sum(g => g.Count), categories });
         }
 
         // GET: api/projects/{id}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Box, CircuitBoard, Code2, FolderGit2, Heart, MessageSquare, PenTool, Plus } from 'lucide-react';
 import { api, API_URL } from '../services/api';
@@ -15,6 +15,10 @@ import { formatOf } from '../utils/loadModel';
 import { PROJECT_CATEGORIES, categoryOf } from '../utils/projectCategories';
 
 type SortKey = 'yeni' | 'begeni' | 'yorum' | 'ad';
+
+const PAGE = 18; // bir seferde istenen proje sayısı (3 sütunlu ızgarada tam satırlar)
+type ProjectPage = { items: Project[]; nextCursor: string | null; total: number | null };
+type ProjectCounts = { total: number; categories: Record<string, number> };
 
 /** "https://github.com/kulup/robot" -> "github.com" */
 function repoHost(url: string): string {
@@ -37,8 +41,20 @@ function repoPath(url: string): string {
 export default function Projeler() {
   const { user } = useAuth();
   const [projects, setProjects] = useState<Project[] | null>(null);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [matched, setMatched] = useState<number | null>(null);
+  const [counts, setCounts] = useState<ProjectCounts | null>(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [moreError, setMoreError] = useState('');
   const [loadFailed, setLoadFailed] = useState(false);
   const [query, setQuery] = useState('');
+  // Arama her tuşta değil, yazmaya ara verince gönderilir
+  const [search, setSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(query.trim()), 300);
+    return () => clearTimeout(t);
+  }, [query]);
+  const listReqRef = useRef(0);
   const [sort, setSort] = useState<SortKey>('yeni');
   const [mine, setMine] = useMine();
   // Dal süzgeci adreste (?dal=robotik), paylaşılabilsin
@@ -53,40 +69,66 @@ export default function Projeler() {
     }, { replace: true });
   const [showModal, setShowModal] = useState(false);
 
+  // Arama, dal, "benimkiler" ve sıralama sunucuda; liste sayfa sayfa gelir
+  const listUrl = (cursor?: string | null) => {
+    const q = new URLSearchParams({ limit: String(PAGE) });
+    if (search) q.set('ara', search);
+    if (dal) q.set('dal', dal);
+    if (mine && user) q.set('kimin', 'benim');
+    if (sort !== 'yeni') q.set('sirala', sort);
+    if (cursor) q.set('cursor', cursor);
+    return `/api/projects?${q}`;
+  };
+
   useEffect(() => {
-    let cancelled = false;
-    api<Project[]>('/api/projects')
-      .then((data) => !cancelled && setProjects(data))
+    const req = ++listReqRef.current;
+    setProjects(null);
+    setNextCursor(null);
+    setMoreError('');
+    setLoadFailed(false);
+    api<ProjectPage>(listUrl())
+      .then((page) => {
+        if (listReqRef.current !== req) return;
+        setProjects(page.items);
+        setNextCursor(page.nextCursor);
+        setMatched(page.total);
+      })
       .catch(() => {
-        if (cancelled) return;
+        if (listReqRef.current !== req) return;
         setProjects([]);
         setLoadFailed(true);
       });
-    return () => {
-      cancelled = true;
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- listUrl bu değerlerden kurulur
+  }, [search, dal, mine, sort, user]);
+
+  // Dal düğmelerindeki sayılar: süzgeçten bağımsız, bütün projeler
+  useEffect(() => {
+    api<ProjectCounts>('/api/projects/sayilar').then(setCounts).catch(() => {});
   }, []);
 
-  const social = useSocialCounts('project', (projects ?? []).map((p) => p.id));
+  const loadMore = async () => {
+    if (!nextCursor || loadingMore) return;
+    const req = listReqRef.current;
+    setLoadingMore(true);
+    setMoreError('');
+    try {
+      const page = await api<ProjectPage>(listUrl(nextCursor));
+      if (listReqRef.current !== req) return;
+      setProjects((prev) => {
+        const seen = new Set((prev ?? []).map((p) => p.id));
+        return [...(prev ?? []), ...page.items.filter((p) => !seen.has(p.id))];
+      });
+      setNextCursor(page.nextCursor);
+    } catch (err) {
+      if (listReqRef.current === req) setMoreError(err instanceof Error ? err.message : 'Daha fazla proje yüklenemedi.');
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
-  const visible = useMemo(() => {
-    const q = query.trim().toLocaleLowerCase('tr');
-    const list = (projects ?? []).filter(
-      (p) =>
-        (!mine || p.owner === user?.username || (!!user && !!p.memberIds?.includes(user.id))) && (!dal || categoryOf(p.category).id === dal) && (!q ||
-        p.title.toLocaleLowerCase('tr').includes(q) ||
-        (p.description ?? '').toLocaleLowerCase('tr').includes(q) ||
-        p.owner.toLocaleLowerCase('tr').includes(q))
-    );
-    const newest = (a: Project, b: Project) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    return [...list].sort((a, b) => {
-      if (sort === 'ad') return a.title.localeCompare(b.title, 'tr');
-      if (sort === 'begeni') return social.get(b.id).likes - social.get(a.id).likes || newest(a, b);
-      if (sort === 'yorum') return social.get(b.id).comments - social.get(a.id).comments || newest(a, b);
-      return newest(a, b);
-    });
-  }, [projects, query, sort, social, mine, user, dal]);
-  const countOf = (id: string) => (projects ?? []).filter((p) => categoryOf(p.category).id === id).length;
+  const social = useSocialCounts('project', (projects ?? []).map((p) => p.id));
+  const visible = projects ?? [];
+  const countOf = (id: string) => counts?.categories[id] ?? 0;
 
 
   return (
@@ -119,13 +161,13 @@ export default function Projeler() {
           { value: 'yorum', label: 'En çok yorumlanan' },
           { value: 'ad', label: 'Ada göre (A–Z)' },
         ]}
-        count={projects && projects.length > 0 ? { shown: visible.length, total: projects.length, unit: 'proje' } : undefined}
+        count={counts && counts.total > 0 && matched !== null ? { shown: matched, total: counts.total, unit: 'proje' } : undefined}
         mine={user ? { active: mine, onChange: setMine } : undefined}
       />
 
       {/* Dallar */}
       <nav className="flex flex-wrap items-center gap-2 mb-5" aria-label="Proje dalları">
-        {[{ id: null as string | null, label: 'Tümü', count: projects?.length }, ...PROJECT_CATEGORIES.map((c) => ({ id: c.id as string | null, label: c.label, count: countOf(c.id), icon: c.icon }))].map((c) => {
+        {[{ id: null as string | null, label: 'Tümü', count: counts?.total }, ...PROJECT_CATEGORIES.map((c) => ({ id: c.id as string | null, label: c.label, count: countOf(c.id), icon: c.icon }))].map((c) => {
           const active = dal === c.id;
           const Icon = 'icon' in c ? c.icon : null;
           return (
@@ -160,13 +202,13 @@ export default function Projeler() {
           <p className="text-tebesir-soluk">
             {loadFailed
               ? 'Projeler yüklenemedi. Sayfayı yenilemeyi dene.'
-              : projects.length === 0
+              : counts?.total === 0
                 ? 'Henüz paylaşılmış proje yok.'
                 : query.trim()
                   ? `"${query.trim()}" için sonuç bulunamadı.`
                   : 'Bu dalda henüz proje yok.'}
           </p>
-          {!loadFailed && projects.length === 0 && user && (
+          {!loadFailed && counts?.total === 0 && user && (
             <button type="button" onClick={() => setShowModal(true)} className="btn-ikincil mt-4">İlk projeyi ekle</button>
           )}
         </div>
@@ -247,11 +289,22 @@ export default function Projeler() {
           })}
         </ul>
       )}
+      {projects && (nextCursor || moreError) && (
+        <div className="pt-5 flex flex-col items-center gap-1">
+          <button type="button" className="btn-ikincil" onClick={loadMore} disabled={loadingMore || !nextCursor}>
+            {loadingMore ? 'Yükleniyor…' : 'Daha fazla proje'}
+          </button>
+          {moreError && <p className="text-xs text-hata" role="alert">{moreError}</p>}
+        </div>
+      )}
 
       {/* Yeni proje */}
       {showModal && (
         <ProjectFormModal
-          onSaved={(created) => setProjects((prev) => [created, ...(prev ?? [])])}
+          onSaved={(created) => {
+            setProjects((prev) => [created, ...(prev ?? []).filter((p) => p.id !== created.id)]);
+            setCounts((c) => c && { total: c.total + 1, categories: { ...c.categories, [categoryOf(created.category).id]: (c.categories[categoryOf(created.category).id] ?? 0) + 1 } });
+          }}
           onClose={() => setShowModal(false)}
         />
       )}

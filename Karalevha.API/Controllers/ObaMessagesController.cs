@@ -115,9 +115,9 @@ namespace Karalevha.API.Controllers
             }
         };
 
-        // GET: api/obamessages/{channelId}?beforeId=&take=100
+        // GET: api/obamessages/{channelId}?beforeId=&take=50   (son 50 mesaj; beforeId ile daha eskileri)
         [HttpGet("{channelId:int}")]
-        public async Task<IActionResult> GetMessages(int channelId, [FromQuery] int? beforeId = null, [FromQuery] int take = 100)
+        public async Task<IActionResult> GetMessages(int channelId, [FromQuery] int? beforeId = null, [FromQuery] int take = 50)
         {
             var access = await ResolveAccess(channelId);
             if (access.Channel == null) return NotFound(new { message = "Kanal bulunamadı" });

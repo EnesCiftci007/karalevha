@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowUpRight } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../services/api';
-import { ClubEvent, Oba, Post, PrintModel, Project } from '../types';
+import { ClubEvent, Post, Project } from '../types';
 import CommunityPulse from '../components/home/CommunityPulse';
 import ClubNotes, { pickNote, rememberNote } from '../components/home/ClubNotes';
 import { lastObaPath } from '../utils/lastOba';
@@ -35,13 +35,30 @@ async function list<T>(path: string): Promise<T[] | null> {
   }
 }
 
+/** Sunucunun saydığı rakamlar: giriş yapana kendi sayıları (mine), misafire kulübün toplamı */
+interface Stats {
+  mine: boolean;
+  projects: number;
+  models: number;
+  obalar: number;
+  posts: number;
+}
+
 interface Lists {
+  stats: Stats | null;
+  /** Son eklenen proje ve gönderi (yalnızca ilk kayıt istenir) */
   projects: Project[] | null;
-  models: PrintModel[] | null;
-  obalar: Oba[] | null;
   posts: Post[] | null;
   /** Yaklaşan ilk etkinlik (yoksa null) */
   event: ClubEvent | null;
+}
+
+async function first<T>(path: string): Promise<T[] | null> {
+  try {
+    return (await api<{ items: T[] }>(path)).items;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -58,13 +75,12 @@ export default function Home() {
   useEffect(() => {
     let cancelled = false;
     Promise.all([
-      list<Project>('/api/projects'),
-      list<PrintModel>('/api/printmodels'),
-      list<Oba>('/api/obalar'),
-      list<Post>('/api/posts'),
+      api<Stats>('/api/istatistik').catch(() => null),
+      first<Project>('/api/projects?limit=1'),
+      first<Post>('/api/posts?limit=1'),
       list<ClubEvent>('/api/etkinlik?take=1'),
-    ]).then(([projects, models, obalar, posts, events]) =>
-      !cancelled && setLists({ projects, models, obalar, posts, event: events?.[0] ?? null })
+    ]).then(([stats, projects, posts, events]) =>
+      !cancelled && setLists({ stats, projects, posts, event: events?.[0] ?? null })
     );
     return () => {
       cancelled = true;
@@ -73,13 +89,12 @@ export default function Home() {
   }, [user?.id]);
 
   // Giriş yapan kişiye kendi sayıları ve kendi içeriğine süzülmüş sayfalar; misafire kulübün toplamı
-  const mineOnly = <T,>(items: T[] | null | undefined, isMine: (t: T) => boolean) =>
-    items ? (user ? items.filter(isMine).length : items.length) : undefined;
+  const s = lists?.stats ?? undefined;
   const stats = [
-    { label: user ? 'projen' : 'proje', value: mineOnly(lists?.projects, (p) => p.owner === user?.username || (!!user && !!p.memberIds?.includes(user.id))), to: '/projeler' },
-    { label: user ? 'modelin' : 'model', value: mineOnly(lists?.models, (m) => m.userId === user?.id), to: '/projeler' },
-    { label: user ? 'oban' : 'oba', value: mineOnly(lists?.obalar, (o) => !!o.isMember || o.owner === user?.username), to: '/e-oba' },
-    { label: user ? 'paylaşımın' : 'paylaşım', value: mineOnly(lists?.posts, (p) => p.user?.id === user?.id), to: '/akis' },
+    { label: user ? 'projen' : 'proje', value: s?.projects, to: '/projeler' },
+    { label: user ? 'modelin' : 'model', value: s?.models, to: '/projeler' },
+    { label: user ? 'oban' : 'oba', value: s?.obalar, to: '/e-oba' },
+    { label: user ? 'paylaşımın' : 'paylaşım', value: s?.posts, to: '/akis' },
   ].map((s) => ({ ...s, to: user ? `${s.to}?${s.to === '/akis' ? 'kapsam' : 'kimin'}=benim` : s.to }));
 
   return (
