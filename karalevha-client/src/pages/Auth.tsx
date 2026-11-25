@@ -18,8 +18,6 @@ export default function Auth() {
   // Giriş gerektiren bir yerden gelindiyse girişten sonra oraya dön
   const returnTo = (location.state as { from?: string } | null)?.from ?? '/';
 
-  if (user) return <Navigate to={returnTo} replace />;
-
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -30,6 +28,9 @@ export default function Auth() {
   const [successMsg, setSuccessMsg] = useState('');
   // Giriş, e-posta doğrulanmadığı için reddedildiyse bağlantıyı yeniden göndermek için adres
   const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
+
+  // Zaten girişliyse geri gönder. Hook'ların hepsinden sonra: React her çizimde aynı sırayla çağrılmasını ister
+  if (user) return <Navigate to={returnTo} replace />;
 
   const isLogin = mode === 'giris';
 
