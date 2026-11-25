@@ -17,7 +17,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownNetworks.Clear();
+    options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
     // Kaç vekil sunucudan geçildiği: Render tek başına 1; site Vercel üzerinden API'ye yönlendiriyorsa
     // (Vercel → Render) 2. Yanlışsa ziyaretçinin IP'si yerine vekilin IP'si görünür ve istek sınırları

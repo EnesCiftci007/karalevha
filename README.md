@@ -3,7 +3,7 @@
 Karalevha, dijital toplulukların (Obalar), 3B baskı projelerinin ve açık kaynaklı projelerin paylaşıldığı modern bir platformdur.
 
 ## 🚀 Teknolojiler
-- **Backend:** .NET 9 (C#), Entity Framework Core, PostgreSQL, SignalR, JWT Authentication
+- **Backend:** .NET 10 LTS (C#), Entity Framework Core, PostgreSQL, SignalR, JWT Authentication
 - **Frontend:** React 19, TypeScript, Vite, TailwindCSS, Three.js (3B STL Önizleme), pdf.js (PDF Önizleme)
 
 ## 📁 Proje Yapısı
