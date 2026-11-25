@@ -44,7 +44,8 @@ builder.Services.AddCors(options =>
 // Askıdaki hesaplar okuyabilir ama yazamaz (Filters/BanFilter.cs)
 builder.Services.AddControllers(options => options.Filters.Add<Karalevha.API.Filters.BanFilter>());
 builder.Services.AddSignalR();
-builder.Services.AddHealthChecks();
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseHealthCheck>("veritabani", tags: new[] { "hazir" });
 builder.Services.AddSingleton<ObaFileStorage>();
 // Yüklenen dosyaların deposu: yerel disk ya da S3 uyumlu (Cloudflare R2). Bkz. Services/FileStore.cs
 builder.Services.AddFileStore(builder.Configuration);
@@ -250,7 +251,9 @@ app.MapControllers();
 app.MapUploads();
 app.MapHub<Karalevha.API.Hubs.ChatHub>("/chathub");
 app.MapHub<Karalevha.API.Hubs.NotificationHub>("/notificationhub");
-app.MapHealthChecks("/health");
+// /health: süreç ayakta mı (platformun canlılık kontrolü). /health/hazir: veritabanına da ulaşıyor mu.
+app.MapHealthChecks("/health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions { Predicate = _ => false });
+app.MapHealthChecks("/health/hazir", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions { Predicate = c => c.Tags.Contains("hazir") });
 app.Map("/error", () => Results.Json(new { message = "Beklenmeyen bir hata oluştu." }, statusCode: 500)).AllowAnonymous();
 
 app.Run();

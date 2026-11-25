@@ -18,7 +18,10 @@ public class StorageTests(ApiFactory api)
         Assert.StartsWith("text/plain", res.Content.Headers.ContentType?.ToString());
         Assert.Contains("sandbox", res.Headers.GetValues("Content-Security-Policy").Single());
         Assert.Equal("nosniff", res.Headers.GetValues("X-Content-Type-Options").Single());
-        Assert.Contains("immutable", res.Headers.CacheControl?.ToString());
+        // Silinen dosya önbellekte en fazla bir gün kalır (KVKK silme talebi): uzun süreli "immutable" yok
+        Assert.True(res.Headers.CacheControl?.Public);
+        Assert.Equal(TimeSpan.FromDays(1), res.Headers.CacheControl?.MaxAge);
+        Assert.DoesNotContain("immutable", res.Headers.CacheControl?.ToString());
 
         var part = await TestClient.Guest(api).Raw(url, r => r.Headers.Range = new System.Net.Http.Headers.RangeHeaderValue(0, 3));
         Assert.Equal(206, (int)part.StatusCode);

@@ -109,8 +109,10 @@ tek bir depodan geçer: `Karalevha.API/Services/FileStore.cs`. İki seçenek var
 Hangisi seçilirse seçilsin dosyalar aynı adreslerden (`/uploads/...`) sunulur; veritabanı ve istemci değişmez.
 Gizli dosyalar (oba, sipariş) her zaman yetki denetleyen API uçlarından okunur.
 
-**Cloudflare R2 kurulumu:** R2'de bir kova (bucket) açın, *Manage R2 API Tokens* ile o kovaya okuma-yazma
-izni olan bir anahtar oluşturun ve API'ye şu ortam değişkenlerini verin:
+**Cloudflare R2 kurulumu:** R2'de bir kova (bucket) açın, *Manage R2 API Tokens* ile **yalnızca o kovaya**
+*Object Read & Write* izni olan bir anahtar oluşturun (hesap geneli ya da yönetici anahtarı vermeyin) ve
+API'ye şu ortam değişkenlerini verin. Kovayı **herkese açık yapmayın** (r2.dev / özel alan adı bağlamayın):
+gizli oba ve sipariş dosyaları da aynı kovadadır; bütün dosyalar yetkiyi denetleyen API'den sunulur.
 
 | Değişken | Değer |
 | --- | --- |
@@ -237,6 +239,22 @@ tarayıcıda çalışması için site ve API tarayıcıya **aynı adres** gibi g
   örnekte bir SignalR backplane'i (ör. Azure SignalR ya da Redis) ve yapışkan oturum gerekir; şu an tek örnek
   önerilir.
 - Hesap başına giriş sınırı ve istek sınırları da örnek başınadır.
+
+### Canlı ortam kontrol listesi
+
+- **Sağlık uçları:** `/health` süreç ayakta mı (platformun canlılık kontrolüne bunu verin), `/health/hazir`
+  veritabanına da ulaşıyor mu. Yanıtlar ayrıntı içermez.
+- **Önbellek:** `/uploads/...` dosyaları tarayıcı ve CDN'de en fazla **1 gün** saklanır (`Cache-Control:
+  public, max-age=86400`). Bir dosya ya da hesap silindiğinde (KVKK) kopyası en geç bir gün içinde her yerden
+  kalkar; acil durumda CDN önbelleğini (Cloudflare/Vercel) elle temizleyin. Gizli oba ve sipariş dosyaları
+  hiç önbelleğe alınmaz, her istekte yetki denetlenir.
+- **Çerez:** oturum çerezi `HttpOnly`, `SameSite=Lax`, canlıda (`ASPNETCORE_ENVIRONMENT=Production`) her zaman
+  `Secure`. Çerezle gelen değiştirici isteklerde `X-KaraLevha` başlığı zorunludur (CSRF).
+- **Anahtarlar:** `Jwt__Key` (32+ bayt, rastgele), R2 anahtarları ve `Bootstrap__OwnerToken` yalnızca
+  platformun gizli ortam değişkenlerinde durur; depoya ya da loglara yazılmaz. `Jwt__Key` değişirse herkesin
+  oturumu kapanır.
+- **Docker:** imaj `aspnet:10.0` tabanlı ve root olmayan kullanıcıyla (`$APP_UID`) çalışır; yalnızca
+  `wwwroot/uploads` ve `App_Data` yazılabilir.
 
 > **Not:** Render gibi platformlarda konteyner diski kalıcı değildir; yerel disk deposuyla yeniden dağıtımda
 > yüklenen bütün dosyalar silinir. Canlıda `Storage__Provider=s3` ile R2/S3 kullanın (ya da kalıcı bir disk

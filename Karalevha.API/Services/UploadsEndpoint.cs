@@ -24,6 +24,9 @@ namespace Karalevha.API.Services
             return provider;
         }
 
+        /// <summary>Herkese açık yüklemelerin önbellek süresi: silinen dosya en geç bu süre sonra hiçbir yerden açılmaz</summary>
+        public static readonly TimeSpan CacheFor = TimeSpan.FromDays(1);
+
         public static string ContentTypeOf(string fileName) =>
             Types.TryGetContentType(fileName, out var type) ? type : "application/octet-stream";
 
@@ -40,8 +43,9 @@ namespace Karalevha.API.Services
                 // Kullanıcı dosyası doğrudan açılırsa (ör. SVG) içindeki betik çalışmasın, tür tahmin edilmesin
                 headers["X-Content-Type-Options"] = "nosniff";
                 headers["Content-Security-Policy"] = "sandbox; default-src 'none'; img-src 'self'; style-src 'unsafe-inline'";
-                // Adlar GUID: içerik hiç değişmez, tarayıcı ve CDN uzun süre saklayabilir
-                headers.CacheControl = "public, max-age=31536000, immutable";
+                // Adlar GUID, içerik değişmez; ama kişi dosyasını ya da hesabını silebilir (KVKK). Bir yıl
+                // "immutable" saklanan bir kopya silindikten sonra da açılırdı: tarayıcı ve CDN en fazla bir gün tutar.
+                headers.CacheControl = $"public, max-age={(int)CacheFor.TotalSeconds}";
 
                 // Yerel dosyada kısmi indirme (Range) desteklenir; S3 akışı baştan sona gönderilir.
                 // Boyut bilinsin: tarayıcı model yüklenirken ilerleme gösterebilsin

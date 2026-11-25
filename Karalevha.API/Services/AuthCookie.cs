@@ -24,8 +24,9 @@ namespace Karalevha.API.Services
         private static CookieOptions Options(HttpContext http, DateTimeOffset? expires) => new()
         {
             HttpOnly = true,
-            // Canlıda istekler HTTPS (vekil sunucunun X-Forwarded-Proto'su ile); yerelde http
-            Secure = http.Request.IsHttps,
+            // Canlıda her zaman Secure: vekil sunucu ayarı (X-Forwarded-Proto) yanlış olsa da çerez şifresiz
+            // bağlantıda gönderilmez. Yerelde ve testlerde http olduğu için isteğe göre.
+            Secure = http.Request.IsHttps || http.RequestServices.GetService<IWebHostEnvironment>()?.IsProduction() == true,
             SameSite = SameSiteMode.Lax,
             Path = "/",
             Expires = expires,

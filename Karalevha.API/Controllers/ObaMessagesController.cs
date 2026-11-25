@@ -181,7 +181,7 @@ namespace Karalevha.API.Controllers
 
             if (lastMessage != null && (DateTime.UtcNow - lastMessage.CreatedAt).TotalSeconds < 3)
             {
-                return BadRequest(new { message = "Yavaş Mod Aktif: Lütfen ard arda mesaj göndermeden önce bekleyin." });
+                return StatusCode(StatusCodes.Status429TooManyRequests, new { message = "Yavaş mod: ard arda mesaj göndermeden önce birkaç saniye bekle." });
             }
 
             var message = new ObaMessage
