@@ -84,7 +84,7 @@ namespace Karalevha.API.Controllers
             {
                 return Conflict(new { message = "Kulübün zaten bir Owner'ı var; kurulum bir kez yapılır." });
             }
-            _current.SetRole(me.Username, Roles.Owner);
+            await _current.RoleChangedAsync(_context, me.Id);
             return Ok(new { userId = me.Id, role = me.Role });
         }
 
@@ -123,8 +123,8 @@ namespace Karalevha.API.Controllers
             {
                 return Conflict(new { message = "Devir sırasında başka bir Owner değişikliği oldu; yeniden dene." });
             }
-            _current.SetRole(me.Username, Roles.Admin);
-            _current.SetRole(target.Username, Roles.Owner);
+            await _current.RoleChangedAsync(_context, me.Id);
+            await _current.RoleChangedAsync(_context, target.Id);
             return Ok(new { ownerId = target.Id, previousOwnerId = me.Id });
         }
 
@@ -144,7 +144,7 @@ namespace Karalevha.API.Controllers
             _notifications.Add(target.Id, CurrentUser.IdOf(User),
                 dto.Role == Roles.Admin ? "Kulüp yöneticisi yapıldın." : "Kulüp yöneticiliğin kaldırıldı.", $"/u/{target.Username}");
             await _context.SaveChangesAsync();
-            _current.SetRole(target.Username, target.Role);
+            await _current.RoleChangedAsync(_context, target.Id);
             return Ok(new { userId = target.Id, role = target.Role });
         }
 

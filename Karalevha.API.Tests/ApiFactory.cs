@@ -33,12 +33,22 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Gönderilen e-postalar: gerçek e-posta yerine burada toplanır</summary>
     public FakeEmail Email { get; } = new();
 
-    private readonly string _storageRoot = Path.Combine(Path.GetTempPath(), "karalevha-test-" + Guid.NewGuid().ToString("N")[..8]);
+    private readonly string _storageRoot;
+    private readonly bool _ownsStorage;
 
-    public ApiFactory()
+    public ApiFactory() : this(secondOf: null) { }
+
+    /// <summary>
+    /// secondOf verilirse: aynı veritabanını ve depoyu kullanan ikinci bir API örneği (ayrı süreç gibi; kendi
+    /// belleği, kendi önbelleği). Veritabanı sıfırlanmaz.
+    /// </summary>
+    private ApiFactory(ApiFactory? secondOf)
     {
         var connection = TestConnectionString();
-        ResetDatabase(connection);
+        _ownsStorage = secondOf == null;
+        _storageRoot = secondOf?._storageRoot ?? Path.Combine(Path.GetTempPath(), "karalevha-test-" + Guid.NewGuid().ToString("N")[..8]);
+        if (secondOf == null) ResetDatabase(connection);
+        else secondOf.CreateClient(); // ilk örnek veritabanını kurmuş olsun
 
         // Program, ayarları builder kurulurken okur: ortam değişkenleri en erken ve en güvenilir yol
         var settings = new Dictionary<string, string>
@@ -81,6 +91,22 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
 
     public AppDbContext NewDb() => Services.CreateScope().ServiceProvider.GetRequiredService<AppDbContext>();
 
+    /// <summary>Aynı veritabanına bağlı ikinci bir API örneği (çok örnekli yayın senaryoları için)</summary>
+    public ApiFactory SecondInstance()
+    {
+        var second = new ApiFactory(this);
+        second.CreateClient();
+        return second;
+    }
+
+    /// <summary>Bu örneğin rol değişikliği dinleyicisi bağlandı mı (bağlanana kadar roller her istekte okunur)</summary>
+    public async Task WaitForRoleListenerAsync()
+    {
+        var roles = Service<CurrentUser>();
+        for (var i = 0; i < 100 && !roles.IsListening; i++) await Task.Delay(50);
+        if (!roles.IsListening) throw new TimeoutException("Rol dinleyicisi bağlanmadı");
+    }
+
     /// <summary>
     /// Test kurulumu: kişiye veritabanında rol verir ve API'nin bellekteki rolünü günceller (Owner'ın
     /// rol ekranından yaptığı gibi). Owner verilirse var olan Owner önce Admin'e düşer (tek-Owner kuralı).
@@ -91,29 +117,25 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
         var cache = Service<CurrentUser>();
         if (role == Karalevha.API.Models.Roles.Owner)
         {
-            foreach (var owner in await db.Users.Where(u => u.Role == Karalevha.API.Models.Roles.Owner && u.Username != username).ToListAsync())
-            {
-                owner.Role = Karalevha.API.Models.Roles.Admin;
-                cache.SetRole(owner.Username, owner.Role);
-            }
+            var owners = await db.Users.Where(u => u.Role == Karalevha.API.Models.Roles.Owner && u.Username != username).ToListAsync();
+            foreach (var owner in owners) owner.Role = Karalevha.API.Models.Roles.Admin;
             await db.SaveChangesAsync();
+            foreach (var owner in owners) await cache.RoleChangedAsync(db, owner.Id);
         }
         var user = await db.Users.SingleAsync(u => u.Username == username);
         user.Role = role;
         await db.SaveChangesAsync();
-        cache.SetRole(username, role);
+        await cache.RoleChangedAsync(db, user.Id);
     }
 
     /// <summary>Kulübün Owner'ını User'a düşürür (Owner kurulum testleri için)</summary>
     public async Task ClearOwnerAsync()
     {
         using var db = NewDb();
-        foreach (var owner in await db.Users.Where(u => u.Role == Karalevha.API.Models.Roles.Owner).ToListAsync())
-        {
-            owner.Role = Karalevha.API.Models.Roles.User;
-            Service<CurrentUser>().SetRole(owner.Username, owner.Role);
-        }
+        var owners = await db.Users.Where(u => u.Role == Karalevha.API.Models.Roles.Owner).ToListAsync();
+        foreach (var owner in owners) owner.Role = Karalevha.API.Models.Roles.User;
         await db.SaveChangesAsync();
+        foreach (var owner in owners) await Service<CurrentUser>().RoleChangedAsync(db, owner.Id);
     }
 
     private static string TestConnectionString()
@@ -143,6 +165,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);
+        if (!_ownsStorage) return;
         try { if (Directory.Exists(_storageRoot)) Directory.Delete(_storageRoot, recursive: true); } catch { /* geçici klasör */ }
     }
 }

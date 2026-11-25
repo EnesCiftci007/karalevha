@@ -227,6 +227,17 @@ tarayıcıda çalışması için site ve API tarayıcıya **aynı adres** gibi g
 - Vercel bu yönlendirmede WebSocket taşımaz; canlı sohbet ve bildirimler SignalR'ın yedek yöntemiyle
   (Server-Sent Events / long polling) kendiliğinden çalışır. Vercel yönlendirilen isteklere 120 saniye süre tanır.
 
+### Birden fazla API örneği
+
+- **Roller** her istekte veritabanındaki güncel rolden gelir (JWT'de rol yoktur). Her örnek rolü en fazla
+  `Roles__CacheSeconds` (varsayılan 60) saniye bellekte tutar; rol değişince PostgreSQL `NOTIFY` ile bütün
+  örnekler anında haberdar olur. Ek servis (Redis vb.) gerekmez. Bağlantı havuzu (PgBouncer) kullanılıyorsa
+  `LISTEN` için **session** modu gerekir; transaction modunda haberler gelmez ve roller en geç 60 sn'de güncellenir.
+- **Canlı sohbet** (SignalR) ve gizli kanal erişim kontrolü her örneğin kendi bağlantılarını bilir. Birden fazla
+  örnekte bir SignalR backplane'i (ör. Azure SignalR ya da Redis) ve yapışkan oturum gerekir; şu an tek örnek
+  önerilir.
+- Hesap başına giriş sınırı ve istek sınırları da örnek başınadır.
+
 > **Not:** Render gibi platformlarda konteyner diski kalıcı değildir; yerel disk deposuyla yeniden dağıtımda
 > yüklenen bütün dosyalar silinir. Canlıda `Storage__Provider=s3` ile R2/S3 kullanın (ya da kalıcı bir disk
 > bağlayıp `Storage__LocalRoot` ile gösterin).

@@ -140,13 +140,12 @@ public class RoleTests(ApiFactory api)
         await api.SetRoleAsync(owner.Username, Roles.Owner);
         await api.SetRoleAsync(admin.Username, Roles.Admin);
 
-        // Yeni bir süreç gibi: boş önbellekle veritabanından yükle
-        var fresh = new CurrentUser();
-        using var db = api.NewDb();
-        await fresh.LoadAsync(db);
-        Assert.Equal(Roles.Owner, fresh.RoleOf(owner.Username));
-        Assert.Equal(Roles.Admin, fresh.RoleOf(admin.Username));
-        Assert.Equal(Roles.User, fresh.RoleOf("sero"));
+        // Yeni bir süreç: boş önbellekle açılan ikinci API örneği, aynı oturumlar
+        using var fresh = api.SecondInstance();
+        Assert.True((await admin.On(fresh).Get("/api/sikayetler")).Ok);                // Admin
+        Assert.True((await owner.On(fresh).Post("/api/admin/set-role", new { userId = admin.Id, role = "Admin" })).Ok); // Owner
+        var member = await TestClient.Register(api, "sero");                         // yapılandırmadaki eski ad
+        Assert.Equal(403, (await member.On(fresh).Get("/api/sikayetler")).Code);
         // Yükleme hiçbir rolü değiştirmez
         Assert.Equal(Roles.Owner, await RoleInDb(owner.Id));
     }

@@ -175,9 +175,6 @@ namespace Karalevha.API.Controllers
             if (RequireEmailVerification && !user.EmailConfirmed)
                 return StatusCode(403, new { requiresVerification = true, email = user.Email, message = "Devam etmek için e-posta adresini doğrulaman gerekiyor." });
 
-            // Bellekteki rolü veritabanındakiyle eşitle (rol vermez, yalnızca okur)
-            _current.SetRole(user.Username, user.Role);
-
             // Jeton yanıt gövdesinde değil, HttpOnly çerezde: JavaScript onu hiç görmez
             AuthCookie.Set(HttpContext, GenerateJwtToken(user));
             return Ok(new { user = UserDto(user) });
@@ -232,7 +229,7 @@ namespace Karalevha.API.Controllers
             // Silinecek obaların kanalları: silindikten sonra onları dinleyen diğer bağlantılar da çıkarılır
             var ownedChannels = await _context.ObaChannels.Where(c => c.Oba!.OwnerId == user.Id).Select(c => c.Id).ToListAsync();
             await deletion.DeleteAsync(user.Id);
-            _current.SetRole(user.Username, Roles.User);
+            await _current.RoleChangedAsync(_context, user.Id); // her API örneği bu kişinin rolünü unutur
             connections.Abort(user.Id);                       // kişinin bütün canlı bağlantıları kesilir
             await guard.RecheckChannelsAsync(ownedChannels);  // devredilen obalarda erişim sürer, silinenlerde kalkar
             AuthCookie.Clear(HttpContext);
@@ -378,7 +375,7 @@ namespace Karalevha.API.Controllers
             {
                 new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
                 new Claim(ClaimTypes.Name, user.Username),
-                new Claim(ClaimTypes.Role, user.Role)
+                // Rol bilerek yok: yetki her istekte veritabanındaki güncel rolden gelir (CurrentUser)
             };
 
             var token = new JwtSecurityToken(

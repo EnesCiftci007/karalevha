@@ -49,6 +49,8 @@ builder.Services.AddSingleton<ObaFileStorage>();
 // Yüklenen dosyaların deposu: yerel disk ya da S3 uyumlu (Cloudflare R2). Bkz. Services/FileStore.cs
 builder.Services.AddFileStore(builder.Configuration);
 builder.Services.AddSingleton<CurrentUser>();
+// Başka bir API örneği rol değiştirince bu örneğin rol önbelleği silinsin (PostgreSQL LISTEN/NOTIFY)
+builder.Services.AddHostedService<RoleChangeListener>();
 builder.Services.AddScoped<NotificationService>();
 builder.Services.AddScoped<ObaAccess>();
 builder.Services.AddScoped<AccountDeletion>();
@@ -203,8 +205,6 @@ using (var scope = app.Services.CreateScope())
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
     db.Database.Migrate();
 
-    // Yapılandırmadaki Owner/Admin rollerini veritabanına yaz, yöneticileri belleğe al
-    await app.Services.GetRequiredService<CurrentUser>().LoadAsync(db);
 
     // Eski sürümlerde oba şifreleri düz metin saklanıyordu; kalanları bir kerelik BCrypt özetine çevir
     var plainPasswords = db.Obalar.Where(o => o.JoinPassword != null && !o.JoinPassword.StartsWith("$2")).ToList();
@@ -237,6 +237,12 @@ app.UseCors("AllowReact");
 // Çerezle gelen değiştirici isteklerde X-KaraLevha başlığı zorunlu (sahte istek / CSRF koruması)
 app.UseCsrfGuard();
 app.UseAuthentication();
+// Güncel rol (veritabanı ya da taze önbellek) isteğin kimliğine eklenir; yetki kontrolleri bunu okur
+app.Use(async (ctx, next) =>
+{
+    await ctx.RequestServices.GetRequiredService<CurrentUser>().AttachAsync(ctx.User, ctx.RequestAborted);
+    await next();
+});
 app.UseRateLimiter();
 app.UseAuthorization();
 

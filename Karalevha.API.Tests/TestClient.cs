@@ -54,6 +54,15 @@ public sealed class TestClient
         };
     }
 
+    /// <summary>Aynı oturumla (aynı çerez) başka bir API örneğine giden istemci</summary>
+    public TestClient On(ApiFactory other)
+    {
+        var http = new HttpClient(other.Server.CreateHandler()) { BaseAddress = other.Server.BaseAddress };
+        http.DefaultRequestHeaders.Add("X-KaraLevha", "1");
+        http.DefaultRequestHeaders.Add("Cookie", "kl_oturum=" + SessionToken);
+        return new TestClient(http, Username, Id) { SessionToken = SessionToken };
+    }
+
     /// <summary>Kulüp yöneticisi: ApiFactory.AdminName hesabı, rolü veritabanından verilir</summary>
     public static async Task<TestClient> Admin(ApiFactory api)
     {
