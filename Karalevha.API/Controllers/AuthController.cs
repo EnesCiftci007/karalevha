@@ -140,9 +140,17 @@ namespace Karalevha.API.Controllers
 
         [HttpPost("login")]
         [EnableRateLimiting("AuthLimiter")]
-        public async Task<IActionResult> Login(LoginDto dto)
+        public async Task<IActionResult> Login(LoginDto dto, [FromServices] LoginThrottle throttle)
         {
             var loginNormal = dto.UsernameOrEmail.Trim().ToLowerInvariant();
+
+            // Hesap başına sınır: IP değiştirerek şifre denemeyi de durdurur. Kapalıyken şifre hiç denenmez.
+            if (throttle.BlockedUntil(loginNormal) is { } until)
+            {
+                var minutes = Math.Max(1, (int)Math.Ceiling((until - DateTime.UtcNow).TotalMinutes));
+                Response.Headers.RetryAfter = ((int)Math.Ceiling((until - DateTime.UtcNow).TotalSeconds)).ToString();
+                return StatusCode(429, new { message = $"Bu hesaba çok fazla hatalı giriş denendi. {minutes} dakika sonra tekrar dene." });
+            }
 
             var user = await _context.Users.FirstOrDefaultAsync(u =>
                 u.Email == loginNormal || u.NormalizedUsername == loginNormal);
@@ -151,7 +159,11 @@ namespace Karalevha.API.Controllers
             var ok = BCrypt.Net.BCrypt.EnhancedVerify(dto.Password, hash);
 
             if (user == null || !ok)
+            {
+                throttle.Failed(loginNormal);
                 return Unauthorized(new { message = "Hatalı kullanıcı adı veya şifre." });
+            }
+            throttle.Succeeded(loginNormal);
 
             if (user.BannedUntil > DateTime.UtcNow)
             {

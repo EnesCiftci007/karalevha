@@ -57,6 +57,8 @@ builder.Services.AddSingleton<ChatConnections>();
 builder.Services.AddScoped<ChannelAccessGuard>();
 builder.Services.AddHttpClient<IEmailService, EmailService>();
 builder.Services.AddMemoryCache();
+// Hesap başına yanlış şifre sınırı (IP'den bağımsız)
+builder.Services.AddSingleton<LoginThrottle>();
 builder.Services.AddHttpClient<RepoService>();
 
 builder.Services.AddDbContext<AppDbContext>(options =>

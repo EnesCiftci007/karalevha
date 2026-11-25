@@ -42,7 +42,9 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
     window.dispatchEvent(new Event('auth:unauthorized'));
   }
   if (res.status === 429) {
-    throw new ApiError('Çok fazla deneme yaptınız, biraz bekleyin.', 429, null);
+    // Sunucu bir açıklama verdiyse (ör. hesap için kaç dakika kaldı) onu göster
+    const body = await res.json().catch(() => null);
+    throw new ApiError(body?.message ?? 'Çok fazla deneme yaptınız, biraz bekleyin.', 429, body);
   }
   if (!res.ok) {
     const body = await res.json().catch(() => null);

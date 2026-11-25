@@ -220,6 +220,10 @@ tarayıcıda çalışması için site ve API tarayıcıya **aynı adres** gibi g
 - Vercel'de `VITE_API_URL` **tanımlamayın**; istemci canlıda API'ye kendi adresinden (`/api/...`) gider.
 - API'de `Proxy__ForwardLimit=2` verin (Vercel → Render iki vekil): yoksa istek sınırları ziyaretçinin değil
   Vercel'in IP'sine göre işler ve örneğin dakikada 5 giriş denemesi herkes için ortak olur.
+  Bilinmesi gereken: Render adresine Vercel'i atlayıp doğrudan gelen biri bu ayarla IP'sini uydurabilir.
+  Bu yüzden giriş ayrıca **hesap başına** sınırlıdır (15 dakikada 10 yanlış şifre → o hesaba giriş 15 dakika
+  kapanır; `Auth__MaxFailedLogins`, `Auth__FailedLoginWindowMinutes`). Site Vercel'siz, doğrudan Render'dan
+  sunuluyorsa `Proxy__ForwardLimit` değerini 1 bırakın.
 - Vercel bu yönlendirmede WebSocket taşımaz; canlı sohbet ve bildirimler SignalR'ın yedek yöntemiyle
   (Server-Sent Events / long polling) kendiliğinden çalışır. Vercel yönlendirilen isteklere 120 saniye süre tanır.
 
