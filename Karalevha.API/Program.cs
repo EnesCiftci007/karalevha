@@ -241,7 +241,7 @@ app.UseAuthentication();
 // Güncel rol (veritabanı ya da taze önbellek) isteğin kimliğine eklenir; yetki kontrolleri bunu okur
 app.Use(async (ctx, next) =>
 {
-    await ctx.RequestServices.GetRequiredService<CurrentUser>().AttachAsync(ctx.User, ctx.RequestAborted);
+    await ctx.RequestServices.GetRequiredService<CurrentUser>().AttachAsync(ctx);
     await next();
 });
 app.UseRateLimiter();

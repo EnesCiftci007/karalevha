@@ -99,10 +99,13 @@ public class MultiInstanceRoleTests(ApiFactory api)
         var (owner, _) = await OwnerAndMember();
         Assert.Equal(Roles.User, await broken.GetRoleAsync(owner.Id));
 
-        var principal = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, owner.Id.ToString()) }, "test"));
-        await broken.AttachAsync(principal, default);
-        Assert.False(broken.IsAdmin(principal));
-        Assert.False(broken.IsOwner(principal));
+        var http = new Microsoft.AspNetCore.Http.DefaultHttpContext
+        {
+            User = new ClaimsPrincipal(new ClaimsIdentity(new[] { new Claim(ClaimTypes.NameIdentifier, owner.Id.ToString()) }, "test"))
+        };
+        await broken.AttachAsync(http);
+        Assert.False(broken.IsAdmin(http.User));
+        Assert.False(broken.IsOwner(http.User));
     }
 
     [Fact]

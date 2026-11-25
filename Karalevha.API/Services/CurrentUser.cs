@@ -55,8 +55,11 @@ namespace Karalevha.API.Services
         public static string NameOf(ClaimsPrincipal principal) =>
             principal.FindFirst(ClaimTypes.Name)?.Value ?? "Bilinmeyen";
 
-        /// <summary>Kişinin güncel rolü: taze önbellekten ya da veritabanından. Okunamazsa User.</summary>
-        public async Task<string> GetRoleAsync(int userId, CancellationToken ct = default)
+        /// <summary>
+        /// Kişinin güncel rolü: taze önbellekten ya da veritabanından. Okunamazsa User.
+        /// Hesap yoksa (silinmiş) null: o oturum artık geçersizdir.
+        /// </summary>
+        public async Task<string?> GetRoleAsync(int userId, CancellationToken ct = default)
         {
             if (_listening && _roles.TryGetValue(userId, out var cached)
                 && cached.LoadedAt >= _listeningSince && DateTime.UtcNow - cached.LoadedAt < _maxAge)
@@ -80,7 +83,7 @@ namespace Karalevha.API.Services
             if (role == null)
             {
                 _roles.TryRemove(userId, out _);
-                return Roles.User; // hesap yok (silinmiş)
+                return null; // hesap yok (silinmiş)
             }
             // Okurken bir değişiklik haberi geldiyse okunan değer eski olabilir: önbelleğe yazılmaz
             if (Interlocked.Read(ref _version) == version)
@@ -88,12 +91,20 @@ namespace Karalevha.API.Services
             return role;
         }
 
-        /// <summary>Kimlik doğrulamadan sonra her istekte: güncel rolü isteğin kimliğine ekler</summary>
-        public async Task AttachAsync(ClaimsPrincipal principal, CancellationToken ct)
+        /// <summary>
+        /// Kimlik doğrulamadan sonra her istekte: güncel rolü isteğin kimliğine ekler. Hesap silinmişse oturum
+        /// (başka bir cihazda açık kalmış çerez) geçersiz sayılır ve istek girişsiz gibi işlenir.
+        /// </summary>
+        public async Task AttachAsync(HttpContext http)
         {
-            if (IdOf(principal) is not { } id) return;
-            var role = await GetRoleAsync(id, ct);
-            principal.AddIdentity(new ClaimsIdentity(new[] { new Claim(RoleClaimType, role, ClaimValueTypes.String, RoleClaimIssuer) }));
+            if (IdOf(http.User) is not { } id) return;
+            var role = await GetRoleAsync(id, http.RequestAborted);
+            if (role == null)
+            {
+                http.User = new ClaimsPrincipal(new ClaimsIdentity());
+                return;
+            }
+            http.User.AddIdentity(new ClaimsIdentity(new[] { new Claim(RoleClaimType, role, ClaimValueTypes.String, RoleClaimIssuer) }));
         }
 
         /// <summary>

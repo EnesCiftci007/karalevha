@@ -26,6 +26,19 @@ public class AccountTests(ApiFactory api)
     }
 
     [Fact]
+    public async Task Silinen_hesabin_baska_cihazdaki_oturumu_calismaz()
+    {
+        var me = await TestClient.Register(api);
+        // Aynı hesap başka bir cihazda da açık (aynı çerez): silme yalnızca bu tarayıcının çerezini siler
+        var otherDevice = me.On(api);
+        Assert.True((await DeleteAccount(me)).Ok);
+
+        Assert.Equal(401, (await otherDevice.Get("/api/auth/me")).Code);
+        Assert.Equal(401, (await otherDevice.Post("/api/posts", new { content = "silindikten sonra" })).Code);
+        Assert.Equal(401, (await otherDevice.Post("/api/projects", new { title = "x", description = "x", category = "diger" })).Code);
+    }
+
+    [Fact]
     public async Task Hesap_ve_verileri_silinir_baskalarininki_kalir()
     {
         var me = await TestClient.Register(api);
